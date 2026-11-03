@@ -141,16 +141,21 @@ import SiteLogo from "@/components/SiteLogo";
 // starts where the published page does.
 //
 // `fullScreen` (the site's own pages): a Canvas fills the browser window.
+// `contactOpen` (2026-11-03): the page is shown by a page that opens it
+// (e.g. "contact" — see Page.opensPageId), so its Contact panel slides
+// open; otherwise a Contact panel isn't shown.
 export default function PagePreview({
   pageId,
   curationId,
   style,
   fullScreen = false,
+  contactOpen = false,
 }: {
   pageId: string;
   curationId: string | null;
   style: PageStyleSummary | null;
   fullScreen?: boolean;
+  contactOpen?: boolean;
 }) {
   const siteData = useSiteData();
   // The work open, and the curation it's opened in.
@@ -196,6 +201,7 @@ export default function PagePreview({
         stories={content.stories}
         exhibitions={content.exhibitions}
         homeHref={siteData.homeHref}
+        contactOpen={contactOpen}
         onOpen={open}
       />
     );
@@ -319,6 +325,8 @@ export type BlockFillerInput = {
   stories: ProfileStoryRow[];
   // The Exhibitions catalogue, for Exhibitions (2026-11-02).
   exhibitions: ExhibitionRow[];
+  // Whether a Contact panel is open (2026-11-03 — see PagePreview).
+  contactOpen: boolean;
   // Opens a work — in the page's curation, or the one given (a
   // Showcase's works, 2026-11-02).
   onOpen: (artworkId: string, curationId?: string) => void;
@@ -338,6 +346,7 @@ export function blockFiller({
   heading,
   stories,
   exhibitions,
+  contactOpen,
   onOpen,
   heroShowing = null,
   onHeroShowing,
@@ -529,6 +538,7 @@ export function blockFiller({
       );
     }
     if (block.type === "contact" && block.contact) {
+      if (!contactOpen) return null;
       return (
         <ContactBlock
           settings={block.contact}
@@ -645,6 +655,7 @@ function BlockBuildPage({
   stories,
   exhibitions,
   homeHref,
+  contactOpen,
   onOpen,
 }: {
   pageId: string;
@@ -658,6 +669,7 @@ function BlockBuildPage({
   stories: ProfileStoryRow[];
   exhibitions: ExhibitionRow[];
   homeHref: string | null;
+  contactOpen: boolean;
   onOpen: (artworkId: string, curationId?: string) => void;
 }) {
   const { layout } = style;
@@ -674,6 +686,7 @@ function BlockBuildPage({
     heading,
     stories,
     exhibitions,
+    contactOpen,
     onOpen,
     heroShowing,
     onHeroShowing: setHeroShowing,

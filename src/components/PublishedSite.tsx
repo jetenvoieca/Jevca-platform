@@ -6,6 +6,7 @@ import {
   pageForPath,
   pageImageUrls,
   publishedHomePath,
+  shownPage,
   type SiteSnapshot,
   type SnapshotPage,
 } from "@/lib/siteSnapshot";
@@ -139,7 +140,22 @@ export default function PublishedSite({
               style={l ? { top: -l.scrollY } : undefined}
               aria-hidden={l ? true : undefined}
             >
-              <PagePreview pageId={p.id} curationId={p.curationId} style={p.style} fullScreen />
+              {(() => {
+                // A page that opens another (2026-11-03, e.g. "contact")
+                // shows that page with its Contact panel open.
+                const shown = shownPage(snapshot.pages, p);
+                return (
+                  shown && (
+                    <PagePreview
+                      pageId={shown.page.id}
+                      curationId={shown.page.curationId}
+                      style={shown.page.style}
+                      contactOpen={shown.contactOpen}
+                      fullScreen
+                    />
+                  )
+                );
+              })()}
             </main>
           );
         })}

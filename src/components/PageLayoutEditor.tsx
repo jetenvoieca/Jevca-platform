@@ -91,6 +91,8 @@ export default function PageLayoutEditor({
     heading: content.heading,
     stories: content.stories,
     exhibitions: content.exhibitions,
+    // Shown while laying the page out, so it can be seen.
+    contactOpen: true,
     homeHref: null,
     onOpen: () => {},
     heroShowing,

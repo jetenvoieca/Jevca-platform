@@ -47,6 +47,8 @@ export async function getPublishedSite(
     signupForms: p.signupForms ?? [],
     menuStyleId: p.menuStyleId ?? null,
     parentId: p.parentId ?? null,
+    // Opening no page for a site published before pages could (2026-11-03).
+    opensPageId: p.opensPageId ?? null,
   }));
   const menus: Record<string, MenuStyleLayout> = {};
   for (const [id, layout] of Object.entries(snapshot.menus ?? {})) {

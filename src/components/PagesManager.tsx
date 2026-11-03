@@ -31,6 +31,8 @@ export type PageListItem = {
   pageStyleId: string | null;
   menuStyleId: string | null;
   parentId: string | null;
+  // The page it opens with its Contact panel slid open (2026-11-03).
+  opensPageId: string | null;
 };
 
 type ListKey = "live" | "hidden";
@@ -122,6 +124,10 @@ export default function PagesManager({
   }, [pages]);
 
   const selected = [...live, ...hidden].find((p) => p.id === selectedId) ?? null;
+  // A page that opens another (2026-11-03) previews that page with its
+  // Contact panel open; it has nothing of its own to arrange.
+  const previewed = (selected?.opensPageId && pages.find((p) => p.id === selected.opensPageId)) || selected;
+  const previewedStyle = previewed ? (pageStyles.find((s) => s.id === previewed.pageStyleId) ?? null) : null;
   const selectedStyle = selected ? (pageStyles.find((s) => s.id === selected.pageStyleId) ?? null) : null;
   const canvasStyle = selectedStyle?.type === "CANVAS" ? selectedStyle : null;
   // A Block Build page can be arranged with or without a curation
@@ -292,6 +298,11 @@ export default function PagesManager({
                   ) : (
                     p.title
                   )}
+                  {p.opensPageId && (
+                    <span className="ml-2 text-xs text-neutral-400">
+                      opens {pages.find((q) => q.id === p.opensPageId)?.title}
+                    </span>
+                  )}
                 </button>
               </div>
             </div>
@@ -341,13 +352,14 @@ export default function PagesManager({
               layout={blockBuildStyle.layout}
             />
           </LiveSiteData>
-        ) : selected ? (
+        ) : selected && previewed ? (
           <LiveSiteData siteId={siteId} artistId={artistId}>
             <PagePreview
               key={`${selected.id}:${previewVersion}`}
-              pageId={selected.id}
-              curationId={selected.curationId}
-              style={selectedStyle}
+              pageId={previewed.id}
+              curationId={previewed.curationId}
+              style={previewedStyle}
+              contactOpen={!!selected.opensPageId}
             />
           </LiveSiteData>
         ) : (
@@ -444,11 +456,14 @@ export default function PagesManager({
                   pageStyleId: selected.pageStyleId,
                   menuStyleId: selected.menuStyleId,
                   parentId: selected.parentId,
+                  opensPageId: selected.opensPageId,
                 }
-              : { title: "", curationId: null, pageStyleId: null, menuStyleId: null, parentId: null }
+              : { title: "", curationId: null, pageStyleId: null, menuStyleId: null, parentId: null, opensPageId: null }
           }
           topPages={pages.filter((p) => !p.parentId && p.id !== (modal === "edit" ? selected?.id : undefined))}
           hasChildren={modal === "edit" && !!selected && pages.some((p) => p.parentId === selected.id)}
+          openablePages={pages.filter((p) => !p.opensPageId && p.id !== (modal === "edit" ? selected?.id : undefined))}
+          isOpened={modal === "edit" && !!selected && pages.some((p) => p.opensPageId === selected.id)}
           curations={curations}
           pageStyles={pageStyles}
           menuStyles={menuStyles}

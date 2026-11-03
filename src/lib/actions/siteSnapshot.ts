@@ -58,6 +58,7 @@ async function loadLivePages(siteId: string) {
           pageStyleId: true,
           menuStyleId: true,
           parentId: true,
+          opensPageId: true,
         },
       },
     },
@@ -80,6 +81,7 @@ async function loadLivePages(siteId: string) {
         signupForms: style?.type === "BLOCK_BUILD" ? await getPageSignupForms(siteId, p.id) : [],
         menuStyleId: p.menuStyleId ?? site.menuStyleId,
         parentId: p.parentId,
+        opensPageId: p.opensPageId,
       };
     })
   );

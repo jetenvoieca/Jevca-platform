@@ -37,6 +37,7 @@ export default async function PagesPage({
         pageStyleId: true,
         menuStyleId: true,
         parentId: true,
+        opensPageId: true,
       },
     }),
     listCurations(site.artistId),

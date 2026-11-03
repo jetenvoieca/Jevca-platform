@@ -17,7 +17,10 @@ import { ThemedStyleOptions } from "@/components/ThemedStyleList";
 // Live Pages) or one of the Menu Styles, for this page only. Under
 // (2026-10-25): the page this one sits under in the menu — one of the
 // site's pages at the top (`topPages`); not offered for a page that has
-// pages under it.
+// pages under it. Shows (2026-11-03, the ISYT sites' "contact"): the
+// page's own content, or another page with its Contact panel slid open
+// (`openablePages`) — then it has no Curation or Display Style of its
+// own. Not offered for a page that others open (`isOpened`).
 export default function PageDetailsModal({
   heading,
   initial,
@@ -26,6 +29,8 @@ export default function PageDetailsModal({
   menuStyles,
   topPages,
   hasChildren,
+  openablePages,
+  isOpened,
   saving,
   error,
   onSave,
@@ -38,6 +43,8 @@ export default function PageDetailsModal({
   menuStyles: MenuStyleSummary[];
   topPages: { id: string; title: string }[];
   hasChildren: boolean;
+  openablePages: { id: string; title: string }[];
+  isOpened: boolean;
   saving: boolean;
   error: string | null;
   onSave: (input: PageDetailsInput) => void;
@@ -48,8 +55,10 @@ export default function PageDetailsModal({
   const [pageStyleId, setPageStyleId] = useState(initial.pageStyleId ?? "");
   const [menuStyleId, setMenuStyleId] = useState(initial.menuStyleId ?? "");
   const [parentId, setParentId] = useState(initial.parentId ?? "");
+  const [opensPageId, setOpensPageId] = useState(initial.opensPageId ?? "");
 
-  const isCanvas = pageStyles.find((s) => s.id === pageStyleId)?.type === "CANVAS";
+  const opens = !!opensPageId;
+  const isCanvas = !opens && pageStyles.find((s) => s.id === pageStyleId)?.type === "CANVAS";
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/40 p-4" onClick={onCancel}>
@@ -60,10 +69,11 @@ export default function PageDetailsModal({
           e.preventDefault();
           onSave({
             title,
-            curationId: isCanvas ? null : curationId || null,
-            pageStyleId: pageStyleId || null,
+            curationId: isCanvas || opens ? null : curationId || null,
+            pageStyleId: opens ? null : pageStyleId || null,
             menuStyleId: menuStyleId || null,
             parentId: parentId || null,
+            opensPageId: opensPageId || null,
           });
         }}
       >
@@ -80,7 +90,28 @@ export default function PageDetailsModal({
         />
 
         <div className="mb-6 grid grid-cols-[110px_1fr] items-center gap-x-3 gap-y-4">
-          {!isCanvas && (
+          {!isOpened && (
+            <>
+              <label htmlFor="page-shows" className="text-sm text-neutral-700">
+                Shows
+              </label>
+              <select
+                id="page-shows"
+                value={opensPageId}
+                onChange={(e) => setOpensPageId(e.target.value)}
+                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">Its own content</option>
+                {openablePages.map((p) => (
+                  <option key={p.id} value={p.id}>
+                    {p.title}, with its Contact panel open
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
+
+          {!isCanvas && !opens && (
             <>
               <label htmlFor="page-curation" className="text-sm text-neutral-700">
                 Curation
@@ -101,18 +132,22 @@ export default function PageDetailsModal({
             </>
           )}
 
-          <label htmlFor="page-display-style" className="text-sm text-neutral-700">
-            Display Style
-          </label>
-          <select
-            id="page-display-style"
-            value={pageStyleId}
-            onChange={(e) => setPageStyleId(e.target.value)}
-            className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
-          >
-            <option value="">None</option>
-            <ThemedStyleOptions items={pageStyles} />
-          </select>
+          {!opens && (
+            <>
+              <label htmlFor="page-display-style" className="text-sm text-neutral-700">
+                Display Style
+              </label>
+              <select
+                id="page-display-style"
+                value={pageStyleId}
+                onChange={(e) => setPageStyleId(e.target.value)}
+                className="w-full rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+              >
+                <option value="">None</option>
+                <ThemedStyleOptions items={pageStyles} />
+              </select>
+            </>
+          )}
 
           <label htmlFor="page-menu" className="text-sm text-neutral-700">
             Menu
@@ -151,6 +186,12 @@ export default function PageDetailsModal({
 
         {isCanvas && (
           <p className="mb-4 text-xs text-neutral-500">A Canvas page&apos;s curations are placed with Arrange.</p>
+        )}
+        {opens && (
+          <p className="mb-4 text-xs text-neutral-500">
+            Its menu item opens that page with the Contact panel slid across — the page&apos;s Display Style needs a
+            Contact panel component (e.g. ISYT — Profile).
+          </p>
         )}
 
         {error && <p className="mb-3 text-sm text-red-600">{error}</p>}
