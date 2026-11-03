@@ -26,6 +26,7 @@ function text(value: unknown, max = MAX_TEXT): string {
 }
 
 type GalleryIn = { name: string; websiteUrl: string };
+type LocationRow = { id: string; name: string; type: string };
 
 function readGalleries(value: unknown): GalleryIn[] {
   if (!Array.isArray(value)) return [];
@@ -97,7 +98,7 @@ export async function POST(request: NextRequest) {
     where: { artistId },
     select: { id: true, name: true, type: true },
   });
-  const byName = new Map(locations.map((l) => [l.name.toLowerCase(), l]));
+  const byName = new Map<string, LocationRow>(locations.map((l: LocationRow) => [l.name.toLowerCase(), l]));
   const listed = await db.profileGallery.findMany({
     where: { storyId: galleriesEntry.id },
     select: { locationId: true, position: true },
@@ -107,9 +108,9 @@ export async function POST(request: NextRequest) {
   let locationsAdded = 0;
   let galleriesListed = 0;
   for (const g of galleries) {
-    let location = byName.get(g.name.toLowerCase());
+    let location: LocationRow | undefined = byName.get(g.name.toLowerCase());
     if (!location) {
-      location = await db.$transaction(async (tx) => {
+      location = await db.$transaction(async (tx): Promise<LocationRow> => {
         const customer = await tx.customer.create({
           data: { artistId, kind: "GALLERY", name: g.name, websiteUrl: g.websiteUrl || null },
           select: { id: true },
