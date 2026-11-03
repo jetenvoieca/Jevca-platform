@@ -9,9 +9,32 @@ import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 // optionally, a picture or short looping video from the Media Catalogue
 // over it; on each, the curation's works, Media Catalogue pictures and
 // text, each placed by hand. Positions and sizes are % of the section, so
-// it all scales together with the width (phones too). Kept as JSON on
+// it all scales together with the width (phones too). Phase two
+// (2026-11-03, from Craig's British High Street site): each item can make
+// an entrance as its section scrolls into view — fading, sliding in from
+// a side or growing, after a delay, so they arrive one after another —
+// and sit in a frame: a card (white, rounded, soft shadow) or with a
+// corner cut off. Kept as JSON on
 // the curation (Curation.dynamicPresentation). Plain module, shared by
 // the editor, the actions and the site.
+
+export const DYNAMIC_ENTRANCES = [
+  { value: "none", label: "None — always there" },
+  { value: "fade", label: "Fade in" },
+  { value: "up", label: "Slide up" },
+  { value: "down", label: "Slide down" },
+  { value: "left", label: "Slide in from the right" },
+  { value: "right", label: "Slide in from the left" },
+  { value: "grow", label: "Grow" },
+] as const;
+export type DynamicEntrance = (typeof DYNAMIC_ENTRANCES)[number]["value"];
+
+export const DYNAMIC_FRAMES = [
+  { value: "none", label: "None" },
+  { value: "card", label: "Card" },
+  { value: "cut", label: "Cut corner" },
+] as const;
+export type DynamicFrame = (typeof DYNAMIC_FRAMES)[number]["value"];
 
 export type DynamicItem = {
   id: string;
@@ -30,6 +53,11 @@ export type DynamicItem = {
   x: number;
   y: number;
   w: number;
+  // Its entrance, after `delay` seconds, taking `duration` seconds.
+  entrance: DynamicEntrance;
+  delay: number;
+  duration: number;
+  frame: DynamicFrame;
 };
 
 export type DynamicSection = {
@@ -54,6 +82,8 @@ export const DYNAMIC_LIMITS = {
   width: { min: 3, max: 100 },
   size: { min: 0.5, max: 20 },
   text: 2000,
+  delay: { min: 0, max: 10 },
+  duration: { min: 0.2, max: 5 },
 } as const;
 
 export const NEW_SECTION_HEIGHT = 56;
@@ -82,6 +112,10 @@ function cleanItem(raw: unknown): DynamicItem | null {
     x: cleanNumber(v.x, l.position, 10, 1),
     y: cleanNumber(v.y, l.position, 10, 1),
     w: cleanNumber(v.w, l.width, 25, 1),
+    entrance: DYNAMIC_ENTRANCES.find((e) => e.value === v.entrance)?.value ?? "none",
+    delay: cleanNumber(v.delay, l.delay, 0, 1),
+    duration: cleanNumber(v.duration, l.duration, 0.8, 1),
+    frame: DYNAMIC_FRAMES.find((f) => f.value === v.frame)?.value ?? "none",
   };
 }
 

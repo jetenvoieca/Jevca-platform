@@ -11,7 +11,8 @@ import { DynamicSectionBox, DynamicWorksContext, type DynamicWork } from "@/comp
 // A curation's Dynamic presentation on the site (2026-11-03, phase one —
 // see lib/dynamicPresentation.ts): opened from a Canvas page in place of
 // the curation panel, over the page, its sections one under another (up
-// to 1200px wide, centred), scrolling. Clicking a work opens its
+// to 1200px wide, centred), scrolling, each section's items making their
+// entrances as it comes into view. Clicking a work opens its
 // Presentation window on top; ✕ or Escape closes.
 
 const MAX_WIDTH = 1200;
@@ -73,6 +74,7 @@ export default function DynamicPresentationView({
           {data.presentation.sections.map((s) => (
             <DynamicSectionBox
               key={s.id}
+              animate
               section={s}
               media={data.media}
               renderItem={(item, content, style) =>

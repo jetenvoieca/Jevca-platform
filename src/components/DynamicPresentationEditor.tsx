@@ -5,6 +5,8 @@ import { useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointer
 import type { CurationWork } from "@/lib/actions/curations";
 import { getDynamicPresentation, saveDynamicPresentation } from "@/lib/actions/dynamicPresentations";
 import {
+  DYNAMIC_ENTRANCES,
+  DYNAMIC_FRAMES,
   DYNAMIC_LIMITS,
   NEW_SECTION_HEIGHT,
   type DynamicItem,
@@ -23,7 +25,9 @@ import { DynamicSectionBox, DynamicWorksContext, type DynamicWork } from "@/comp
 // its height), the curation's works, Media Catalogue pictures and text
 // are added to it — and drag anything on it to place it (its corner to
 // size it); click an item to choose it, then change its words and look
-// on the left. Saves itself a moment after each change.
+// on the left. Saves itself a moment after each change. Phase two
+// (2026-11-03): an item's frame and entrance (with its delay and how long
+// it takes) are set with it; Play shows the chosen section's entrances.
 
 const SAVE_AFTER_MS = 700;
 const newId = () => crypto.randomUUID();
@@ -46,6 +50,8 @@ export default function DynamicPresentationEditor({
   const [sectionId, setSectionId] = useState<string | null>(null);
   const [itemId, setItemId] = useState<string | null>(null);
   const [status, setStatus] = useState<"saved" | "saving" | "error">("saved");
+  // The section whose entrances are playing, and a count to play again.
+  const [playing, setPlaying] = useState<{ id: string; n: number } | null>(null);
   const timer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const latest = useRef<DynamicSection[]>([]);
 
@@ -127,6 +133,10 @@ export default function DynamicPresentationEditor({
     x: 8 + ((n * 6) % 50),
     y: 8 + ((n * 6) % 50),
     w: 25,
+    entrance: "none",
+    delay: 0,
+    duration: 0.8,
+    frame: "none",
   });
 
   const addSection = () => {
@@ -275,6 +285,13 @@ export default function DynamicPresentationEditor({
                     ↓ Down
                   </button>
                 </div>
+                <button
+                  type="button"
+                  onClick={() => setPlaying((p) => ({ id: section.id, n: (p?.n ?? 0) + 1 }))}
+                  className={button}
+                >
+                  ▶ Play entrances
+                </button>
                 <button type="button" onClick={deleteSection} className={`${button} text-red-600 hover:bg-red-50`}>
                   Delete section
                 </button>
@@ -378,6 +395,56 @@ export default function DynamicPresentationEditor({
                     </label>
                   </>
                 )}
+                <label className="flex items-center justify-between gap-2 text-sm text-neutral-700">
+                  Frame
+                  <select
+                    value={item.frame}
+                    onChange={(e) => setItem(section.id, item.id, { frame: e.target.value as DynamicItem["frame"] })}
+                    className="rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                  >
+                    {DYNAMIC_FRAMES.map((f) => (
+                      <option key={f.value} value={f.value}>
+                        {f.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                <label className="flex items-center justify-between gap-2 text-sm text-neutral-700">
+                  Entrance
+                  <select
+                    value={item.entrance}
+                    onChange={(e) => setItem(section.id, item.id, { entrance: e.target.value as DynamicItem["entrance"] })}
+                    className="min-w-0 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                  >
+                    {DYNAMIC_ENTRANCES.map((en) => (
+                      <option key={en.value} value={en.value}>
+                        {en.label}
+                      </option>
+                    ))}
+                  </select>
+                </label>
+                {item.entrance !== "none" && (
+                  <>
+                    <NumberField
+                      label="After"
+                      unit="seconds"
+                      step={0.1}
+                      value={item.delay}
+                      limits={DYNAMIC_LIMITS.delay}
+                      onCommit={(delay) => setItem(section.id, item.id, { delay })}
+                      wide
+                    />
+                    <NumberField
+                      label="Taking"
+                      unit="seconds"
+                      step={0.1}
+                      value={item.duration}
+                      limits={DYNAMIC_LIMITS.duration}
+                      onCommit={(duration) => setItem(section.id, item.id, { duration })}
+                      wide
+                    />
+                  </>
+                )}
                 <div className="flex gap-2">
                   <button type="button" onClick={toFront} className={button}>
                     To front
@@ -410,6 +477,8 @@ export default function DynamicPresentationEditor({
                 className={`relative ${s.id === sectionId ? "z-10 outline outline-2 outline-blue-500" : ""}`}
               >
                 <DynamicSectionBox
+                  key={playing?.id === s.id ? `play-${playing.n}` : "still"}
+                  animate={playing?.id === s.id}
                   section={s}
                   media={media}
                   renderItem={(it, content, style) => (
