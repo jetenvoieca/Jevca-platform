@@ -38,6 +38,9 @@ import {
   cleanShowcase,
   SHOWCASE_LIMITS,
   type ShowcaseSettings,
+  cleanContact,
+  CONTACT_LIMITS,
+  type ContactSettings,
   type ExhibitionsSettings,
   type PictureWordsLook,
   PICTURE_SHAPES,
@@ -109,6 +112,7 @@ export default function PageStyleLayoutEditor({
             viewer={b.viewer}
             exhibitions={b.exhibitions}
             showcase={b.showcase}
+            contact={b.contact}
             device={device}
             spacing={layout.gridSpacing}
           />
@@ -325,6 +329,18 @@ export default function PageStyleLayoutEditor({
                   wide
                 />
               </>
+            ),
+          };
+        }
+        if (b.contact) {
+          return {
+            button: "Settings",
+            title: "Contact panel",
+            content: (
+              <ContactPanelSettings
+                settings={b.contact}
+                onChange={(contact) => onBlock({ ...b, contact: cleanContact(contact) })}
+              />
             ),
           };
         }
@@ -635,6 +651,55 @@ function ExhibitionsPanel({
       <p className="text-xs text-neutral-400">
         Shows the artist&apos;s Exhibitions (Artworks → Exhibitions), archived ones left out, in the page&apos;s Text
         look. The first is shown to start with; clicking another shows it instead.
+      </p>
+    </>
+  );
+}
+
+// A Contact panel's settings (2026-11-03): its title and the title's
+// size, and how much of the page's width it covers on a desktop.
+function ContactPanelSettings({
+  settings,
+  onChange,
+}: {
+  settings: ContactSettings;
+  onChange: (v: ContactSettings) => void;
+}) {
+  const set = (patch: Partial<ContactSettings>) => onChange(cleanContact({ ...settings, ...patch }));
+  return (
+    <>
+      <label className="flex flex-col gap-1 text-sm text-neutral-700">
+        Title
+        <input
+          type="text"
+          defaultValue={settings.title}
+          maxLength={CONTACT_LIMITS.title}
+          onBlur={(e) => set({ title: e.target.value.trim() })}
+          className="rounded-md border border-neutral-300 px-2 py-1.5 text-sm"
+        />
+      </label>
+      <NumberField
+        label="Title size"
+        unit="pixels"
+        step={1}
+        value={settings.titleSize}
+        limits={CONTACT_LIMITS.titleSize}
+        onCommit={(titleSize) => set({ titleSize })}
+        wide
+      />
+      <NumberField
+        label="Width it covers on a desktop"
+        unit="%"
+        step={1}
+        value={settings.share}
+        limits={CONTACT_LIMITS.share}
+        onCommit={(share) => set({ share })}
+        wide
+      />
+      <p className="text-xs text-neutral-400">
+        Slides in from the right as the page opens, over the components below it (the whole width on a phone), until
+        its ✕ is pressed. Shows the phone and email from the artist&apos;s Settings, then a form — messages go to the
+        Inbox, and ticking the box adds the visitor to Subscribers. In the page&apos;s Text look.
       </p>
     </>
   );

@@ -21,6 +21,9 @@ export type SiteArtist = {
   // Links to the artist's Instagram and Facebook (2026-10-23), shown
   // under a Side list menu; absent from sites published before.
   social?: { instagramUrl: string | null; facebookUrl: string | null };
+  // The phone and email in the artist's Settings (2026-11-03), shown above
+  // a Contact panel's form; absent from sites published before.
+  contact?: { phone: string | null; email: string | null };
   footer: SiteFooter;
 };
 

@@ -24,6 +24,8 @@ export async function getSiteArtist(artistId: string): Promise<SiteArtist | null
       logoByline: true,
       instagramHandle: true,
       facebookUrl: true,
+      phone: true,
+      email: true,
     },
   });
   if (!artist) return null;
@@ -36,6 +38,7 @@ export async function getSiteArtist(artistId: string): Promise<SiteArtist | null
         : null,
       facebookUrl: artist.facebookUrl,
     },
+    contact: { phone: artist.phone?.trim() || null, email: artist.email?.trim() || null },
     footer: {
       name: artist.name,
       town: artist.showFooterAddress ? artistTownLine(artist) : null,
