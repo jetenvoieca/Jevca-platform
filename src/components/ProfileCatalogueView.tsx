@@ -282,13 +282,13 @@ function StoryModal({
         {!media && fixed ? (
           <div className="mb-4">{picker(story.kind === "BIOGRAPHY" ? "Add a picture (optional)" : "Add a picture")}</div>
         ) : !media ? (
-          <div className="mb-4 flex aspect-[4/3] w-full flex-col items-center justify-center gap-3 rounded-md bg-neutral-100 text-sm text-neutral-400">
+          <div className="mb-4 flex aspect-[4/3] w-1/2 flex-col items-center justify-center gap-3 rounded-md bg-neutral-100 p-3 text-center text-sm text-neutral-400">
             <span>Its picture or video was deleted from the Media Catalogue.</span>
             {picker("Choose a picture or video")}
           </div>
         ) : media.kind === "VIDEO" ? (
           <>
-            <div className="overflow-hidden rounded-md">
+            <div className="w-1/2 overflow-hidden rounded-md">
               <SectionMediaView media={{ kind: "VIDEO", url: media.fullUrl, posterUrl: media.displayUrl }} />
             </div>
             <p className="mb-4 mt-1 text-xs text-neutral-400">Click to play, right here.</p>
@@ -299,7 +299,7 @@ function StoryModal({
               src={media.displayUrl ?? media.fullUrl}
               alt=""
               onClick={() => setFullSize(true)}
-              className="w-full cursor-zoom-in rounded-md object-cover"
+              className="w-1/2 cursor-zoom-in rounded-md object-cover"
             />
             <p className="mb-4 mt-1 text-xs text-neutral-400">Click to view full size.</p>
           </>
