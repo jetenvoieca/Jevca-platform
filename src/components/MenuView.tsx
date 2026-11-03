@@ -1,6 +1,6 @@
 "use client";
 
-import { useId, useState, type CSSProperties, type ReactNode } from "react";
+import { useEffect, useId, useState, type CSSProperties, type ReactNode } from "react";
 import { SUB_PAGE_SCALE, menuBackground, menuHeight, menuSide, type MenuStyleLayout } from "@/lib/menuStyleLayout";
 import { mergeTextStyle } from "@/lib/textStyle";
 import { SITE_DESKTOP_MIN } from "@/lib/siteBreakpoint";
@@ -75,6 +75,9 @@ export default function MenuView({
   defaultOpen?: boolean;
 }) {
   const [open, setOpen] = useState(defaultOpen);
+  // A group opened by choosing its page while its pages are hidden.
+  const [unfolded, setUnfolded] = useState<string | null>(null);
+  useEffect(() => setUnfolded(null), [currentId]);
   const scope = `menu-${useId().replace(/[^a-zA-Z0-9-]/g, "")}`;
   const sideList = layout.kind === "sidelist";
   const side = sideList ? layout.list.side : menuSide(layout.position);
@@ -110,7 +113,9 @@ export default function MenuView({
   // FULL_SCREEN_GAP apart, sub-pages FULL_SCREEN_SUB_GAP (2026-11-03,
   // Craig's request — easier to tap than a Side list's tight spacing). Pages under another (2026-10-25) show
   // under it, indented, in their own look — while one of that group's
-  // pages is showing, or always.
+  // pages is showing, or always. Choosing a group's page while its pages
+  // are hidden shows them instead of opening the first (2026-11-03,
+  // Craig's request), so one can be chosen.
   const list = (fullScreen: boolean) => {
     const size = (layout.text.size ?? 15) * (fullScreen && !sideList ? 1.4 : 1);
     const align = fullScreen ? "center" : sideList ? layout.list.align : "left";
@@ -118,7 +123,10 @@ export default function MenuView({
     const subText = mergeTextStyle(layout.text, sub.text);
     const subSize = sub.text.size !== null ? sub.text.size : size * SUB_PAGE_SCALE;
     const open = (item: MenuViewItem) =>
-      sub.show === "always" || item.id === currentId || !!item.children?.some((c) => c.id === currentId);
+      sub.show === "always" ||
+      item.id === currentId ||
+      item.id === unfolded ||
+      !!item.children?.some((c) => c.id === currentId);
     return (
       <ul
         className={`flex flex-col ${ALIGN_ITEMS[align]}`}
@@ -134,6 +142,7 @@ export default function MenuView({
               size={size}
               align={align}
               onChoose={choose}
+              onUnfold={item.children?.length && !open(item) ? () => setUnfolded(item.id) : undefined}
             />
             {!!item.children?.length && open(item) && (
               <ul
@@ -480,6 +489,7 @@ function MenuEntry({
   size,
   align,
   onChoose,
+  onUnfold,
 }: {
   item: MenuViewItem;
   current: boolean;
@@ -488,6 +498,8 @@ function MenuEntry({
   size: number;
   align: "left" | "center" | "right";
   onChoose: () => void;
+  // Given, choosing it shows the pages under it instead.
+  onUnfold?: () => void;
 }) {
   // A Side list's pages are spaced only by its own spacing (2026-10-25),
   // tightly lined; the other kinds' have some padding.
@@ -501,6 +513,13 @@ function MenuEntry({
     backgroundColor: current && layout.highlightColor ? layout.highlightColor : undefined,
   };
   const label: ReactNode = item.title;
+  if (onUnfold) {
+    return (
+      <button type="button" onClick={onUnfold} aria-expanded={false} className={`w-full ${className}`} style={style}>
+        {label}
+      </button>
+    );
+  }
   if (item.href) {
     return (
       <a href={item.href} onClick={onChoose} className={className} style={style}>
