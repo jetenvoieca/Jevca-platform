@@ -120,17 +120,20 @@ export default function ContactPanel({ settings, onClosed }: OpenPanel) {
 
   return (
     <div className="relative min-h-full px-6 pb-8 pt-1 shadow-[-12px_0_24px_-16px_rgba(0,0,0,0.35)]" style={look}>
-      <button
-        type="button"
-        onClick={() => setPhase("out")}
-        aria-label="Close"
-        title="Close"
-        className="absolute right-2 top-0 p-1 opacity-60 transition-opacity hover:opacity-100"
-      >
-        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
-          <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
-        </svg>
-      </button>
+      {/* ✕ stays in view as the page scrolls (2026-11-03). */}
+      <div className="sticky top-0 z-10 -mr-4 flex h-0 justify-end">
+        <button
+          type="button"
+          onClick={() => setPhase("out")}
+          aria-label="Close"
+          title="Close"
+          className="p-1 opacity-60 transition-opacity hover:opacity-100"
+        >
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.5} className="h-5 w-5">
+            <path strokeLinecap="round" strokeLinejoin="round" d="M6 18L18 6M6 6l12 12" />
+          </svg>
+        </button>
+      </div>
 
       {settings.title && (
         <h2 className="mb-5 pr-8 font-bold leading-tight" style={{ fontSize: settings.titleSize }}>

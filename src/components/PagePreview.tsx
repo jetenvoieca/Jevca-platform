@@ -713,6 +713,7 @@ function BlockBuildPage({
 // all of it on a phone — in the same grid cell, so the page is as tall as
 // the taller; anything off to the right (the panel sliding) is cut off
 // rather than widening the page. On a phone it covers the whole screen.
+// It lies over a sticky Page heading too, so its ✕ is never hidden.
 function StyledFrame({
   margins,
   maxWidth,
@@ -761,7 +762,7 @@ function StyledFrame({
             )
           ) : (
             <div
-              className="relative z-10 col-start-1 row-start-1 justify-self-end"
+              className="relative z-30 col-start-1 row-start-1 justify-self-end"
               style={{ width: `${panel.settings.share}%` }}
             >
               <ContactPanel settings={panel.settings} onClosed={panel.onClosed} />
