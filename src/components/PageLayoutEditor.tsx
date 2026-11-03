@@ -9,7 +9,7 @@ import PageStyleLayoutEditor from "@/components/PageStyleLayoutEditor";
 import { blockFiller, usePageContent } from "@/components/PagePreview";
 import { PresentationProvider } from "@/components/WorkPresentation";
 import { useAutoSave } from "@/components/useAutoSave";
-import { useRegisterPageViewReturn } from "@/lib/pageViewReturn";
+import { useRegisterPageViewReturn } from "@/lib/pageHeaderActions";
 
 // A page's layout, edited on the page itself (2026-10-22, Craig's
 // request — "so we can see what we are doing"): its Display Style's

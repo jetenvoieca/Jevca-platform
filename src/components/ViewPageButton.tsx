@@ -1,6 +1,6 @@
 "use client";
 
-import { usePageViewReturn } from "@/lib/pageViewReturn";
+import { usePageViewReturn } from "@/lib/pageHeaderActions";
 
 // The eye in the site header (2026-11-01, Craig's request): shown while a
 // page's Layout or Arrange is open in Pages, it goes back to the page's

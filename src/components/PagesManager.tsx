@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState, useTransition } from "react";
-import { useRegisterPageViewReturn } from "@/lib/pageViewReturn";
+import { useRegisterPageLayoutOpen, useRegisterPageViewReturn } from "@/lib/pageHeaderActions";
 import { useRouter } from "next/navigation";
 import {
   createPage,
@@ -148,6 +148,13 @@ export default function PagesManager({
   }, []);
   // While arranging, the site header's eye closes Arrange (ViewPageButton).
   useRegisterPageViewReturn(arrangingSections ? closeArrange : null);
+  // The site header's Layout icon (PageLayoutButton, 2026-11-03) opens the
+  // selected page's Layout, while it can.
+  const openLayout = useCallback(() => {
+    setArranging(false);
+    setLayingOut(true);
+  }, []);
+  useRegisterPageLayoutOpen(selected && blockBuildStyle && canEditStyles && !layingOut ? openLayout : null);
 
   // The style has changed: fresh styles from the server, then the preview.
   const closeLayout = () => {
@@ -375,7 +382,7 @@ export default function PagesManager({
       </section>
 
       <aside className="flex min-h-0 flex-col gap-4">
-        <div className={`grid gap-2 ${canEditStyles ? "grid-cols-5" : "grid-cols-4"}`}>
+        <div className="grid grid-cols-4 gap-2">
           <button type="button" onClick={() => openModal("add")} disabled={isPending} className={buttonClass}>
             Add
           </button>
@@ -387,20 +394,6 @@ export default function PagesManager({
           >
             Edit
           </button>
-          {canEditStyles && (
-            <button
-              type="button"
-              onClick={() => {
-                setArranging(false);
-                setLayingOut(true);
-              }}
-              disabled={!blockBuildStyle || isPending}
-              title="Change this page's layout (its Display Style), seeing its real content"
-              className={buttonClass}
-            >
-              Layout
-            </button>
-          )}
           <button
             type="button"
             onClick={() => {
