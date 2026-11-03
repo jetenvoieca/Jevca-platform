@@ -29,6 +29,14 @@
 // Media Catalogue — not the Hopper. Name: the words after the year, else
 // line 2; no venue (chosen afterwards from Locations); the old heading
 // kept at the top of the description, for checking.
+//
+// Profile (2026-11-03): the site's profile page (profile.aspx, in the
+// menu) — .profile-images (the artist's photos, 400px), .profile-galleries
+// (an h3, then a list of links: the gallery's name, its website) and
+// #biography (an h3, then a table, one paragraph a row). Sent to
+// /api/hopper/profile-import: the Biography / CV's text and picture (the
+// first photo) where it has none, and the galleries added as Locations
+// and listed in the Galleries entry, in the site's order.
 (function () {
   const HOST_ID = "hopper-isyt-host";
   const OTHER_HOST_ID = "hopper-picker-host";
@@ -306,6 +314,66 @@
     return read.filter(Boolean);
   }
 
+  // ---------- profile ----------
+
+  // The site's profile page, from its menu — null if it has none.
+  function findProfilePage(doc) {
+    for (const a of doc.querySelectorAll("a[href]")) {
+      try {
+        const u = new URL(a.getAttribute("href"), location.href);
+        if (/\/profile\.aspx$/i.test(u.pathname) && !u.searchParams.has("pageid")) return u.toString();
+      } catch (e) {
+        // not an address
+      }
+    }
+    return null;
+  }
+
+  // The biography: a paragraph for each row of its table (the row's cells
+  // together), or its words as they are when it has no table.
+  function biographyText(el) {
+    if (!el) return "";
+    const rows = [...el.querySelectorAll("tr")];
+    if (rows.length) {
+      return rows
+        .map((tr) => [...tr.cells].map((td) => linesOf(td)).filter(Boolean).join(" "))
+        .filter(Boolean)
+        .join("\n\n");
+    }
+    const copy = el.cloneNode(true);
+    copy.querySelectorAll("h3").forEach((h) => h.remove());
+    return linesOf(copy);
+  }
+
+  // A photo at larger sizes than found (the site may have made them), then
+  // as found.
+  function profilePhotoCandidates(found) {
+    if (!found) return null;
+    const m = found.match(/^(.*\/)(\d+)(\/[^/]+)$/);
+    if (!m) return [found];
+    const larger = [1200, 800, 600].filter((n) => n > Number(m[2])).map((n) => `${m[1]}${n}${m[3]}`);
+    return [...larger, found];
+  }
+
+  async function readProfile(say) {
+    const pageUrl = findProfilePage(document);
+    if (!pageUrl) return null;
+    say("Reading the profile…");
+    const doc = await fetchDoc(pageUrl);
+    if (!doc) return null;
+    const galleries = [...doc.querySelectorAll(".profile-galleries li")]
+      .map((li) => {
+        const a = li.querySelector("a[href]");
+        return { name: clean(li.textContent), websiteUrl: a ? clean(a.getAttribute("href")) : "" };
+      })
+      .filter((g) => g.name);
+    const biography = biographyText(doc.querySelector("#biography, .profile-biography"));
+    const photo = doc.querySelector(".profile-images img")?.getAttribute("src");
+    const photoUrl = photo ? new URL(photo, location.href).toString() : null;
+    if (!biography && !galleries.length) return null;
+    return { biography, galleries, photoUrl, candidates: profilePhotoCandidates(photoUrl) };
+  }
+
   async function readSite(say) {
     const sections = findSections(document);
     const works = [];
@@ -351,6 +419,8 @@
   }
 
   function detailLine(w) {
+    if (w.kind === "biography") return `${w.biography.split(/\s+/).length} words${w.candidates ? " · with photo" : ""}`;
+    if (w.kind === "galleries") return `${w.galleries.length} galleries`;
     if (w.kind === "exhibition") {
       return [w.startDate, w.endDate].filter(Boolean).join(" to ") || w.year;
     }
@@ -358,6 +428,8 @@
   }
 
   function hoverText(w) {
+    if (w.kind === "biography") return w.biography;
+    if (w.kind === "galleries") return w.galleries.map((g) => [g.name, g.websiteUrl].filter(Boolean).join(" — ")).join("\n");
     if (w.kind === "exhibition") {
       return [w.title, detailLine(w), w.openingTimes, w.description].filter(Boolean).join("\n\n");
     }
@@ -426,7 +498,7 @@
       const wrap = document.createElement("div");
       wrap.className = "section";
       const fresh = section.works.filter((w) => !known.has(w.sourceUrl)).length;
-      const noun = section.exhibitions ? "exhibitions" : "works";
+      const noun = section.profile ? "items" : section.exhibitions ? "exhibitions" : "works";
       wrap.innerHTML = `
         <label class="section-head"><input type="checkbox" ${fresh ? "checked" : ""}>
           ${escapeHtml(section.name)} <span class="count">${section.works.length} ${noun}${
@@ -477,13 +549,32 @@
     });
 
     // Works go to the Hopper first, then exhibitions straight into
-    // Exhibitions.
+    // Exhibitions, then the profile into the Profile Catalogue.
     let sending = [];
     let sendingExhibitions = [];
-    const sendExhibitions = () => {
-      if (!sendingExhibitions.length) {
+    let sendingProfile = [];
+    const sendProfile = () => {
+      if (!sendingProfile.length) {
         status.textContent += " — All done!";
         update();
+        return;
+      }
+      const biography = sendingProfile.find((w) => w.kind === "biography");
+      const galleries = sendingProfile.find((w) => w.kind === "galleries");
+      status.textContent = "Sending the profile…";
+      chrome.runtime.sendMessage({
+        type: "SEND_PROFILE",
+        token,
+        profile: {
+          biography: biography?.biography || "",
+          candidates: biography?.candidates || null,
+          galleries: galleries?.galleries || [],
+        },
+      });
+    };
+    const sendExhibitions = () => {
+      if (!sendingExhibitions.length) {
+        sendProfile();
         return;
       }
       status.textContent = `Sending exhibition 1 of ${sendingExhibitions.length}…`;
@@ -504,8 +595,9 @@
     };
     sendBtn.addEventListener("click", () => {
       const chosen = all.filter((w) => selected.has(w)); // in the site's order
-      sending = chosen.filter((w) => w.kind !== "exhibition");
+      sending = chosen.filter((w) => !w.kind);
       sendingExhibitions = chosen.filter((w) => w.kind === "exhibition");
+      sendingProfile = chosen.filter((w) => w.kind === "biography" || w.kind === "galleries");
       sendBtn.disabled = true;
       if (!sending.length) {
         sendExhibitions();
@@ -560,8 +652,20 @@
         }`;
         if (item) markSent(item, message.ok);
       }
-      if (message.type === "EXHIBITIONS_DONE") {
-        status.textContent += " — All done!";
+      if (message.type === "EXHIBITIONS_DONE") sendProfile();
+      if (message.type === "PROFILE_DONE") {
+        sendingProfile.forEach((w) => markSent(w, message.ok));
+        const r = message.result || {};
+        status.textContent = message.ok
+          ? `Profile ✔ — ${[
+              r.biographyFilled && "biography added",
+              r.pictureAdded && "photo added",
+              `${r.locationsAdded || 0} new locations`,
+              `${r.galleriesListed || 0} galleries listed`,
+            ]
+              .filter(Boolean)
+              .join(", ")} — All done!`
+          : `Profile ✖ (${message.error}) — done.`;
         update();
       }
     });
@@ -586,8 +690,17 @@
 
     const { sections, works } = await readSite(say);
     const exhibitions = await readExhibitions(say);
-    if (!works.length && !exhibitions.length) return say("No works or exhibitions found on this site.");
+    const profile = await readProfile(say);
+    if (!works.length && !exhibitions.length && !profile) return say("No works, exhibitions or profile found on this site.");
     if (exhibitions.length) sections.push({ id: "exhibitions", name: "Exhibitions", exhibitions: true, works: exhibitions });
+    if (profile) {
+      const items = [];
+      if (profile.biography) {
+        items.push({ kind: "biography", title: "Biography", biography: profile.biography, thumb: profile.photoUrl, candidates: profile.candidates });
+      }
+      if (profile.galleries.length) items.push({ kind: "galleries", title: "Galleries", galleries: profile.galleries, thumb: null });
+      sections.push({ id: "profile", name: "Profile", profile: true, works: items });
+    }
 
     say("Checking what's already in Jevca…");
     const answer = await chrome.runtime.sendMessage({
@@ -598,10 +711,11 @@
     if (answer?.error) return say(`Couldn't check Jevca: ${answer.error}`);
     const known = new Set(answer.known);
 
-    const withWorks = sections.filter((s) => s.works.length && !s.exhibitions).length;
+    const withWorks = sections.filter((s) => s.works.length && !s.exhibitions && !s.profile).length;
     say(
       `Found ${works.length} works in ${withWorks} sections` +
-        (exhibitions.length ? ` and ${exhibitions.length} exhibitions` : "") +
+        (exhibitions.length ? `, ${exhibitions.length} exhibitions` : "") +
+        (profile ? " and the profile" : "") +
         (known.size ? `, ${known.size} already in Jevca (not ticked).` : ".") +
         " Hover one to see all its details."
     );

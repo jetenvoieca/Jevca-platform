@@ -3,18 +3,10 @@
 import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
+import { ensureFixedEntries, FIXED_ENTRIES, type ProfileStoryKind } from "@/lib/profileCatalogue";
 
-// The Profile Catalogue (2026-10-26) — see ProfileStory in schema.prisma.
-
-export type ProfileStoryKind = "STORY" | "STATEMENT" | "BIOGRAPHY" | "GALLERIES";
-
-// The entries every artist has (2026-11-02; Galleries 2026-11-03), first
-// in the catalogue, in this order, named by their kind.
-const FIXED_ENTRIES: { kind: Exclude<ProfileStoryKind, "STORY">; caption: string }[] = [
-  { kind: "STATEMENT", caption: "Artist Statement" },
-  { kind: "BIOGRAPHY", caption: "Biography / CV" },
-  { kind: "GALLERIES", caption: "Galleries" },
-];
+// The Profile Catalogue (2026-10-26) — see ProfileStory in schema.prisma
+// and lib/profileCatalogue.ts (the fixed entries).
 
 // One gallery in a Galleries entry (2026-11-03): its Location's name, and
 // its town and website from its Customer record.
@@ -112,16 +104,7 @@ function toRow(s: StoryRecord): ProfileStoryRow {
 // time, empty), then the stories in order.
 export async function listProfileCatalogue(artistId: string): Promise<ProfileStoryRow[]> {
   await requireArtistAccess(artistId);
-  const have = await db.profileStory.findMany({
-    where: { artistId, kind: { not: "STORY" } },
-    select: { kind: true },
-  });
-  const missing = FIXED_ENTRIES.filter((f) => !have.some((h) => h.kind === f.kind));
-  if (missing.length) {
-    await db.profileStory.createMany({
-      data: missing.map((f) => ({ artistId, kind: f.kind, caption: f.caption, position: 0 })),
-    });
-  }
+  await ensureFixedEntries(artistId);
   return entriesInOrder(artistId);
 }
 

@@ -183,30 +183,35 @@ async function sendOneImage({ url, candidates, filename, caption, description, s
   return finalizeData;
 }
 
+// A picture from an ISYT site uploaded to storage — the first of
+// `candidates` that loads — for an import route to save into the Media
+// Catalogue: { key, contentType }, or {} with no candidates.
+async function uploadPicture(candidates, filename, token) {
+  if (!candidates || !candidates.length) return {};
+  const { blob, url } = await fetchFirstImage(candidates);
+  const contentType = blob.type || guessContentType(url);
+  const requestRes = await fetch(`${JEVCA_ORIGIN}/api/hopper/request-upload`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify({ token, filename, contentType }),
+  });
+  const requestData = await requestRes.json().catch(() => ({}));
+  if (!requestRes.ok) throw new Error(requestData.error || `request-upload failed (${requestRes.status})`);
+  const putRes = await fetch(requestData.uploadUrl, {
+    method: "PUT",
+    body: blob,
+    headers: { "content-type": contentType },
+  });
+  if (!putRes.ok) throw new Error(`Upload to storage failed (${putRes.status})`);
+  return { key: requestData.key, contentType };
+}
+
 // One exhibition from an ISYT site (2026-11-02): its picture, if any,
-// uploaded like a Hopper item's, then the exhibition created in Jevca's
-// Exhibitions with it (/api/hopper/exhibition-import) — the picture goes
-// to the Media Catalogue, not the Hopper.
+// uploaded, then the exhibition created in Jevca's Exhibitions with it
+// (/api/hopper/exhibition-import) — the picture goes to the Media
+// Catalogue, not the Hopper.
 async function sendOneExhibition({ candidates, filename, ...fields }, token) {
-  let upload = {};
-  if (candidates && candidates.length) {
-    const { blob, url } = await fetchFirstImage(candidates);
-    const contentType = blob.type || guessContentType(url);
-    const requestRes = await fetch(`${JEVCA_ORIGIN}/api/hopper/request-upload`, {
-      method: "POST",
-      headers: { "content-type": "application/json" },
-      body: JSON.stringify({ token, filename, contentType }),
-    });
-    const requestData = await requestRes.json().catch(() => ({}));
-    if (!requestRes.ok) throw new Error(requestData.error || `request-upload failed (${requestRes.status})`);
-    const putRes = await fetch(requestData.uploadUrl, {
-      method: "PUT",
-      body: blob,
-      headers: { "content-type": contentType },
-    });
-    if (!putRes.ok) throw new Error(`Upload to storage failed (${putRes.status})`);
-    upload = { key: requestData.key, contentType };
-  }
+  const upload = await uploadPicture(candidates, filename, token);
   const res = await fetch(`${JEVCA_ORIGIN}/api/hopper/exhibition-import`, {
     method: "POST",
     headers: { "content-type": "application/json" },
@@ -236,6 +241,29 @@ chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
       })
       .catch((err) => sendResponse({ error: err.message }));
     return true;
+  }
+
+  // The profile from an ISYT site (2026-11-03): the profile photo
+  // uploaded, then the biography and galleries sent to
+  // /api/hopper/profile-import.
+  if (message.type === "SEND_PROFILE") {
+    (async () => {
+      const { profile, token } = message;
+      let reply;
+      try {
+        const upload = await uploadPicture(profile.candidates, "profile.jpg", token);
+        const res = await fetch(`${JEVCA_ORIGIN}/api/hopper/profile-import`, {
+          method: "POST",
+          headers: { "content-type": "application/json" },
+          body: JSON.stringify({ token, biography: profile.biography, galleries: profile.galleries, ...upload }),
+        });
+        const data = await res.json().catch(() => ({}));
+        reply = res.ok ? { ok: true, result: data } : { ok: false, error: data.error || `(${res.status})` };
+      } catch (err) {
+        reply = { ok: false, error: err.message };
+      }
+      chrome.tabs.sendMessage(sender.tab.id, { type: "PROFILE_DONE", ...reply });
+    })();
   }
 
   if (message.type === "SEND_EXHIBITIONS") {
