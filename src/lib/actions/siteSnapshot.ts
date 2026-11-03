@@ -15,6 +15,7 @@ import {
 } from "@/lib/actions/curations";
 import { siteWorks, type SiteWork } from "@/lib/siteWorks";
 import { readContactPanel } from "@/lib/contactPanel";
+import { getDynamicPresentation } from "@/lib/actions/dynamicPresentations";
 import { listCurationSections } from "@/lib/actions/curationSections";
 import { getPageCanvas } from "@/lib/actions/pageCanvas";
 import { getPageComponents } from "@/lib/actions/pageComponents";
@@ -119,9 +120,10 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
   // the database.
   const curations: Record<string, SnapshotCuration> = {};
   for (const id of curationIds) {
-    const [detail, sections] = await Promise.all([
+    const [detail, sections, dynamic] = await Promise.all([
       getCuration(id, site.artistId),
       listCurationSections(id, site.artistId),
+      getDynamicPresentation(id, site.artistId),
     ]);
     if (!detail) continue;
     const presentations: Record<string, CurationWorkPresentation> = {};
@@ -129,7 +131,7 @@ async function buildSiteSnapshot(siteId: string): Promise<SiteSnapshot | null> {
       const presentation = await getCurationWorkPresentation(id, site.artistId, w.artworkId);
       if (presentation) presentations[w.artworkId] = presentation;
     }
-    curations[id] = { detail, sections, presentations };
+    curations[id] = { detail, sections, presentations, dynamic };
   }
 
   const covers = (await listCurationCovers(site.artistId)).filter((c) => curationIds.has(c.id));

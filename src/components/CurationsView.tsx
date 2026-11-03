@@ -27,6 +27,7 @@ import { moveArtworksToLocation } from "@/lib/actions/locations";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { formatMoney } from "@/lib/currencies";
 import BaseStar from "@/components/BaseStar";
+import DynamicPresentationEditor from "@/components/DynamicPresentationEditor";
 
 // Curations page (2026-09-24, stage one). Two columns:
 // - left: the open curation — its name (click to rename), ⊞ to add works,
@@ -55,6 +56,10 @@ import BaseStar from "@/components/BaseStar";
 // Catalogue details (ArtworkDetailPanel) in a modal; Consign (unsold
 // works only) lists the locations, and choosing one puts the work there
 // (moveArtworksToLocation, as Locations' Add works does).
+//
+// Dynamic (2026-11-03, Craig's mockup — phase one): the curation's
+// Dynamic presentation, edited full screen (DynamicPresentationEditor),
+// shown on Canvas pages in place of the usual curation panel.
 //
 // Frozen headers (2026-10-04, general requirement): the page fills the
 // space under the site header and never scrolls as a whole. The open
@@ -85,6 +90,7 @@ export default function CurationsView({
   // The work whose presentation modal is open, if any.
   const [presentingId, setPresentingId] = useState<string | null>(null);
   const [aboutOpen, setAboutOpen] = useState(false);
+  const [dynamicOpen, setDynamicOpen] = useState(false);
   // The work open in the Catalogue modal, or in the Consign modal.
   const [catalogueWork, setCatalogueWork] = useState<ArtworkDetail | null>(null);
   const [consignWork, setConsignWork] = useState<ArtworkDetail | null>(null);
@@ -118,6 +124,7 @@ export default function CurationsView({
     setSelected(detail);
     setTitleDraft(detail?.name ?? "");
     setAboutOpen(false);
+    setDynamicOpen(false);
     updateUrlSelected(detail?.id ?? null);
   };
 
@@ -424,6 +431,14 @@ export default function CurationsView({
               </button>
               <button
                 type="button"
+                onClick={() => setDynamicOpen(true)}
+                title="A presentation of sections with works, pictures and text placed by hand — for Canvas pages"
+                className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm text-neutral-900 hover:bg-neutral-50"
+              >
+                Dynamic
+              </button>
+              <button
+                type="button"
                 onClick={handleDelete}
                 disabled={isPending}
                 className="shrink-0 rounded-md border border-red-200 px-3 py-1 text-sm text-red-600 hover:bg-red-50 disabled:opacity-50"
@@ -568,6 +583,17 @@ export default function CurationsView({
             </div>
           </div>
         </div>
+      )}
+
+      {selected && dynamicOpen && (
+        <DynamicPresentationEditor
+          key={selected.id}
+          curationId={selected.id}
+          artistId={artistId}
+          siteId={siteId}
+          works={selected.works}
+          onClose={() => setDynamicOpen(false)}
+        />
       )}
 
       {selected && aboutOpen && (

@@ -14,6 +14,8 @@ import type { CanvasPlacement } from "@/lib/actions/pageCanvas";
 import type { CanvasLayout } from "@/lib/pageStyleLayout";
 import { useSiteData } from "@/lib/siteData";
 import CurationPanel from "@/components/CurationPanel";
+import DynamicPresentationView from "@/components/DynamicPresentationView";
+import type { DynamicPresentationData } from "@/lib/actions/dynamicPresentations";
 import FadeImage from "@/components/FadeImage";
 import SoldFlag from "@/components/SoldFlag";
 import { isSold } from "@/lib/artworkFilters";
@@ -398,12 +400,43 @@ export default function CanvasPlayer({
       </div>
 
       {viewing && (
-        <CurationPanel
+        <OpenCuration
+          key={`${viewing.curationId}:${viewing.artworkId}`}
           curationId={viewing.curationId}
           artworkId={viewing.artworkId}
           onClose={closePanel}
         />
       )}
     </div>
+  );
+}
+
+// A curation opened from the canvas (2026-11-03): its Dynamic presentation
+// if it has one, otherwise the curation panel — nothing until that's known.
+function OpenCuration({
+  curationId,
+  artworkId,
+  onClose,
+}: {
+  curationId: string;
+  artworkId: string;
+  onClose: () => void;
+}) {
+  const siteData = useSiteData();
+  const [dynamic, setDynamic] = useState<DynamicPresentationData | null | undefined>(undefined);
+  useEffect(() => {
+    let current = true;
+    siteData.getDynamicPresentation(curationId).then((d) => {
+      if (current) setDynamic(d);
+    });
+    return () => {
+      current = false;
+    };
+  }, [siteData, curationId]);
+  if (dynamic === undefined) return null;
+  return dynamic ? (
+    <DynamicPresentationView curationId={curationId} data={dynamic} onClose={onClose} />
+  ) : (
+    <CurationPanel curationId={curationId} artworkId={artworkId} onClose={onClose} />
   );
 }

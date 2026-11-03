@@ -25,6 +25,7 @@ import { listProfileStories, type ProfileStoryRow } from "@/lib/actions/profileS
 import { listShownExhibitions, type ExhibitionRow } from "@/lib/actions/exhibitions";
 import { listLiveSiteWorks } from "@/lib/actions/siteSnapshot";
 import { siteWorks, type SiteWork } from "@/lib/siteWorks";
+import { getDynamicPresentation, type DynamicPresentationData } from "@/lib/actions/dynamicPresentations";
 
 // Where the page components (PagePreview, CanvasPlayer, CurationPanel,
 // CurationWorkView, PageSectionsArranger) get their content from
@@ -73,6 +74,8 @@ export type SiteData = {
   // Every work the site shows, each once (2026-11-02, for a Showcase —
   // see lib/siteWorks.ts).
   listSiteWorks(): Promise<SiteWork[]>;
+  // A curation's Dynamic presentation (2026-11-03) — null if it has none.
+  getDynamicPresentation(curationId: string): Promise<DynamicPresentationData | null>;
   // Everything a page shows, at once (2026-10-13): from the published
   // snapshot, which is already in the browser, so a page is drawn
   // straight away — no "Loading…". Null in the admin preview, whose
@@ -130,6 +133,7 @@ export function LiveSiteData({
       listProfileStories: () => listProfileStories(artistId),
       listExhibitions: () => listShownExhibitions(artistId),
       listSiteWorks: () => listLiveSiteWorks(siteId),
+      getDynamicPresentation: (curationId) => getDynamicPresentation(curationId, artistId),
       pageContentNow: () => null,
       canvasNow: () => null,
       homeHref: null,
@@ -170,6 +174,7 @@ export function SnapshotSiteData({
       getHeadingNames: async (pageId) => snapshotHeadingNames(snapshot, pageId),
       listProfileStories: async () => snapshot.profileStories,
       listExhibitions: async () => snapshot.exhibitions,
+      getDynamicPresentation: async (curationId) => snapshot.curations[curationId]?.dynamic ?? null,
       listSiteWorks: async () =>
         siteWorks(
           snapshot.pages,

@@ -14,6 +14,7 @@ import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 import { readPageStories } from "@/lib/pageStories";
 import type { ContactPanelSettings } from "@/lib/contactPanel";
+import type { DynamicPresentationData } from "@/lib/actions/dynamicPresentations";
 
 // A published site (2026-10-06) — everything its pages show, saved when
 // "Publish to live site" is pressed (see SitePublication in
@@ -97,6 +98,9 @@ export type SnapshotCuration = {
   detail: CurationDetail;
   sections: CurationSectionData[];
   presentations: Record<string, CurationWorkPresentation>;
+  // Its Dynamic presentation (2026-11-03) — absent or null if it has none
+  // (or was published before they existed).
+  dynamic?: DynamicPresentationData | null;
 };
 
 export type SiteSnapshot = {
