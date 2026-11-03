@@ -7,6 +7,11 @@ import { SITE_DESKTOP_MIN } from "@/lib/siteBreakpoint";
 import { bodyTextCss } from "@/components/textStyleCss";
 import SiteLogo from "@/components/SiteLogo";
 
+// The least space between pages, and between sub-pages, in the full screen
+// menu, in pixels.
+const FULL_SCREEN_GAP = 18;
+const FULL_SCREEN_SUB_GAP = 12;
+
 // One menu entry — a Live Page. With `href` it's a link (the published
 // site shows the page without leaving — see PublishedSite); without (the
 // Menus page preview) choosing it only shows what would happen.
@@ -101,7 +106,9 @@ export default function MenuView({
   };
 
   // A Side list's pages keep their size full screen; the other kinds'
-  // grow, as they always have. Pages under another (2026-10-25) show
+  // grow, as they always have. Full screen (phones), pages are at least
+  // FULL_SCREEN_GAP apart, sub-pages FULL_SCREEN_SUB_GAP (2026-11-03,
+  // Craig's request — easier to tap than a Side list's tight spacing). Pages under another (2026-10-25) show
   // under it, indented, in their own look — while one of that group's
   // pages is showing, or always.
   const list = (fullScreen: boolean) => {
@@ -113,7 +120,10 @@ export default function MenuView({
     const open = (item: MenuViewItem) =>
       sub.show === "always" || item.id === currentId || !!item.children?.some((c) => c.id === currentId);
     return (
-      <ul className={`flex flex-col ${ALIGN_ITEMS[align]}`} style={{ gap: sideList ? layout.list.gap : 4 }}>
+      <ul
+        className={`flex flex-col ${ALIGN_ITEMS[align]}`}
+        style={{ gap: Math.max(sideList ? layout.list.gap : 4, fullScreen ? FULL_SCREEN_GAP : 0) }}
+      >
         {items.map((item) => (
           <li key={item.id} className="max-w-full">
             <MenuEntry
@@ -128,7 +138,11 @@ export default function MenuView({
             {!!item.children?.length && open(item) && (
               <ul
                 className={`flex flex-col ${ALIGN_ITEMS[align]}`}
-                style={{ gap: sub.gap, marginTop: sub.gap, paddingLeft: align === "left" ? sub.indent : 0 }}
+                style={{
+                  gap: Math.max(sub.gap, fullScreen ? FULL_SCREEN_SUB_GAP : 0),
+                  marginTop: Math.max(sub.gap, fullScreen ? FULL_SCREEN_SUB_GAP : 0),
+                  paddingLeft: align === "left" ? sub.indent : 0,
+                }}
               >
                 {item.children.map((child) => (
                   <li key={child.id} className="max-w-full">
