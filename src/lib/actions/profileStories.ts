@@ -87,6 +87,21 @@ export async function listProfileCatalogue(artistId: string): Promise<ProfileSto
       data: missing.map((f) => ({ artistId, kind: f.kind, caption: f.caption, position: 0 })),
     });
   }
+  return entriesInOrder(artistId);
+}
+
+// What a page's Profile stories can show — every entry, in the
+// catalogue's order: since 2026-11-03 (Craig's request, the ISYT profile
+// page) the Artist Statement and Biography / CV too, once the artist has
+// them (they're made when the Profile Catalogue is first opened).
+export async function listProfileStories(artistId: string): Promise<ProfileStoryRow[]> {
+  await requireArtistAccess(artistId);
+  return entriesInOrder(artistId);
+}
+
+// The artist's entries: the fixed ones first, in FIXED_ENTRIES' order,
+// then the stories in their order.
+async function entriesInOrder(artistId: string): Promise<ProfileStoryRow[]> {
   const rows = await db.profileStory.findMany({
     where: { artistId },
     orderBy: { position: "asc" },
@@ -97,18 +112,6 @@ export async function listProfileCatalogue(artistId: string): Promise<ProfileSto
     return i < 0 ? FIXED_ENTRIES.length : i;
   };
   return rows.map(toRow).sort((a, b) => rank(a.kind) - rank(b.kind));
-}
-
-// The stories a page's Profile stories can show — the stories only, in
-// order (the Artist Statement and Biography / CV aren't offered yet).
-export async function listProfileStories(artistId: string): Promise<ProfileStoryRow[]> {
-  await requireArtistAccess(artistId);
-  const rows = await db.profileStory.findMany({
-    where: { artistId, kind: "STORY" },
-    orderBy: { position: "asc" },
-    select: STORY_SELECT,
-  });
-  return rows.map(toRow);
 }
 
 // A new story at the end of the catalogue, for this picture or video. Its

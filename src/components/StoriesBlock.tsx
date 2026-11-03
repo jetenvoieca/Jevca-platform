@@ -8,7 +8,9 @@ import PictureWordsBlock from "@/components/PictureWordsBlock";
 // stacked `storySpace` apart — each its picture or video beside its
 // caption and story, as a Picture & words, the picture on the style's
 // side or, swapped on the page, the other. A story no longer in the
-// Profile Catalogue, or with nothing to show, is left out.
+// Profile Catalogue, or with nothing to show, is left out — an Artist
+// Statement or Biography / CV (2026-11-03) with no text or picture too,
+// as its fixed name alone isn't anything to show.
 export default function StoriesBlock({
   settings,
   chosen,
@@ -23,7 +25,7 @@ export default function StoriesBlock({
   const byId = new Map(stories.map((s) => [s.id, s]));
   const shown = chosen.flatMap((c) => {
     const story = byId.get(c.id);
-    return story && (story.media || story.caption || story.story)
+    return story && (story.media || story.story || (story.kind === "STORY" && story.caption))
       ? [{ story, swap: c.swap }]
       : [];
   });

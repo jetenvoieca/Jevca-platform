@@ -89,7 +89,9 @@ export default function PictureWordsBlock({
             {image}
           </div>
         ))}
-      <div className={`min-w-0 ${wordsOrder}`}>
+      {/* With no picture (2026-11-03 — e.g. a Biography / CV without
+          one), the words take the full width. */}
+      <div className={`min-w-0 ${wordsOrder} ${picture ? "" : "site:col-span-2"}`}>
         {(headline || (accent && s.accent)) && (
           <h2 className="font-normal" style={{ marginBottom: s.headlineSpace }}>
             {headline && (
