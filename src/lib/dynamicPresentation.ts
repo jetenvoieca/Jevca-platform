@@ -14,7 +14,9 @@ import { isSiteFontId, type SiteFontId } from "@/lib/siteFonts";
 // an entrance as its section scrolls into view — fading, sliding in from
 // a side or growing, after a delay, so they arrive one after another —
 // and sit in a frame: a card (white, rounded, soft shadow) or with a
-// corner cut off. Kept as JSON on
+// corner cut off. Phase three (2026-11-03): each item has a depth — as the
+// page scrolls, an item set further back moves a little slower than its
+// section and one set nearer a little faster (parallax). Kept as JSON on
 // the curation (Curation.dynamicPresentation). Plain module, shared by
 // the editor, the actions and the site.
 
@@ -58,6 +60,9 @@ export type DynamicItem = {
   delay: number;
   duration: number;
   frame: DynamicFrame;
+  // -10 (near, moves faster) to 10 (far back, moves slower); 0 = with
+  // the page.
+  depth: number;
 };
 
 export type DynamicSection = {
@@ -84,6 +89,7 @@ export const DYNAMIC_LIMITS = {
   text: 2000,
   delay: { min: 0, max: 10 },
   duration: { min: 0.2, max: 5 },
+  depth: { min: -10, max: 10 },
 } as const;
 
 export const NEW_SECTION_HEIGHT = 56;
@@ -116,6 +122,7 @@ function cleanItem(raw: unknown): DynamicItem | null {
     delay: cleanNumber(v.delay, l.delay, 0, 1),
     duration: cleanNumber(v.duration, l.duration, 0.8, 1),
     frame: DYNAMIC_FRAMES.find((f) => f.value === v.frame)?.value ?? "none",
+    depth: cleanNumber(v.depth, l.depth, 0, 0),
   };
 }
 

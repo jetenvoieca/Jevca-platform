@@ -14,7 +14,11 @@ import { SITE_FONT_FAMILY } from "@/lib/siteFontFaces";
 // outline). With `animate` (2026-11-03, phase two) the items make their
 // entrances once a fifth of the section has scrolled into view — without,
 // everything simply shows (the editor, until its Play). Each item sits in
-// its frame: a card or a cut corner.
+// its frame: a card or a cut corner. Animated, it also follows the scroll
+// by its depth (parallax): the section keeps --scroll-p, how far its
+// middle is from the middle of the window (−1 above … 1 below, roughly),
+// and each item with a depth is moved by it. Nothing moves for a visitor
+// who asks their device for less motion.
 
 // How far an item slides in from, as a % of its section's width; how much
 // smaller it grows from.
@@ -22,6 +26,9 @@ const SLIDE = 6;
 const GROW_FROM = 0.8;
 // A cut corner: the top right, a fifth of the way along each side.
 const CUT_CORNER = "polygon(0 0, 80% 0, 100% 20%, 100% 100%, 0 100%)";
+// How far an item moves at full scroll for each step of depth, as a % of
+// its section's width.
+const DEPTH_STEP = 1.5;
 
 // A work of the curation, as an item shows it — the works come from the
 // curation, given by whoever draws the presentation.
@@ -44,9 +51,40 @@ export function DynamicSectionBox({
   const background = section.backgroundImageId ? media[section.backgroundImageId] : undefined;
   const boxRef = useRef<HTMLDivElement>(null);
   const [inView, setInView] = useState(false);
+  const [moving, setMoving] = useState(false);
+  useEffect(() => {
+    setMoving(animate && !window.matchMedia("(prefers-reduced-motion: reduce)").matches);
+  }, [animate]);
+
+  // Keeps --scroll-p up to date while anything scrolls (the window, or
+  // the presentation's own scrolling layer), once a frame.
+  const hasDepth = section.items.some((i) => i.depth !== 0);
   useEffect(() => {
     const box = boxRef.current;
-    if (!animate || !box) return;
+    if (!moving || !hasDepth || !box) return;
+    let frame = 0;
+    const update = () => {
+      frame = 0;
+      const r = box.getBoundingClientRect();
+      const p = (r.top + r.height / 2 - window.innerHeight / 2) / window.innerHeight;
+      box.style.setProperty("--scroll-p", Math.max(-1.5, Math.min(1.5, p)).toFixed(4));
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(update);
+    };
+    update();
+    document.addEventListener("scroll", onScroll, { capture: true, passive: true });
+    window.addEventListener("resize", onScroll);
+    return () => {
+      document.removeEventListener("scroll", onScroll, { capture: true });
+      window.removeEventListener("resize", onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [moving, hasDepth]);
+
+  useEffect(() => {
+    const box = boxRef.current;
+    if (!moving || !box) return;
     const observer = new IntersectionObserver(
       (entries) => {
         if (entries.some((e) => e.isIntersecting)) {
@@ -58,8 +96,8 @@ export function DynamicSectionBox({
     );
     observer.observe(box);
     return () => observer.disconnect();
-  }, [animate]);
-  const shown = !animate || inView;
+  }, [moving]);
+  const shown = !moving || inView;
 
   return (
     <div
@@ -83,7 +121,7 @@ export function DynamicSectionBox({
         )
       )}
       {section.items.map((item) => (
-        <ItemSlot key={item.id} item={item} media={media} renderItem={renderItem} shown={shown} />
+        <ItemSlot key={item.id} item={item} media={media} renderItem={renderItem} shown={shown} moving={moving} />
       ))}
       {children}
     </div>
@@ -96,18 +134,27 @@ function ItemSlot({
   media,
   renderItem,
   shown,
+  moving,
 }: {
   item: DynamicItem;
   media: DynamicMedia;
   renderItem: (item: DynamicItem, content: ReactNode, style: CSSProperties) => ReactNode;
   shown: boolean;
+  moving: boolean;
 }) {
   const style: CSSProperties = { position: "absolute", left: `${item.x}%`, top: `${item.y}%`, width: `${item.w}%` };
+  // Further back (positive depth) lags behind the scroll; nearer runs ahead.
+  const depthStyle: CSSProperties | undefined =
+    moving && item.depth !== 0
+      ? { transform: `translateY(calc(var(--scroll-p, 0) * ${-item.depth * DEPTH_STEP}cqw))`, willChange: "transform" }
+      : undefined;
   const content = (
-    <div style={entranceStyle(item, shown)}>
-      <Framed item={item}>
-        <DynamicItemContent item={item} media={media} />
-      </Framed>
+    <div style={depthStyle}>
+      <div style={entranceStyle(item, shown)}>
+        <Framed item={item}>
+          <DynamicItemContent item={item} media={media} />
+        </Framed>
+      </div>
     </div>
   );
   return <>{renderItem(item, content, style)}</>;

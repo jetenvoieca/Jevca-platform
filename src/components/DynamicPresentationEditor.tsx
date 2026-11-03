@@ -28,6 +28,7 @@ import { DynamicSectionBox, DynamicWorksContext, type DynamicWork } from "@/comp
 // on the left. Saves itself a moment after each change. Phase two
 // (2026-11-03): an item's frame and entrance (with its delay and how long
 // it takes) are set with it; Play shows the chosen section's entrances.
+// Phase three: its depth, seen while scrolling once Play is on.
 
 const SAVE_AFTER_MS = 700;
 const newId = () => crypto.randomUUID();
@@ -137,6 +138,7 @@ export default function DynamicPresentationEditor({
     delay: 0,
     duration: 0.8,
     frame: "none",
+    depth: 0,
   });
 
   const addSection = () => {
@@ -445,6 +447,15 @@ export default function DynamicPresentationEditor({
                     />
                   </>
                 )}
+                <NumberField
+                  label="Depth (− nearer, + further back)"
+                  unit=""
+                  step={1}
+                  value={item.depth}
+                  limits={DYNAMIC_LIMITS.depth}
+                  onCommit={(depth) => setItem(section.id, item.id, { depth })}
+                  wide
+                />
                 <div className="flex gap-2">
                   <button type="button" onClick={toFront} className={button}>
                     To front
