@@ -3,7 +3,7 @@
 import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { revalidatePath } from "next/cache";
-import { publicMediaUrl } from "@/lib/r2";
+import { getPresignedDownloadUrl, publicMediaUrl } from "@/lib/r2";
 import { ARTWORK_IMAGE_SELECT, toArtworkImage } from "@/lib/artworkImages";
 import { deleteImagePermanently, deleteImagesPermanently } from "./imageDelete";
 
@@ -95,6 +95,30 @@ export async function getMediaDetail(id: string) {
   // original throughout, since the lightbox's "view full size" click
   // deliberately shows the real, unresized file.
   return { ...rest, artwork: mainImageOfArtwork, displayUrl: publicMediaUrl(image.displayKey) || image.url };
+}
+
+// Where to fetch an item's original file to share it (2026-11-04, Craig:
+// send a video by WhatsApp) — a short-lived address, and the file's name
+// and type.
+export async function getMediaShareFile(
+  id: string,
+): Promise<{ url: string; filename: string; mimeType: string } | { error: string }> {
+  await requireRecordAccess(db.image.findUnique({ where: { id }, select: { artistId: true } }));
+  const image = await db.image.findUnique({ where: { id }, select: { url: true, mimeType: true, caption: true } });
+  const prefix = "/api/media/";
+  if (!image || !image.url.startsWith(prefix)) return { error: "This file can't be shared." };
+  const key = image.url.slice(prefix.length);
+  const file = key.split("/").pop() ?? "";
+  const extension = file.includes(".") ? file.slice(file.lastIndexOf(".")) : "";
+  const name =
+    // Plain letters only (accents dropped), as it goes in a header.
+    (image.caption ?? "")
+      .normalize("NFD")
+      .replace(/[^A-Za-z0-9 _-]/g, "")
+      .trim()
+      .slice(0, 80) || "Jevca";
+  const filename = `${name}${extension}`;
+  return { url: await getPresignedDownloadUrl(key, filename), filename, mimeType: image.mimeType };
 }
 
 export async function updateMedia(id: string, siteId: string, formData: FormData): Promise<void> {

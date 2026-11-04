@@ -48,6 +48,18 @@ export async function getPresignedUploadUrl(key: string, contentType: string) {
   return getSignedUrl(r2, command, { expiresIn: 300 });
 }
 
+// A short-lived URL to fetch a file from — saved as `filename` when
+// opened (2026-11-04, Media Catalogue's Share). Fetching it from a page
+// needs the bucket's CORS rule to allow the app's address.
+export async function getPresignedDownloadUrl(key: string, filename: string) {
+  const command = new GetObjectCommand({
+    Bucket: R2_BUCKET,
+    Key: key,
+    ResponseContentDisposition: `attachment; filename="${filename.replace(/["\\\r\n]/g, "")}"`,
+  });
+  return getSignedUrl(r2, command, { expiresIn: 600 });
+}
+
 // Builds a public, directly-loadable URL for an object in the bucket —
 // used for thumbnail/display image sizes (2026-08-13), which are served
 // straight from R2 rather than proxied through a server function, so

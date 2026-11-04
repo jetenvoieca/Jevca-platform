@@ -4,6 +4,7 @@ import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { updateMedia, deleteMedia } from "@/lib/actions/mediaCatalogue";
 import { addMediaToBucket } from "@/lib/actions/videoEditor";
+import ShareMediaButton from "@/components/ShareMediaButton";
 
 export type MediaDetail = {
   id: string;
@@ -127,6 +128,7 @@ export default function MediaDetailPanel({
               >
                 {addedToBucket ? "Added to Video Edit" : "Add to Video Edit"}
               </button>
+              <ShareMediaButton mediaId={media.id} />
               <button
                 type="button"
                 onClick={handleDelete}
