@@ -130,18 +130,19 @@ function checked(input: MarketingContactInput) {
 
 // Adds a contact (no `id`) or saves one, with its links — a name not yet
 // a contact of the other type (matched ignoring capitals) is added as
-// one. Returns every contact, as the links change the others too.
+// one. Returns its id and every contact, as the links change the others
+// too.
 export async function saveMarketingContact(
   id: string | null,
   input: MarketingContactInput,
-): Promise<{ contacts: MarketingContactRow[] } | { error: string }> {
+): Promise<{ id: string; contacts: MarketingContactRow[] } | { error: string }> {
   await requireAdmin();
   const result = checked(input);
   if ("error" in result) return { error: result.error! };
   const { data, links } = result;
   const other = otherType(data.type);
 
-  await db.$transaction(async (tx) => {
+  const savedId = await db.$transaction(async (tx) => {
     const contact = id
       ? await tx.marketingContact.update({ where: { id }, data, select: { id: true } })
       : await tx.marketingContact.create({ data, select: { id: true } });
@@ -174,9 +175,10 @@ export async function saveMarketingContact(
       ),
       skipDuplicates: true,
     });
+    return contact.id;
   });
 
-  return { contacts: await listMarketingContacts() };
+  return { id: savedId, contacts: await listMarketingContacts() };
 }
 
 // Deletes a contact and its links — not the contacts it was linked to.

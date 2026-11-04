@@ -1,6 +1,6 @@
 "use client";
 
-import { useMemo, useState, useTransition } from "react";
+import { useEffect, useMemo, useState, useTransition } from "react";
 import {
   deleteMarketingContact,
   saveMarketingContact,
@@ -11,13 +11,15 @@ import {
 } from "@/lib/actions/marketingContacts";
 import AddIconButton from "@/components/AddIconButton";
 import FormModal from "@/components/FormModal";
-import { inputCls, labelCls, primaryButtonCls, secondaryButtonCls } from "@/components/subscriberFormParts";
+import { useAutoSave } from "@/components/useAutoSave";
+import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberFormParts";
 
 // Administration → Contacts (2026-11-04, Craig's request): the platform's
 // own marketing list — a table of artists and galleries, shown All /
 // Galleries / Artists and searched by any of their details; ⊞ beside the
 // heading adds one, and clicking a row edits it in a window, where it can
-// also be deleted. A gallery lists its artists and an artist their
+// also be deleted. Changes save themselves (useAutoSave, 2026-11-04, as
+// the other editors) once it has a name. A gallery lists its artists and an artist their
 // galleries (2026-11-04): typing a name suggests existing ones, and a new
 // name is added as a contact when saved.
 
@@ -84,10 +86,6 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
     });
   }, [contacts, showing, search]);
 
-  const saved = (all: MarketingContactRow[]) => {
-    setContacts(all);
-    setEditing(null);
-  };
   // Gone from the list, and from the others' links.
   const deleted = (id: string) => {
     setContacts((old) =>
@@ -192,7 +190,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         <ContactModal
           contact={editing === "new" ? null : editing}
           contacts={contacts}
-          onSaved={saved}
+          onSaved={setContacts}
           onDeleted={deleted}
           onClose={() => setEditing(null)}
         />
@@ -224,29 +222,50 @@ function ContactModal({
 }: {
   contact: MarketingContactRow | null;
   contacts: MarketingContactRow[];
+  // Every contact, after each save (its links change the others too).
   onSaved: (all: MarketingContactRow[]) => void;
   onDeleted: (id: string) => void;
   onClose: () => void;
 }) {
   const [values, setValues] = useState<MarketingContactInput>(contact ?? EMPTY);
-  const [error, setError] = useState<string | null>(null);
+  // Its id once saved — a new one has none until it has a name.
+  const [savedId, setSavedId] = useState<string | null>(contact?.id ?? null);
   const [confirmDelete, setConfirmDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
-  const set = (patch: Partial<MarketingContactInput>) => setValues((v) => ({ ...v, ...patch }));
 
-  const save = () => {
-    setError(null);
-    startTransition(async () => {
-      const result = await saveMarketingContact(contact?.id ?? null, values);
-      if ("error" in result) return setError(result.error);
-      onSaved(result.contacts);
-    });
+  const saveAs = async (id: string | null, draft: MarketingContactInput) => {
+    const result = await saveMarketingContact(id, draft);
+    if ("error" in result) return result;
+    onSaved(result.contacts);
+    return { id: result.id };
+  };
+  const autoSave = useAutoSave<MarketingContactInput>({
+    create: (draft) => saveAs(null, draft),
+    update: saveAs,
+    cannotSave: (draft) => (draft.name.trim() ? null : "Give it a name to save it."),
+    onSaved: setSavedId,
+  });
+  useEffect(() => {
+    autoSave.begin(contact?.id ?? null);
+    // Once, for the contact the window opened with.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const set = (patch: Partial<MarketingContactInput>) => {
+    const next = { ...values, ...patch };
+    setValues(next);
+    autoSave.schedule(next);
+  };
+  const close = async () => {
+    await autoSave.flush();
+    onClose();
   };
   const remove = () => {
-    if (!contact) return;
+    if (!savedId) return;
     startTransition(async () => {
-      await deleteMarketingContact(contact.id);
-      onDeleted(contact.id);
+      await autoSave.flush();
+      await deleteMarketingContact(savedId);
+      onDeleted(savedId);
     });
   };
 
@@ -262,7 +281,7 @@ function ContactModal({
   );
 
   return (
-    <FormModal title={contact ? "Edit contact" : "Add contact"} busy={isPending} onClose={onClose}>
+    <FormModal title={contact ? "Edit contact" : "Add contact"} busy={isPending} onClose={close}>
       <div>
         <label className={labelCls}>Type</label>
         <div className="flex gap-4 text-sm text-neutral-700">
@@ -305,12 +324,11 @@ function ContactModal({
           className={inputCls}
         />
       </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-      <div className="flex items-center gap-2 pt-1">
-        <button type="button" onClick={save} disabled={isPending || !values.name.trim()} className={primaryButtonCls}>
-          {isPending ? "Saving…" : contact ? "Save" : "Add contact"}
-        </button>
-        {contact &&
+      <div className="flex min-h-9 items-center gap-2 pt-1">
+        <p className={`text-xs ${autoSave.status.isError ? "text-red-600" : "text-neutral-500"}`}>
+          {autoSave.status.text}
+        </p>
+        {savedId &&
           (confirmDelete ? (
             <>
               <span className="ml-auto text-sm text-neutral-600">Delete this contact?</span>
@@ -337,7 +355,7 @@ function ContactModal({
 
 // A gallery's artists or an artist's galleries: each with ✕ to take it
 // off, then a box to add one — suggesting existing contacts of that type
-// as you type; a name that isn't one is marked "new" and added as a
+// as you type; a name that isn't one yet is marked "new" and added as a
 // contact when saved.
 function LinksEditor({
   label,
@@ -383,7 +401,9 @@ function LinksEditor({
               className="inline-flex items-center gap-1 rounded-full bg-neutral-100 py-0.5 pl-2.5 pr-1 text-sm text-neutral-800"
             >
               {l.name}
-              {!l.id && <span className="text-xs text-neutral-500">new</span>}
+              {!l.id && !options.some((o) => o.name.toLowerCase() === l.name.toLowerCase()) && (
+                <span className="text-xs text-neutral-500">new</span>
+              )}
               <button
                 type="button"
                 onClick={() => onChange(links.filter((x) => x !== l))}
