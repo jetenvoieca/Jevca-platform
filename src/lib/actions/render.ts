@@ -53,10 +53,9 @@ function shotstackHost(env: ShotstackEnv) {
   return `https://api.shotstack.io/edit/${env}`;
 }
 
-function apiKeyFor(env: ShotstackEnv): string {
-  return env === "v1"
-    ? process.env.SHOTSTACK_API_KEY_PRODUCTION!
-    : process.env.SHOTSTACK_API_KEY_STAGE!;
+// Undefined when it isn't set on the site.
+function apiKeyFor(env: ShotstackEnv): string | undefined {
+  return env === "v1" ? process.env.SHOTSTACK_API_KEY_PRODUCTION : process.env.SHOTSTACK_API_KEY_STAGE;
 }
 
 function activeEnv(): ShotstackEnv {
@@ -505,6 +504,11 @@ export async function renderVideo(
   }
 
   const env = activeEnv();
+  const apiKey = apiKeyFor(env);
+  if (!apiKey) {
+    await Promise.all(tempKeys.map((k) => deleteFromR2(k).catch(() => {})));
+    return { ok: false, error: `The Shotstack ${env === "v1" ? "production" : "stage"} key isn't set on this site.` };
+  }
   const callbackUrl = `${HOST}/api/shotstack/render-webhook`;
   const editJson = buildEditJson(
     clipsWithImages,
@@ -523,7 +527,7 @@ export async function renderVideo(
   try {
     response = await fetch(`${shotstackHost(env)}/render`, {
       method: "POST",
-      headers: { "Content-Type": "application/json", "x-api-key": apiKeyFor(env) },
+      headers: { "Content-Type": "application/json", "x-api-key": apiKey },
       body: JSON.stringify(editJson),
     });
   } catch {
@@ -532,8 +536,11 @@ export async function renderVideo(
 
   const body = await response.json().catch(() => null);
   if (!response.ok || !body?.success) {
+    // Shotstack's own words, with its status and which key was used
+    // (2026-11-04: a bare "Forbidden" said too little).
     const message = body?.message || body?.response?.error || "Shotstack rejected the render request.";
-    return { ok: false, error: String(message) };
+    const key = `${env === "v1" ? "production" : "stage"} key …${apiKey.slice(-4)}`;
+    return { ok: false, error: `Shotstack: ${String(message)} (${response.status}, ${key}).` };
   }
 
   const shotstackRenderId = body.response.id as string;
