@@ -2898,7 +2898,8 @@ model User {
 
 // Administration → Contacts (2026-11-04, Craig's request): the platform's
 // own marketing list of artists and galleries — not any client's. Admin
-// only. All but the name optional.
+// only. All but the name optional. A gallery's artists and an artist's
+// galleries are MarketingContactLinks (2026-11-04).
 enum MarketingContactType {
   GALLERY
   ARTIST
@@ -2919,5 +2920,21 @@ model MarketingContact {
   createdAt DateTime             @default(now())
   updatedAt DateTime             @updatedAt
 
+  // As a gallery, its artists; as an artist, their galleries.
+  artists   MarketingContactLink[] @relation("GalleryArtists")
+  galleries MarketingContactLink[] @relation("ArtistGalleries")
+
   @@index([type])
+}
+
+// A gallery and an artist it shows (2026-11-04), in Contacts.
+model MarketingContactLink {
+  galleryId String
+  gallery   MarketingContact @relation("GalleryArtists", fields: [galleryId], references: [id], onDelete: Cascade)
+  artistId  String
+  artist    MarketingContact @relation("ArtistGalleries", fields: [artistId], references: [id], onDelete: Cascade)
+  createdAt DateTime         @default(now())
+
+  @@id([galleryId, artistId])
+  @@index([artistId])
 }

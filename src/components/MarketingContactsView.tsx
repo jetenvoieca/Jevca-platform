@@ -5,6 +5,7 @@ import {
   deleteMarketingContact,
   saveMarketingContact,
   type MarketingContactInput,
+  type MarketingContactLinkRef,
   type MarketingContactRow,
   type MarketingContactType,
 } from "@/lib/actions/marketingContacts";
@@ -16,15 +17,21 @@ import { inputCls, labelCls, primaryButtonCls, secondaryButtonCls } from "@/comp
 // own marketing list — a table of artists and galleries, shown All /
 // Galleries / Artists and searched by any of their details; ⊞ beside the
 // heading adds one, and clicking a row edits it in a window, where it can
-// also be deleted.
+// also be deleted. A gallery lists its artists and an artist their
+// galleries (2026-11-04): typing a name suggests existing ones, and a new
+// name is added as a contact when saved.
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
+// What each type lists: a gallery its artists, an artist their galleries.
+const LINKS_LABEL: Record<MarketingContactType, string> = { GALLERY: "Artists", ARTIST: "Galleries" };
+const otherType = (t: MarketingContactType): MarketingContactType => (t === "GALLERY" ? "ARTIST" : "GALLERY");
 const SHOWING = [
   { value: "ALL", label: "All" },
   { value: "GALLERY", label: "Galleries" },
   { value: "ARTIST", label: "Artists" },
 ] as const;
 type Showing = (typeof SHOWING)[number]["value"];
+const MAX_SUGGESTIONS = 8;
 
 const EMPTY: MarketingContactInput = {
   type: "GALLERY",
@@ -37,6 +44,7 @@ const EMPTY: MarketingContactInput = {
   town: "",
   country: "",
   notes: "",
+  links: [],
 };
 
 // Links for what was typed: a full address as it is, otherwise the site
@@ -58,21 +66,33 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
     const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return contacts.filter((c) => {
       if (showing !== "ALL" && c.type !== showing) return false;
-      const all = [c.name, c.email, c.phone, c.website, c.instagram, c.tiktok, c.town, c.country, c.notes]
+      const all = [
+        c.name,
+        c.email,
+        c.phone,
+        c.website,
+        c.instagram,
+        c.tiktok,
+        c.town,
+        c.country,
+        c.notes,
+        ...c.links.map((l) => l.name),
+      ]
         .join(" ")
         .toLowerCase();
       return words.every((w) => all.includes(w));
     });
   }, [contacts, showing, search]);
 
-  const saved = (contact: MarketingContactRow) => {
-    setContacts((old) =>
-      [...old.filter((c) => c.id !== contact.id), contact].sort((a, b) => a.name.localeCompare(b.name)),
-    );
+  const saved = (all: MarketingContactRow[]) => {
+    setContacts(all);
     setEditing(null);
   };
+  // Gone from the list, and from the others' links.
   const deleted = (id: string) => {
-    setContacts((old) => old.filter((c) => c.id !== id));
+    setContacts((old) =>
+      old.filter((c) => c.id !== id).map((c) => ({ ...c, links: c.links.filter((l) => l.id !== id) })),
+    );
     setEditing(null);
   };
 
@@ -118,7 +138,18 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
           <table className="w-full text-left text-sm">
             <thead className="bg-neutral-50 text-xs text-neutral-500">
               <tr>
-                {["Type", "Name", "Email", "Phone", "Website", "Instagram", "TikTok", "Town", "Country"].map((h) => (
+                {[
+                  "Type",
+                  "Name",
+                  showing === "ALL" ? "Artists / Galleries" : LINKS_LABEL[showing],
+                  "Email",
+                  "Phone",
+                  "Website",
+                  "Instagram",
+                  "TikTok",
+                  "Town",
+                  "Country",
+                ].map((h) => (
                   <th key={h} className="whitespace-nowrap px-3 py-2 font-medium">
                     {h}
                   </th>
@@ -134,6 +165,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                 >
                   <td className="whitespace-nowrap px-3 py-2 text-neutral-500">{TYPE_LABEL[c.type]}</td>
                   <td className="px-3 py-2 font-medium text-neutral-900">{c.name}</td>
+                  <td className="px-3 py-2 text-neutral-600">{c.links.map((l) => l.name).join(", ")}</td>
                   <td className="px-3 py-2">
                     {c.email && <ContactLink href={`mailto:${c.email}`} text={c.email} />}
                   </td>
@@ -159,6 +191,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
       {editing && (
         <ContactModal
           contact={editing === "new" ? null : editing}
+          contacts={contacts}
           onSaved={saved}
           onDeleted={deleted}
           onClose={() => setEditing(null)}
@@ -184,12 +217,14 @@ function ContactLink({ href, text, newTab = false }: { href: string; text: strin
 
 function ContactModal({
   contact,
+  contacts,
   onSaved,
   onDeleted,
   onClose,
 }: {
   contact: MarketingContactRow | null;
-  onSaved: (contact: MarketingContactRow) => void;
+  contacts: MarketingContactRow[];
+  onSaved: (all: MarketingContactRow[]) => void;
   onDeleted: (id: string) => void;
   onClose: () => void;
 }) {
@@ -204,7 +239,7 @@ function ContactModal({
     startTransition(async () => {
       const result = await saveMarketingContact(contact?.id ?? null, values);
       if ("error" in result) return setError(result.error);
-      onSaved(result.contact);
+      onSaved(result.contacts);
     });
   };
   const remove = () => {
@@ -215,7 +250,11 @@ function ContactModal({
     });
   };
 
-  const field = (key: Exclude<keyof MarketingContactInput, "type" | "notes">, label: string, type = "text") => (
+  const field = (
+    key: Exclude<keyof MarketingContactInput, "type" | "notes" | "links">,
+    label: string,
+    type = "text",
+  ) => (
     <div>
       <label className={labelCls}>{label}</label>
       <input type={type} value={values[key]} onChange={(e) => set({ [key]: e.target.value })} className={inputCls} />
@@ -229,13 +268,21 @@ function ContactModal({
         <div className="flex gap-4 text-sm text-neutral-700">
           {(["GALLERY", "ARTIST"] as const).map((t) => (
             <label key={t} className="flex items-center gap-2">
-              <input type="radio" checked={values.type === t} onChange={() => set({ type: t })} />
+              {/* A gallery's artists aren't an artist's galleries, so they
+                  go when the type changes. */}
+              <input type="radio" checked={values.type === t} onChange={() => set({ type: t, links: [] })} />
               {TYPE_LABEL[t]}
             </label>
           ))}
         </div>
       </div>
       {field("name", "Name")}
+      <LinksEditor
+        label={LINKS_LABEL[values.type]}
+        links={values.links}
+        options={contacts.filter((c) => c.type === otherType(values.type))}
+        onChange={(links) => set({ links })}
+      />
       <div className="grid grid-cols-2 gap-2">
         {field("email", "Email", "email")}
         {field("phone", "Phone", "tel")}
@@ -285,5 +332,104 @@ function ContactModal({
           ))}
       </div>
     </FormModal>
+  );
+}
+
+// A gallery's artists or an artist's galleries: each with ✕ to take it
+// off, then a box to add one — suggesting existing contacts of that type
+// as you type; a name that isn't one is marked "new" and added as a
+// contact when saved.
+function LinksEditor({
+  label,
+  links,
+  options,
+  onChange,
+}: {
+  label: string;
+  links: MarketingContactLinkRef[];
+  options: MarketingContactRow[];
+  onChange: (links: MarketingContactLinkRef[]) => void;
+}) {
+  const [typed, setTyped] = useState("");
+  const query = typed.trim().toLowerCase();
+  const taken = (name: string, id: string | null) =>
+    links.some((l) => (id && l.id === id) || l.name.toLowerCase() === name.toLowerCase());
+  const suggestions = query
+    ? options
+        .filter((o) => o.name.toLowerCase().includes(query) && !taken(o.name, o.id))
+        .slice(0, MAX_SUGGESTIONS)
+    : [];
+
+  const add = (link: MarketingContactLinkRef) => {
+    if (!link.name.trim() || taken(link.name, link.id)) return setTyped("");
+    onChange([...links, link]);
+    setTyped("");
+  };
+  // What was typed: an existing contact of that name, or a new one.
+  const addTyped = () => {
+    const name = typed.trim();
+    const existing = options.find((o) => o.name.toLowerCase() === name.toLowerCase());
+    add(existing ? { id: existing.id, name: existing.name } : { id: null, name });
+  };
+
+  return (
+    <div>
+      <label className={labelCls}>{label}</label>
+      {links.length > 0 && (
+        <div className="mb-2 flex flex-wrap gap-1.5">
+          {links.map((l) => (
+            <span
+              key={l.id ?? `new:${l.name}`}
+              className="inline-flex items-center gap-1 rounded-full bg-neutral-100 py-0.5 pl-2.5 pr-1 text-sm text-neutral-800"
+            >
+              {l.name}
+              {!l.id && <span className="text-xs text-neutral-500">new</span>}
+              <button
+                type="button"
+                onClick={() => onChange(links.filter((x) => x !== l))}
+                aria-label={`Take off ${l.name}`}
+                className="rounded-full px-1 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-800"
+              >
+                ✕
+              </button>
+            </span>
+          ))}
+        </div>
+      )}
+      <div className="relative flex gap-2">
+        <input
+          type="text"
+          value={typed}
+          onChange={(e) => setTyped(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") {
+              e.preventDefault();
+              addTyped();
+            }
+          }}
+          placeholder={`Add ${label.toLowerCase().replace(/s$/, "")}`}
+          className={inputCls}
+        />
+        <button type="button" onClick={addTyped} disabled={!typed.trim()} className={secondaryButtonCls}>
+          Add
+        </button>
+        {suggestions.length > 0 && (
+          <ul className="absolute left-0 right-16 top-full z-10 mt-1 overflow-hidden rounded-md border border-neutral-200 bg-white shadow-lg">
+            {suggestions.map((o) => (
+              <li key={o.id}>
+                <button
+                  type="button"
+                  onClick={() => add({ id: o.id, name: o.name })}
+                  className="block w-full px-3 py-1.5 text-left text-sm hover:bg-neutral-50"
+                >
+                  {o.name}
+                  {o.town && <span className="ml-2 text-xs text-neutral-500">{o.town}</span>}
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+    </div>
   );
 }
