@@ -2895,3 +2895,29 @@ model User {
 
   @@index([artistId])
 }
+
+// Administration → Contacts (2026-11-04, Craig's request): the platform's
+// own marketing list of artists and galleries — not any client's. Admin
+// only. All but the name optional.
+enum MarketingContactType {
+  GALLERY
+  ARTIST
+}
+
+model MarketingContact {
+  id        String               @id @default(cuid())
+  type      MarketingContactType
+  name      String
+  email     String?
+  phone     String?
+  website   String?
+  instagram String?
+  tiktok    String?
+  town      String?
+  country   String?
+  notes     String?
+  createdAt DateTime             @default(now())
+  updatedAt DateTime             @updatedAt
+
+  @@index([type])
+}

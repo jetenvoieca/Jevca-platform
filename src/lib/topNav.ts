@@ -4,6 +4,7 @@ import type { RecentSite } from "@/lib/recentSites";
 export type TopNavKey =
   | "sites"
   | "clients"
+  | "contacts"
   | "pageStyles"
   | "menuStyles"
   | "siteThemes"
@@ -69,6 +70,8 @@ export function buildAccountsSection(
     key: "accounts",
     children: [
       { label: "Clients", href: "/clients", active: active === "clients" },
+      // The platform's own marketing list (2026-11-04).
+      { label: "Contacts", href: "/accounts/contacts", active: active === "contacts" },
       { label: "Dashboard", href: "/accounts/dashboard", active: active === "dashboard", badge: alertCount },
       { label: "Inbox", href: "/accounts/inbox", active: active === "inbox" },
       { label: "Subscriptions", href: "/accounts", active: active === "subscriptions" },
