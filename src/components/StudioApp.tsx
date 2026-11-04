@@ -16,8 +16,8 @@ import { priceToInput } from "@/lib/studioShared";
 // and whichever flow the artist chose. Consign and Sold each start from
 // the catalogue of unsold works, where a single tap chooses one; that
 // flow's own screen then takes over. Instructions (2026-10-31, Craig's
-// mockup — replacing Payment, which will come back revised) sends a note
-// to the artist's Hopper. Every screen but the first has a Back link at
+// mockup — replacing Payment, which will come back revised; its button
+// INSTRUCT since 2026-11-04, to fit) sends a note to the artist's Hopper. Every screen but the first has a Back link at
 // the top left to the first screen (as does tapping the "JEVCA Studio"
 // title).
 
@@ -163,7 +163,7 @@ export default function StudioApp({
             <StudioButton onClick={() => start("add")}>NEW ART</StudioButton>
             <StudioButton onClick={() => start("consign")}>CONSIGN</StudioButton>
             <StudioButton onClick={() => start("sold")}>SOLD</StudioButton>
-            <StudioButton onClick={() => start("instructions")}>INSTRUCTIONS</StudioButton>
+            <StudioButton onClick={() => start("instructions")}>INSTRUCT</StudioButton>
           </div>
         </section>
       ) : (

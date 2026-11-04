@@ -7,7 +7,8 @@ import type { Notice } from "@/components/studio/StudioUi";
 
 // "Instructions" (2026-10-31, Craig's mockup): a plain text box and SEND.
 // The text goes to the artist's Hopper as a note (see HopperNote), where
-// it's read and marked done. A fuller form will follow.
+// it's read and marked done; once it's there the app says so (2026-11-04,
+// Craig's wording). A fuller form will follow.
 
 const MAX_LENGTH = 5000;
 
@@ -37,7 +38,7 @@ export default function SendInstructions({
     setNotice({ text: "Sending…", tone: "info" });
     try {
       await sendInstructions(token, text.trim());
-      onDone({ text: "Sent", tone: "info" });
+      onDone({ text: "I'm on it, will confirm a.s.a.p", tone: "info" });
     } catch (err) {
       setNotice({
         text: err instanceof Error ? err.message : "Couldn't send. Please try again.",
