@@ -8,13 +8,15 @@ import {
   type MarketingContactRow,
   type MarketingContactType,
 } from "@/lib/actions/marketingContacts";
+import AddIconButton from "@/components/AddIconButton";
 import FormModal from "@/components/FormModal";
 import { inputCls, labelCls, primaryButtonCls, secondaryButtonCls } from "@/components/subscriberFormParts";
 
 // Administration → Contacts (2026-11-04, Craig's request): the platform's
 // own marketing list — a table of artists and galleries, shown All /
-// Galleries / Artists and searched by any of their details; clicking a
-// row edits it in a window, where it can also be deleted.
+// Galleries / Artists and searched by any of their details; ⊞ beside the
+// heading adds one, and clicking a row edits it in a window, where it can
+// also be deleted.
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 const SHOWING = [
@@ -76,6 +78,12 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
 
   return (
     <div>
+      <div className="mb-1 flex items-center gap-2">
+        <h1 className="text-2xl font-semibold text-neutral-900">Contacts</h1>
+        <AddIconButton label="Add a contact" onClick={() => setEditing("new")} />
+      </div>
+      <p className="mb-6 text-sm text-neutral-500">Artists and galleries to keep in touch with.</p>
+
       <div className="mb-4 flex flex-wrap items-center gap-3">
         <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
           {SHOWING.map((s) => (
@@ -99,9 +107,6 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         <span className="text-sm text-neutral-500">
           {shown.length} of {contacts.length}
         </span>
-        <button type="button" onClick={() => setEditing("new")} className={`${primaryButtonCls} ml-auto`}>
-          Add contact
-        </button>
       </div>
 
       {shown.length === 0 ? (
