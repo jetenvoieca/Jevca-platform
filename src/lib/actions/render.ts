@@ -536,9 +536,14 @@ export async function renderVideo(
 
   const body = await response.json().catch(() => null);
   if (!response.ok || !body?.success) {
-    // Shotstack's own words, with its status and which key was used
-    // (2026-11-04: a bare "Forbidden" said too little).
-    const message = body?.message || body?.response?.error || "Shotstack rejected the render request.";
+    // Shotstack's own explanation where it gives one (it can sit a level
+    // down, under a bare "Forbidden" — e.g. out of credits, 2026-11-04),
+    // with its status and which key was used.
+    const message =
+      body?.response?.response?.error ||
+      body?.response?.error ||
+      body?.message ||
+      "Shotstack rejected the render request.";
     const key = `${env === "v1" ? "production" : "stage"} key …${apiKey.slice(-4)}`;
     return { ok: false, error: `Shotstack: ${String(message)} (${response.status}, ${key}).` };
   }
