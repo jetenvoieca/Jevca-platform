@@ -2,6 +2,7 @@
 
 import type { ReactNode } from "react";
 import type { CurationSummary } from "@/lib/actions/curations";
+import type { ArtworkNameCount } from "@/lib/actions/artworks";
 import { ARTWORK_SORT_NUMBER, FILTER_NONE } from "@/lib/artworkFilters";
 
 // The artwork filters (Curation, Name, Location, Type) and the Sort —
@@ -31,7 +32,8 @@ export default function ArtworkFilterBar({
   before?: ReactNode;
   values: ArtworkFilterValues;
   curations: CurationSummary[];
-  names: string[];
+  // Each name with how many works have it.
+  names: ArtworkNameCount[];
   locations: string[];
   types: string[];
   onChange: (change: Partial<ArtworkFilterValues>) => void;
@@ -68,12 +70,12 @@ export default function ArtworkFilterBar({
           className={`max-w-56 ${selectCls}`}
         >
           <option value="">All names</option>
-          {values.name && !names.includes(values.name) && (
+          {values.name && !names.some((n) => n.name === values.name) && (
             <option value={values.name}>{values.name}</option>
           )}
           {names.map((n) => (
-            <option key={n} value={n}>
-              {n}
+            <option key={n.name} value={n.name}>
+              {n.name} ({n.count})
             </option>
           ))}
         </select>

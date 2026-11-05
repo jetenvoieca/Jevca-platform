@@ -8,6 +8,7 @@ import {
   listArtworkNames,
   deleteArtworkIfBlank,
   type ArtworkListRow,
+  type ArtworkNameCount,
 } from "@/lib/actions/artworks";
 import type { CurationSummary } from "@/lib/actions/curations";
 import ArtworkImportPanel from "@/components/ArtworkImportPanel";
@@ -114,7 +115,7 @@ export default function ArtworksCatalogueView({
   // The Name dropdown (2026-10-13): the chosen name, and every artwork
   // name to choose from.
   name: string;
-  names: string[];
+  names: ArtworkNameCount[];
   availability: string;
   location: string;
   type: string;

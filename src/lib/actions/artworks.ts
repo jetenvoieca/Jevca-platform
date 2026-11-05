@@ -374,16 +374,19 @@ export type ArtworkListRow = {
 
 // Every distinct artwork name for the artist, A–Z the same way the grid
 // sorts (natural-language collation, see buildArtworkOrderBy) — the
-// Artwork Catalogue's Name dropdown (2026-10-13).
-export async function listArtworkNames(artistId: string): Promise<string[]> {
+// Artwork Catalogue's Name dropdown (2026-10-13) — with how many works
+// have each name (2026-11-05, Craig's request).
+export type ArtworkNameCount = { name: string; count: number };
+
+export async function listArtworkNames(artistId: string): Promise<ArtworkNameCount[]> {
   await requireArtistAccess(artistId);
-  const rows = await db.artwork.findMany({
+  const rows = await db.artwork.groupBy({
+    by: ["catalogueName"],
     where: { artistId },
-    distinct: ["catalogueName"],
     orderBy: { catalogueName: "asc" },
-    select: { catalogueName: true },
+    _count: { _all: true },
   });
-  return rows.map((r) => r.catalogueName);
+  return rows.map((r) => ({ name: r.catalogueName, count: r._count._all }));
 }
 
 // Lightweight rows for the grid — only what a tile needs to render.

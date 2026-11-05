@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import Link from "next/link";
-import { listArtworks, type ArtworkListRow } from "@/lib/actions/artworks";
+import { listArtworks, type ArtworkListRow, type ArtworkNameCount } from "@/lib/actions/artworks";
 import { getArtworkForMedia } from "@/lib/actions/mediaCatalogue";
 import type { CurationSummary } from "@/lib/actions/curations";
 import type { ArtworkImage } from "@/lib/artworkImages";
@@ -38,7 +38,7 @@ export default function MediaArtworksView({
   pageSize: number;
   filters: ArtworkFilterValues;
   curations: CurationSummary[];
-  names: string[];
+  names: ArtworkNameCount[];
   locations: string[];
   types: string[];
 }) {
