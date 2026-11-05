@@ -655,6 +655,22 @@ export async function updateCatalogue(
   }
 }
 
+// Just the work's Location (2026-11-05 — set from View Derivatives on a
+// derivative that has none), seeding the website's "Can be viewed at"
+// the same way a Catalogue save does.
+export async function setArtworkLocation(id: string, location: string): Promise<{ ok: true } | { error: string }> {
+  const { artistId } = await artworkOwner(id);
+  const name = location.trim();
+  const known = await db.location.findFirst({ where: { artistId, name }, select: { id: true } });
+  if (!known) return { error: "Choose one of your Locations." };
+  const current = await db.artwork.findUnique({ where: { id }, select: { viewingLocation: true } });
+  await db.artwork.update({
+    where: { id },
+    data: { location: name, ...(current?.viewingLocation ? {} : { viewingLocation: name }) },
+  });
+  return { ok: true };
+}
+
 // The artwork's price, edited from the Curations page's Purchase Options
 // (2026-10-03). Writes the same price fields updateCatalogue does —
 // offeredPrice, its presentationPrice mirror (see the note on

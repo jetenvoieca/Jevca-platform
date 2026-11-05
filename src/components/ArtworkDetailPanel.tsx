@@ -501,7 +501,11 @@ export default function ArtworkDetailPanel({
         />
       )}
       {derivativeWindow === "view" && (
-        <ViewDerivativesModal artworkId={artwork.id} onClose={() => setDerivativeWindow(null)} />
+        <ViewDerivativesModal
+          artworkId={artwork.id}
+          locations={settings.locations.map((l) => l.name)}
+          onClose={() => setDerivativeWindow(null)}
+        />
       )}
     </div>
   );

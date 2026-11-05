@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState, useTransition } from "react";
-import { duplicateArtwork, listDerivatives, type DerivativeGroup } from "@/lib/actions/artworks";
+import { duplicateArtwork, listDerivatives, setArtworkLocation, type DerivativeGroup } from "@/lib/actions/artworks";
 import { isOpenEditionType, isOriginalType } from "@/lib/derivatives";
 import FormModal from "@/components/FormModal";
 import { inputCls, labelCls, primaryButtonCls } from "@/components/subscriberFormParts";
@@ -14,7 +14,8 @@ import { inputCls, labelCls, primaryButtonCls } from "@/components/subscriberFor
 //   filled in from this work's other derivatives of that Type, the number
 //   with the next one not yet made.
 // - View Derivatives: each Type's unsold derivatives — numbered ones as
-//   "3 — where it is" in number order — sold ones left out.
+//   "3 — where it is" in number order — sold ones left out. One with no
+//   location can be given one there (2026-11-05).
 
 function useDerivatives(artworkId: string) {
   const [groups, setGroups] = useState<DerivativeGroup[] | null>(null);
@@ -142,9 +143,31 @@ export function MakeDerivativeModal({
   );
 }
 
-export function ViewDerivativesModal({ artworkId, onClose }: { artworkId: string; onClose: () => void }) {
+export function ViewDerivativesModal({
+  artworkId,
+  locations,
+  onClose,
+}: {
+  artworkId: string;
+  // The client's Locations, by name.
+  locations: string[];
+  onClose: () => void;
+}) {
   const groups = useDerivatives(artworkId);
   const shown = groups?.filter((g) => g.unsold.length > 0) ?? [];
+  // Locations set here, by derivative.
+  const [placed, setPlaced] = useState<Record<string, string>>({});
+  const [error, setError] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+
+  const place = (id: string, location: string) => {
+    setError(null);
+    startTransition(async () => {
+      const result = await setArtworkLocation(id, location);
+      if ("error" in result) return setError(result.error);
+      setPlaced((old) => ({ ...old, [id]: location }));
+    });
+  };
 
   return (
     <FormModal title="Derivatives" busy={false} onClose={onClose}>
@@ -163,13 +186,33 @@ export function ViewDerivativesModal({ artworkId, onClose }: { artworkId: string
               {g.unsold.map((d) => (
                 <li key={d.id} className="grid grid-cols-[2.5rem_1fr] gap-2">
                   <span className="text-neutral-500">{g.open ? "" : (d.number ?? d.edition ?? "—")}</span>
-                  <span className={d.location ? "" : "text-neutral-400"}>{d.location || "No location"}</span>
+                  {d.location || placed[d.id] ? (
+                    <span>{d.location || placed[d.id]}</span>
+                  ) : (
+                    <select
+                      value=""
+                      onChange={(e) => place(d.id, e.target.value)}
+                      disabled={isPending}
+                      aria-label="Location"
+                      className="rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-500"
+                    >
+                      <option value="" disabled>
+                        No location — choose…
+                      </option>
+                      {locations.map((l) => (
+                        <option key={l} value={l}>
+                          {l}
+                        </option>
+                      ))}
+                    </select>
+                  )}
                 </li>
               ))}
             </ul>
           </div>
         ))
       )}
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </FormModal>
   );
 }
