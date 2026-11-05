@@ -89,10 +89,26 @@ export default function LinkDerivativesModal({
               </ul>
             </div>
           )}
-          {plan.noOriginal > 0 && (
-            <p className="text-sm text-neutral-500">
-              {plan.noOriginal} work{plan.noOriginal === 1 ? " has" : "s have"} no Original of the same name.
-            </p>
+          {plan.noOriginal.length > 0 && (
+            <div className="text-sm text-neutral-600">
+              <p className="font-medium">
+                No Original of the same name ({plan.noOriginal.length}) — check the name, or make or tick its Base:
+              </p>
+              <div className="mt-1 max-h-60 overflow-y-auto rounded-md border border-neutral-200">
+                <table className="w-full text-left text-sm">
+                  <tbody>
+                    {plan.noOriginal.map((w) => (
+                      <tr key={w.id} className="border-b border-neutral-100 last:border-0">
+                        <td className="px-2 py-1.5 text-neutral-900">{w.name}</td>
+                        <td className="px-2 py-1.5 text-neutral-500">
+                          #{w.catalogueNumber} {w.type ? `· ${w.type}` : ""}
+                        </td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table>
+              </div>
+            </div>
           )}
           {plan.links.length > 0 && (
             <button type="button" onClick={apply} disabled={isPending} className={primaryButtonCls}>

@@ -26,8 +26,9 @@ export type DerivativeLinkPlan = {
   // Names with more than one Original: how many Originals, and how many
   // works would need one.
   unclear: { name: string; originals: number; works: number }[];
-  // Works with no Original of their name.
-  noOriginal: number;
+  // Works with no Original of their name (listed 2026-11-05, to sort by
+  // hand).
+  noOriginal: { id: string; name: string; catalogueNumber: string; type: string | null }[];
 };
 
 const key = (name: string) => name.trim().toLowerCase();
@@ -48,7 +49,7 @@ async function plan(artistId: string): Promise<DerivativeLinkPlan> {
 
   const links: DerivativeLink[] = [];
   const unclear = new Map<string, { name: string; originals: number; works: number }>();
-  let noOriginal = 0;
+  const noOriginal: DerivativeLinkPlan["noOriginal"] = [];
   for (const w of works) {
     if (isOriginalType(w.type) || w.derivedFromId) continue;
     const found = originals.get(key(w.catalogueName)) ?? [];
@@ -66,7 +67,7 @@ async function plan(artistId: string): Promise<DerivativeLinkPlan> {
       entry.works++;
       unclear.set(key(w.catalogueName), entry);
     } else {
-      noOriginal++;
+      noOriginal.push({ id: w.id, name: w.catalogueName, catalogueNumber: w.catalogueNumber, type: w.type });
     }
   }
   return { links, unclear: [...unclear.values()], noOriginal };
