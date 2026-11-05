@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useMemo } from "react";
+import { Fragment, useState, useMemo } from "react";
 import { useRouter } from "next/navigation";
 import { formatDate, ukYearMonth } from "@/lib/formatDate";
 import { CURRENCIES, type Currency, formatMoney } from "@/lib/currencies";
@@ -154,15 +154,12 @@ export default function SalesView({
               <th className="px-3 py-2 font-normal">{words.item}</th>
               <th className="px-3 py-2 font-normal">Buyer</th>
               <th className="px-3 py-2 font-normal">Type</th>
+              {/* Each currency's amount and net side by side (2026-11-05). */}
               {shownCurrencies.map((c) => (
-                <th key={`amount-${c}`} className="px-3 py-2 text-right font-normal">
-                  Amount {CURRENCY_SYMBOL[c]}
-                </th>
-              ))}
-              {shownCurrencies.map((c) => (
-                <th key={`net-${c}`} className="px-3 py-2 text-right font-normal">
-                  Net {CURRENCY_SYMBOL[c]}
-                </th>
+                <Fragment key={c}>
+                  <th className="px-3 py-2 text-right font-normal">Amount {CURRENCY_SYMBOL[c]}</th>
+                  <th className="px-3 py-2 text-right font-normal">Net {CURRENCY_SYMBOL[c]}</th>
+                </Fragment>
               ))}
               <th className="px-3 py-2 font-normal">Status</th>
             </tr>
@@ -213,14 +210,10 @@ export default function SalesView({
                   {s.type === "FULL" ? "Full" : "Instalments"}
                 </td>
                 {shownCurrencies.map((c) => (
-                  <td key={`amount-${c}`} className={moneyCell}>
-                    {s.currency === c ? formatMoney(parseFloat(s.totalAmount), c) : ""}
-                  </td>
-                ))}
-                {shownCurrencies.map((c) => (
-                  <td key={`net-${c}`} className={moneyCell}>
-                    {s.currency === c ? formatMoney(parseFloat(s.netAmount), c) : ""}
-                  </td>
+                  <Fragment key={c}>
+                    <td className={moneyCell}>{s.currency === c ? formatMoney(parseFloat(s.totalAmount), c) : ""}</td>
+                    <td className={moneyCell}>{s.currency === c ? formatMoney(parseFloat(s.netAmount), c) : ""}</td>
+                  </Fragment>
                 ))}
                 <td className="px-3 py-1.5">
                   <SaleStatusBadge status={s.status} overdue={s.overdue} />
@@ -239,14 +232,10 @@ export default function SalesView({
                     {label}
                   </td>
                   {shownCurrencies.map((c) => (
-                    <td key={`amount-${c}`} className={moneyCell}>
-                      {formatMoney(sums[c].amount, c)}
-                    </td>
-                  ))}
-                  {shownCurrencies.map((c) => (
-                    <td key={`net-${c}`} className={moneyCell}>
-                      {formatMoney(sums[c].net, c)}
-                    </td>
+                    <Fragment key={c}>
+                      <td className={moneyCell}>{formatMoney(sums[c].amount, c)}</td>
+                      <td className={moneyCell}>{formatMoney(sums[c].net, c)}</td>
+                    </Fragment>
                   ))}
                   <td />
                 </tr>
