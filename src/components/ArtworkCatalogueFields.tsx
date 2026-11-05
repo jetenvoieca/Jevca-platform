@@ -95,6 +95,7 @@ export default function ArtworkCatalogueFields({
   onViewLocation,
   onBaseChange,
   studioActions,
+  studioDateAction,
   studioError,
   children,
   name,
@@ -126,6 +127,9 @@ export default function ArtworkCatalogueFields({
   // Buttons after Base in Studio notes (2026-11-01 — the details panel's
   // Make Derivative and Curation), and a message under them.
   studioActions?: React.ReactNode;
+  // A button beside Date (2026-11-05 — the details panel's View
+  // Derivatives).
+  studioDateAction?: React.ReactNode;
   studioError?: string | null;
   // The price (Catalogue / Hopper's own), shown after Size / Edition.
   children?: React.ReactNode;
@@ -403,8 +407,9 @@ export default function ArtworkCatalogueFields({
             placeholder="Date — e.g. June 2025"
             aria-label="Date"
             onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-            className={`w-1/2 rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`}
+            className={`${studioDateAction ? "w-1/4 min-w-0" : "w-1/2"} rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`}
           />
+          {studioDateAction}
         </div>
         {(values.isBase !== undefined || studioActions) && (
         <div className="mb-3 flex items-center gap-4">

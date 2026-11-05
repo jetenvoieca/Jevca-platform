@@ -7,10 +7,12 @@ import { publicMediaUrl } from "@/lib/r2";
 import {
   buildArtworkWhere,
   buildArtworkOrderBy,
+  isSold,
   SOLD_AVAILABILITIES,
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
 import { isCurrency } from "@/lib/currencies";
+import { formatEdition, isOpenEditionType, isOriginalType, parseEdition } from "@/lib/derivatives";
 import { ARTWORK_IMAGE_SELECT, toArtworkImage } from "@/lib/artworkImages";
 import { getArtistDefaultCurrency } from "@/lib/primarySite";
 import type { PurchaseDetail } from "./payments";
@@ -154,17 +156,20 @@ export async function createArtworkWithRetry(
 // What else gets copied now depends on the original's Type (2026-09-11,
 // direct request):
 // - "Original"/"Unique" (isOriginalOrUnique below) — every field except
-//   the name is left blank on the new derivative. The whole point of
+//   the name (and the Type and edition chosen) is left blank on the new
+//   derivative. The whole point of
 //   deriving from a one-off piece is a genuinely fresh sellable listing
 //   (e.g. a print edition made from an original painting), not a copy of
 //   details that don't apply to it.
 // - Anything else (typically an edition) — every field is carried over
 //   unchanged, same as before this change, EXCEPT Location (always
 //   blank — a new edition print isn't automatically sitting wherever the
-//   original is) and Edition (set to `newEdition`, collected by the
-//   caller — see ArtworkDetailPanel's handleDuplicate — before this runs,
-//   since a new edition copy needs its own edition number, not the
-//   original's).
+//   original is).
+//
+// Its Type and edition are chosen first (2026-11-05, Craig's mockup — see
+// lib/derivatives.ts): any Type but an Original; for a numbered edition
+// (not an open one) its number of how many, a number not already taken
+// by another derivative of this work of that Type.
 //
 // Deliberately reset rather than copied, in both cases:
 // - Availability always starts AVAILABLE, regardless of the original's
@@ -182,7 +187,7 @@ export async function createArtworkWithRetry(
 export async function duplicateArtwork(
   artworkId: string,
   siteId: string,
-  newEdition?: string | null
+  choice: { type: string; number: number | null; size: number | null }
 ): Promise<{ id: string } | { error: string }> {
   await artworkOwner(artworkId);
   const original = await db.artwork.findUniqueOrThrow({
@@ -190,6 +195,25 @@ export async function duplicateArtwork(
     include: { mainImage: true, saleTerms: true },
   });
   if (!original.isBase) return { error: "Tick Base first — derivatives are made from a Base work." };
+
+  const newType = choice.type.trim();
+  if (!newType || isOriginalType(newType)) return { error: "Choose the derivative's Type (not an Original)." };
+  let newEdition: string | null = null;
+  if (!isOpenEditionType(newType)) {
+    const { number, size } = choice;
+    if (!Number.isInteger(number) || !Number.isInteger(size) || number! < 1 || size! < 1) {
+      return { error: "Give its number and the size of the edition, e.g. 3 of 10." };
+    }
+    if (number! > size!) return { error: `Its number can't be more than ${size}.` };
+    const siblings = await db.artwork.findMany({
+      where: { derivedFromId: original.id, type: newType },
+      select: { edition: true },
+    });
+    if (siblings.some((d) => parseEdition(d.edition)?.number === number)) {
+      return { error: `Number ${number} of this edition is already in the catalogue.` };
+    }
+    newEdition = formatEdition(number!, size!);
+  }
 
   const typeLower = (original.type || "").trim().toLowerCase();
   const isOriginalOrUnique = typeLower.includes("original") || typeLower.includes("unique");
@@ -204,7 +228,7 @@ export async function duplicateArtwork(
     description: isOriginalOrUnique ? null : original.description,
     medium: isOriginalOrUnique ? null : original.medium,
     availability: "AVAILABLE",
-    type: isOriginalOrUnique ? null : original.type,
+    type: newType,
     size: isOriginalOrUnique ? null : original.size,
     // Always blank, in both branches — see the note above.
     location: null,
@@ -220,7 +244,7 @@ export async function duplicateArtwork(
     where: { id: created.id },
     data: {
       date: isOriginalOrUnique ? null : original.date,
-      edition: isOriginalOrUnique ? null : newEdition?.trim() || original.edition,
+      edition: newEdition,
       availableQty: isOriginalOrUnique ? null : original.availableQty,
       offeredPrice: isOriginalOrUnique ? null : original.offeredPrice,
       ...(isOriginalOrUnique ? {} : { priceCurrency: original.priceCurrency }),
@@ -272,6 +296,47 @@ export async function duplicateArtwork(
   }
 
   return { id: created.id };
+}
+
+// A Base work's derivatives by Type (2026-11-05, Craig's mockup): for
+// the Make Derivative window, each Type's edition size and the numbers
+// already made (sold ones too); for View Derivatives, the unsold ones —
+// numbered ones in number order — with where each is. Sold ones are left
+// out of that list: it's for keeping track of unsold stock.
+export type DerivativeGroup = {
+  type: string;
+  open: boolean;
+  size: number | null;
+  usedNumbers: number[];
+  unsold: { id: string; number: number | null; edition: string | null; location: string | null }[];
+};
+
+export async function listDerivatives(artworkId: string): Promise<DerivativeGroup[]> {
+  await artworkOwner(artworkId);
+  const rows = await db.artwork.findMany({
+    where: { derivedFromId: artworkId },
+    select: { id: true, type: true, edition: true, location: true, availability: true },
+    orderBy: { createdAt: "asc" },
+  });
+  const groups = new Map<string, DerivativeGroup>();
+  for (const row of rows) {
+    const type = row.type?.trim() || "No type";
+    const group: DerivativeGroup = groups.get(type) ?? { type, open: isOpenEditionType(type), size: null, usedNumbers: [], unsold: [] };
+    groups.set(type, group);
+    const parsed = parseEdition(row.edition);
+    if (parsed) {
+      group.size ??= parsed.size;
+      group.usedNumbers.push(parsed.number);
+    }
+    if (!isSold(row.availability)) {
+      group.unsold.push({ id: row.id, number: parsed?.number ?? null, edition: row.edition, location: row.location });
+    }
+  }
+  for (const group of groups.values()) {
+    group.usedNumbers.sort((a, b) => a - b);
+    group.unsold.sort((a, b) => (a.number ?? Infinity) - (b.number ?? Infinity));
+  }
+  return [...groups.values()].sort((a, b) => a.type.localeCompare(b.type));
 }
 
 // The shared catalogue filters (lib/artworkFilters.ts — the same ones

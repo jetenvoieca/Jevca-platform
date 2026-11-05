@@ -6,7 +6,6 @@ import {
   updateCatalogue,
   deleteArtwork,
   deleteArtworkIfBlank,
-  duplicateArtwork,
   setArtworkMainImage,
 } from "@/lib/actions/artworks";
 import type { LocationSummary } from "@/lib/actions/locations";
@@ -16,6 +15,7 @@ import MediaPicker from "@/components/MediaPicker";
 import ArtworkCatalogueFields, { FIELD_HEIGHT } from "@/components/ArtworkCatalogueFields";
 import BaseStar from "@/components/BaseStar";
 import AddToCurationButton from "@/components/AddToCurationButton";
+import { MakeDerivativeModal, ViewDerivativesModal } from "@/components/DerivativeWindows";
 import type { PurchaseDetail } from "@/lib/actions/payments";
 import type { ArtworkImage } from "@/lib/artworkImages";
 
@@ -134,7 +134,8 @@ export default function ArtworkDetailPanel({
   const [saved, setSaved] = useState(false);
   // The Base box (2026-11-01), so the header's star follows it at once.
   const [isBase, setIsBase] = useState(artwork.isBase);
-  const [derivativeError, setDerivativeError] = useState<string | null>(null);
+  // Make Derivative's and View Derivatives' windows (2026-11-05).
+  const [derivativeWindow, setDerivativeWindow] = useState<"make" | "view" | null>(null);
   // Live state for Type/Size (2026-08-28) — needed for the Reference
   // price preview below. Owned here (rather than inside
   // ArtworkCatalogueFields) since Reference price is Catalogue-tab-only;
@@ -223,12 +224,6 @@ export default function ArtworkDetailPanel({
     });
   };
 
-  // Same Type checks duplicateArtwork itself uses server-side (2026-09-11)
-  // — computed here too so this can decide, before calling the action at
-  // all, whether a new edition number needs asking for. Original/Unique
-  // never asks (everything's blank on the new derivative anyway); an
-  // edition-type source does, since a new print copy needs its own
-  // edition number, not the original's.
   // The work's one picture (2026-10-28); changing it refreshes the work.
   const { mainImage } = artwork;
   const [pictureError, setPictureError] = useState<string | null>(null);
@@ -241,30 +236,11 @@ export default function ArtworkDetailPanel({
     });
   };
 
-  const handleDuplicate = () => {
-    const typeLower = (artwork.type || "").trim().toLowerCase();
-    const isOriginalOrUnique = typeLower.includes("original") || typeLower.includes("unique");
-    const isEditionType = typeLower.includes("edition");
-
-    let newEdition: string | null = null;
-    if (!isOriginalOrUnique && isEditionType) {
-      // Cancelling this prompt doesn't cancel the derivative itself —
-      // it just falls back to copying the original's own edition number
-      // (duplicateArtwork's default when newEdition is empty), same as
-      // every other field on an edition-type derivative.
-      newEdition = window.prompt("Edition number for this derivative (e.g. 6/25):");
-    }
-
-    setDerivativeError(null);
-    startTransition(async () => {
-      const result = await duplicateArtwork(artwork.id, siteId, newEdition);
-      if ("error" in result) {
-        setDerivativeError(result.error);
-        return;
-      }
-      if (onDuplicated) onDuplicated(result.id);
-      else router.push(`/sites/${siteId}/artworks?selected=${result.id}`);
-    });
+  // A derivative made (MakeDerivativeModal) opens in the panel.
+  const handleDerivativeMade = (id: string) => {
+    setDerivativeWindow(null);
+    if (onDuplicated) onDuplicated(id);
+    else router.push(`/sites/${siteId}/artworks?selected=${id}`);
   };
 
   const handleClosePanel = () => {
@@ -404,7 +380,7 @@ export default function ArtworkDetailPanel({
                 {isBase && (
                   <button
                     type="button"
-                    onClick={handleDuplicate}
+                    onClick={() => setDerivativeWindow("make")}
                     disabled={isPending}
                     className={`shrink-0 rounded-md border border-neutral-400 px-3 text-sm text-neutral-700 hover:bg-neutral-50 disabled:opacity-50 ${FIELD_HEIGHT}`}
                   >
@@ -419,7 +395,17 @@ export default function ArtworkDetailPanel({
                 />
               </>
             }
-            studioError={derivativeError}
+            studioDateAction={
+              isBase && (
+                <button
+                  type="button"
+                  onClick={() => setDerivativeWindow("view")}
+                  className={`shrink-0 rounded-md border border-neutral-400 px-3 text-sm text-neutral-700 hover:bg-neutral-50 ${FIELD_HEIGHT}`}
+                >
+                  View Derivatives
+                </button>
+              )
+            }
             onAutosave={autosaveCatalogue}
             onTypeOrSizeChange={(type, size) => {
               setTypeValue(type);
@@ -505,6 +491,18 @@ export default function ArtworkDetailPanel({
           {saved && <span className="text-sm text-green-600">Saved</span>}
         </div>
       </form>
+      {derivativeWindow === "make" && (
+        <MakeDerivativeModal
+          artworkId={artwork.id}
+          siteId={siteId}
+          types={settings.artworkTypes}
+          onMade={handleDerivativeMade}
+          onClose={() => setDerivativeWindow(null)}
+        />
+      )}
+      {derivativeWindow === "view" && (
+        <ViewDerivativesModal artworkId={artwork.id} onClose={() => setDerivativeWindow(null)} />
+      )}
     </div>
   );
 }
