@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/artworks";
 import type { CurationSummary } from "@/lib/actions/curations";
 import ArtworkImportPanel from "@/components/ArtworkImportPanel";
+import LinkDerivativesModal from "@/components/LinkDerivativesModal";
 import ArtworkDetailPanel, {
   type ArtworkDetail,
   type ArtworkSettings,
@@ -94,6 +95,7 @@ export default function ArtworksCatalogueView({
   curations = [],
   initialSelected,
   settings,
+  isAdmin = false,
 }: {
   siteId: string;
   // Where this view's own in-page links (currently just "+ Add New" ->
@@ -129,6 +131,8 @@ export default function ArtworksCatalogueView({
   curations?: CurationSummary[];
   initialSelected: ArtworkDetail | null;
   settings: ArtworkSettings;
+  // Admin only: Link derivatives in the export/import menu (2026-11-05).
+  isAdmin?: boolean;
 }) {
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const gridLayout = useGridLayout(LAYOUT_STORAGE_KEY);
@@ -139,8 +143,10 @@ export default function ArtworksCatalogueView({
   const [showExportDialog, setShowExportDialog] = useState(false);
   const [showImport, setShowImport] = useState(false);
   // The export/import menu: Export PDF, Export CSV (the current filtered
-  // view), Import CSV (ArtworkImportPanel).
+  // view), Import CSV (ArtworkImportPanel), and for an admin Link
+  // derivatives (LinkDerivativesModal).
   const [showFileMenu, setShowFileMenu] = useState(false);
+  const [showLinkDerivatives, setShowLinkDerivatives] = useState(false);
   const words = useClientWords();
   const [artworks, setArtworks] = useState<ArtworkListRow[]>(initialArtworks);
   const [total, setTotal] = useState(initialTotal);
@@ -560,6 +566,18 @@ export default function ArtworksCatalogueView({
                       >
                         Import CSV
                       </button>
+                      {isAdmin && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setShowFileMenu(false);
+                            setShowLinkDerivatives(true);
+                          }}
+                          className="block w-full border-t border-neutral-100 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
+                        >
+                          Link derivatives…
+                        </button>
+                      )}
                     </div>
                   </>
                 )}
@@ -750,6 +768,15 @@ export default function ArtworksCatalogueView({
             />
           </div>
         </div>
+      )}
+
+      {showLinkDerivatives && (
+        <LinkDerivativesModal
+          siteId={siteId}
+          artistId={artistId}
+          onDone={() => applyFilters({})}
+          onClose={() => setShowLinkDerivatives(false)}
+        />
       )}
 
       {showImport && (

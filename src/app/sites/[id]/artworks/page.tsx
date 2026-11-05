@@ -2,6 +2,7 @@ import { db } from "@/lib/db";
 import { listArtworks, listArtworkNames, getArtworkDetailForClient } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { listCurations } from "@/lib/actions/curations";
+import { getCurrentUser } from "@/lib/currentUser";
 import ArtworksCatalogueView from "./ArtworksCatalogueView";
 
 export const dynamic = "force-dynamic";
@@ -45,7 +46,7 @@ export default async function ArtworksCataloguePage({
   });
   const artistId = site!.artistId;
 
-  const [{ rows, total, soldCount }, settings, names, curations, selectedRaw] = await Promise.all([
+  const [{ rows, total, soldCount }, settings, names, curations, selectedRaw, user] = await Promise.all([
     listArtworks(artistId, {
       name: sp.name,
       availability: sp.availability,
@@ -60,6 +61,7 @@ export default async function ArtworksCataloguePage({
     listArtworkNames(artistId),
     listCurations(artistId),
     sp.selected ? getArtworkDetailForClient(sp.selected) : Promise.resolve(null),
+    getCurrentUser(),
   ]);
 
   const selected = selectedRaw && selectedRaw.artistId === artistId ? selectedRaw : null;
@@ -84,6 +86,7 @@ export default async function ArtworksCataloguePage({
       curations={curations}
       initialSelected={selected}
       settings={settings}
+      isAdmin={user?.role === "ADMIN"}
     />
   );
 }
