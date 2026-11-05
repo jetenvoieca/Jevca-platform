@@ -366,9 +366,12 @@ export type ArtworkListRow = {
   isBase: boolean;
   availability: string;
   type: string | null;
-  // Shown under a tile while the catalogue is filtered (2026-11-05).
+  // Shown under a tile while the catalogue is filtered, and in the list
+  // (2026-11-05).
   edition: string | null;
   location: string | null;
+  // The curations it's in, by name (the list, 2026-11-05).
+  curations: string[];
   imageUrl: string | null;
 };
 
@@ -416,6 +419,7 @@ export async function listArtworks(
         edition: true,
         location: true,
         mainImage: { select: { url: true, thumbnailKey: true } },
+        curationItems: { select: { curation: { select: { name: true } } } },
       },
       skip: offset,
       take: limit,
@@ -432,8 +436,9 @@ export async function listArtworks(
   // falls back to the original proxied url for any image uploaded before
   // 2026-08-13 that hasn't been backfilled yet, so nothing breaks or goes
   // blank in the meantime.
-  const listRows: ArtworkListRow[] = rows.map(({ mainImage, presentationPrice, ...rest }) => ({
+  const listRows: ArtworkListRow[] = rows.map(({ mainImage, presentationPrice, curationItems, ...rest }) => ({
     ...rest,
+    curations: curationItems.map((i) => i.curation.name).sort((a, b) => a.localeCompare(b)),
     presentationPrice: presentationPrice != null ? presentationPrice.toString() : null,
     imageUrl: mainImage ? publicMediaUrl(mainImage.thumbnailKey) || mainImage.url : null,
   }));

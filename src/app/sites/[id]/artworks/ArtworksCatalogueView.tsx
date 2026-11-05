@@ -45,7 +45,7 @@ const LAYOUT_STORAGE_KEY = "jevca:artworks-density";
 // Not Paid"), SOLD (2026-09-20 rebuild, see the "Availability model"
 // note in lib/actions/payments.ts). This is the one place that maps the
 // raw value to what the grid actually shows, so the tile ribbon and the
-// list view's Availability column can't drift out of sync with each
+// list view's Location column (Sold ones) can't drift out of sync with each
 // other.
 function formatAvailability(value: string): string {
   if (value === "SOLD") return "SOLD";
@@ -699,8 +699,11 @@ export default function ArtworksCatalogueView({
                   <th className="py-2 font-medium"></th>
                   <th className="py-2 font-medium">Name</th>
                   <th className="py-2 font-medium">Catalogue #</th>
+                  <th className="py-2 font-medium">Type</th>
+                  <th className="py-2 font-medium">Edition</th>
                   <th className="py-2 font-medium">Price</th>
-                  <th className="py-2 font-medium">Availability</th>
+                  <th className="py-2 font-medium">Location</th>
+                  <th className="py-2 font-medium">Curations</th>
                 </tr>
               </thead>
               <tbody>
@@ -724,14 +727,20 @@ export default function ArtworksCatalogueView({
                       )}
                     </td>
                     <td className="py-2 font-medium text-neutral-900">{a.catalogueName}</td>
-                    <td className="py-2 text-neutral-500">
+                    <td className="whitespace-nowrap py-2 pr-3 text-neutral-500">
                       <BaseStar isBase={a.isBase} />
                       {a.catalogueNumber}
                     </td>
-                    <td className="py-2 text-neutral-500">
+                    <td className="py-2 pr-3 text-neutral-500">{a.type || "—"}</td>
+                    <td className="whitespace-nowrap py-2 pr-3 text-neutral-500">{a.edition || "—"}</td>
+                    <td className="py-2 pr-3 text-neutral-500">
                       {a.presentationPrice ? `£${a.presentationPrice}` : "—"}
                     </td>
-                    <td className="py-2 text-neutral-500">{formatAvailability(a.availability)}</td>
+                    {/* Where it is — or Sold (2026-11-05, Craig's mockup). */}
+                    <td className="py-2 pr-3 text-neutral-500">
+                      {isSold(a.availability) ? formatAvailability(a.availability) : a.location || "—"}
+                    </td>
+                    <td className="py-2 text-neutral-500">{a.curations.join(", ") || "—"}</td>
                   </tr>
                 ))}
               </tbody>
