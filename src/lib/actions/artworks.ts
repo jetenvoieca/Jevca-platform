@@ -301,6 +301,9 @@ export type ArtworkListRow = {
   isBase: boolean;
   availability: string;
   type: string | null;
+  // Shown under a tile while the catalogue is filtered (2026-11-05).
+  edition: string | null;
+  location: string | null;
   imageUrl: string | null;
 };
 
@@ -342,6 +345,8 @@ export async function listArtworks(
         isBase: true,
         availability: true,
         type: true,
+        edition: true,
+        location: true,
         mainImage: { select: { url: true, thumbnailKey: true } },
       },
       skip: offset,

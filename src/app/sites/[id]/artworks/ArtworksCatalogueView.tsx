@@ -183,6 +183,9 @@ export default function ArtworksCatalogueView({
   };
 
   const currentFilters: Filters = { name, availability, location, type, curation, base, sort };
+  // Any filter set (the order isn't one) — tiles then show each work's
+  // edition and location too (2026-11-05, Craig's request).
+  const filtered = !!(name || availability || location || type || curation || base);
 
   // Declared up here, ahead of applyFilters below, specifically because
   // applyFilters' own dependency array reads `selected` directly
@@ -427,6 +430,8 @@ export default function ArtworksCatalogueView({
                     availability: item.availability,
                     type: item.type,
                     isBase: item.isBase,
+                    edition: item.edition,
+                    location: item.location,
                     imageUrl: item.mainImage?.url ?? null,
                   }
                 : a
@@ -660,6 +665,11 @@ export default function ArtworksCatalogueView({
                       <BaseStar isBase={a.isBase} />#{a.catalogueNumber}
                     </span>
                   </p>
+                  {filtered && (a.edition || a.location) && (
+                    <p className="truncate text-xs text-neutral-500">
+                      {[a.edition && `Edition ${a.edition}`, a.location].filter(Boolean).join(" · ")}
+                    </p>
+                  )}
                 </button>
               ))}
             </div>
