@@ -801,9 +801,20 @@ export async function deleteArtworkIfBlank(siteId: string, artworkId: string) {
   await db.artwork.delete({ where: { id: artworkId } });
 }
 
-export async function deleteArtwork(siteId: string, id: string) {
+// Deletes a work — its curation places and sale terms go with it, its
+// picture stays in the Media Catalogue and its derivatives just lose the
+// link. A work with sales recorded isn't deleted (2026-11-06): its sales
+// would go too.
+export async function deleteArtwork(siteId: string, id: string): Promise<{ ok: true } | { error: string }> {
   await artworkOwner(id);
+  const sales = await db.purchase.count({ where: { artworkId: id } });
+  if (sales > 0) {
+    return {
+      error: `This work has ${sales === 1 ? "a sale" : `${sales} sales`} recorded, so it can't be deleted. If it's a duplicate, delete the other copy instead.`,
+    };
+  }
   await db.artwork.delete({ where: { id } });
+  return { ok: true };
 }
 
 // The artwork's one picture (2026-10-28, Craig: the Catalogue is a plain

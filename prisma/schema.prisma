@@ -1846,7 +1846,8 @@ model Artwork {
 model SaleTerms {
   id        String  @id @default(cuid())
   artworkId String  @unique
-  artwork   Artwork @relation(fields: [artworkId], references: [id])
+  // Goes with the work when it's deleted (2026-11-06).
+  artwork   Artwork @relation(fields: [artworkId], references: [id], onDelete: Cascade)
 
   totalAmount Decimal @db.Decimal(10, 2)
   currency    String  @default("GBP")

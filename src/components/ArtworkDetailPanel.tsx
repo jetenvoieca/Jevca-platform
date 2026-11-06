@@ -212,10 +212,13 @@ export default function ArtworkDetailPanel({
     });
   };
 
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const handleDelete = () => {
     if (!confirm(`Delete "${artwork.catalogueName}"? This can't be undone.`)) return;
+    setDeleteError(null);
     startTransition(async () => {
-      await deleteArtwork(siteId, artwork.id);
+      const result = await deleteArtwork(siteId, artwork.id);
+      if ("error" in result) return setDeleteError(result.error);
       if (onDeleted) {
         onDeleted();
       } else {
@@ -326,6 +329,7 @@ export default function ArtworkDetailPanel({
           )}
         </div>
       </div>
+      {deleteError && <p className="-mt-2 mb-4 text-sm text-red-600">{deleteError}</p>}
 
       <form onBlur={(e) => autosaveCatalogue(e.currentTarget)} className="space-y-4">
           <ArtworkCatalogueFields
