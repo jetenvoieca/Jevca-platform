@@ -1,9 +1,16 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
-import { deleteMarketingContact, saveMarketingContact } from "@/lib/actions/marketingContacts";
+import {
+  deleteMarketingContact,
+  listMarketingContacts,
+  saveMarketingContact,
+} from "@/lib/actions/marketingContacts";
 import {
   CURRENCIES,
+  CURRENCY_SIGN,
+  EMPTY_CONTACT,
+  WORKS_LABEL,
   WORKS_TYPES,
   type MarketingContactInput,
   type MarketingContactLinkRef,
@@ -13,6 +20,7 @@ import {
   type MarketingWorksType,
 } from "@/lib/marketingContacts";
 import AddIconButton from "@/components/AddIconButton";
+import MarketingContactsImport from "@/components/MarketingContactsImport";
 import FormModal from "@/components/FormModal";
 import { useAutoSave } from "@/components/useAutoSave";
 import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberFormParts";
@@ -26,7 +34,8 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // galleries (2026-11-04): typing a name suggests existing ones, and a new
 // name is added as a contact when saved. A contact also has a contact
 // person, a price band, works types and tags (2026-11-06); the list can
-// be narrowed to a tag, e.g. "Louise Dear criteria".
+// be narrowed to a tag, e.g. "Louise Dear criteria". Import adds
+// contacts from a CSV (MarketingContactsImport).
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -41,15 +50,6 @@ type Showing = (typeof SHOWING)[number]["value"];
 const MAX_SUGGESTIONS = 8;
 const ALL_TAGS = "";
 
-const WORKS_LABEL: Record<MarketingWorksType, string> = {
-  ORIGINALS: "Originals",
-  PRINTS: "Prints",
-  SCULPTURE: "Sculpture",
-  PHOTOGRAPHY: "Photography",
-  MIXED_MEDIA: "Mixed media",
-};
-const CURRENCY_SIGN: Record<MarketingCurrency, string> = { GBP: "£", EUR: "€", USD: "$" };
-
 // "£500–£5,000", "from £500", "up to £5,000", or nothing.
 function priceBand(c: Pick<MarketingContactRow, "priceMin" | "priceMax" | "priceCurrency">) {
   if (!c.priceCurrency) return "";
@@ -60,26 +60,6 @@ function priceBand(c: Pick<MarketingContactRow, "priceMin" | "priceMax" | "price
   return "";
 }
 const worksText = (c: Pick<MarketingContactRow, "worksTypes">) => c.worksTypes.map((w) => WORKS_LABEL[w]).join(", ");
-
-const EMPTY: MarketingContactInput = {
-  type: "GALLERY",
-  name: "",
-  contactPerson: "",
-  email: "",
-  phone: "",
-  website: "",
-  instagram: "",
-  tiktok: "",
-  town: "",
-  country: "",
-  notes: "",
-  priceMin: null,
-  priceMax: null,
-  priceCurrency: null,
-  worksTypes: [],
-  links: [],
-  tags: [],
-};
 
 // Links for what was typed: a full address as it is, otherwise the site
 // or the account's page.
@@ -96,6 +76,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   const [tagFilter, setTagFilter] = useState(ALL_TAGS);
   // The contact being edited — "new" for Add.
   const [editing, setEditing] = useState<MarketingContactRow | "new" | null>(null);
+  const [importing, setImporting] = useState(false);
 
   // Every tag a contact has, by name.
   const tags = useMemo(() => {
@@ -145,6 +126,9 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
       <div className="mb-1 flex items-center gap-2">
         <h1 className="text-2xl font-semibold text-neutral-900">Contacts</h1>
         <AddIconButton label="Add a contact" onClick={() => setEditing("new")} />
+        <button type="button" onClick={() => setImporting(true)} className={`${secondaryButtonCls} ml-auto`}>
+          Import
+        </button>
       </div>
       <p className="mb-6 text-sm text-neutral-500">Artists and galleries to keep in touch with.</p>
 
@@ -265,6 +249,13 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
           onClose={() => setEditing(null)}
         />
       )}
+      {importing && (
+        <MarketingContactsImport
+          tagNames={tags.map((t) => t.name)}
+          onImported={async () => setContacts(await listMarketingContacts())}
+          onClose={() => setImporting(false)}
+        />
+      )}
     </div>
   );
 }
@@ -300,7 +291,7 @@ function ContactModal({
   onDeleted: (id: string) => void;
   onClose: () => void;
 }) {
-  const [values, setValues] = useState<MarketingContactInput>(contact ?? EMPTY);
+  const [values, setValues] = useState<MarketingContactInput>(contact ?? EMPTY_CONTACT);
   // Its id once saved — a new one has none until it has a name.
   const [savedId, setSavedId] = useState<string | null>(contact?.id ?? null);
   const [confirmDelete, setConfirmDelete] = useState(false);

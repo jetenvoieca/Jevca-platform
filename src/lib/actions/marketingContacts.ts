@@ -11,6 +11,8 @@ import {
   type MarketingContactRow,
   type MarketingContactType,
   type MarketingCurrency,
+  type MarketingImportResult,
+  type MarketingImportRow,
   type MarketingWorksType,
 } from "@/lib/marketingContacts";
 
@@ -21,12 +23,14 @@ import {
 // contact of that type becomes one. Contacts also have a contact person,
 // a price band, works types and tags (2026-11-06) — a tag added that
 // doesn't exist yet is created, and one no contact has any more goes.
+// Contacts can also be imported from a CSV (2026-11-06).
 
 const MAX_FIELD = 300;
 const MAX_NOTES = 5000;
 const MAX_LINKS = 500;
 const MAX_TAGS = 50;
 const MAX_PRICE = 100_000_000;
+const MAX_IMPORT_BATCH = 100;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const otherType = (t: MarketingContactType): MarketingContactType => (t === "GALLERY" ? "ARTIST" : "GALLERY");
@@ -154,9 +158,9 @@ function checked(input: MarketingContactInput) {
   };
 }
 
-// Sets a contact's tags to these — each an existing tag, else one of
-// that name (ignoring capitals), else a new one.
-async function setTags(tx: Prisma.TransactionClient, contactId: string, tags: MarketingContactLinkRef[]) {
+// The ids of these tags — each an existing tag, else one of that name
+// (ignoring capitals), else a new one.
+async function tagIds(tx: Prisma.TransactionClient, tags: MarketingContactLinkRef[]) {
   const ids = new Set<string>();
   for (const tag of tags) {
     const found =
@@ -168,11 +172,23 @@ async function setTags(tx: Prisma.TransactionClient, contactId: string, tags: Ma
       (await tx.marketingTag.create({ data: { name: tag.name }, select: { id: true } }));
     ids.add(found.id);
   }
-  await tx.marketingContactTag.deleteMany({ where: { contactId, tagId: { notIn: [...ids] } } });
+  return [...ids];
+}
+
+// Gives a contact these tags, as well as any it has.
+async function addTags(tx: Prisma.TransactionClient, contactId: string, tags: MarketingContactLinkRef[]) {
+  const ids = await tagIds(tx, tags);
   await tx.marketingContactTag.createMany({
-    data: [...ids].map((tagId) => ({ contactId, tagId })),
+    data: ids.map((tagId) => ({ contactId, tagId })),
     skipDuplicates: true,
   });
+  return ids;
+}
+
+// Sets a contact's tags to these.
+async function setTags(tx: Prisma.TransactionClient, contactId: string, tags: MarketingContactLinkRef[]) {
+  const ids = await addTags(tx, contactId, tags);
+  await tx.marketingContactTag.deleteMany({ where: { contactId, tagId: { notIn: ids } } });
 }
 
 // Tags no contact has any more.
@@ -245,4 +261,92 @@ export async function deleteMarketingContact(id: string): Promise<{ ok: true }> 
     await removeUnusedTags(tx);
   });
   return { ok: true };
+}
+
+// A website as one site, whatever way it was typed:
+// "https://www.Gallery.com/contact" → "gallery.com".
+const siteKey = (v: string | null) =>
+  v
+    ?.toLowerCase()
+    .replace(/^[a-z]+:\/\//, "")
+    .replace(/^www\./, "")
+    .split(/[/?#]/)[0] || null;
+
+// Imports CSV rows (up to MAX_IMPORT_BATCH a call — the screen sends
+// them in batches). A row matching a contact of its type, by email or
+// website, is merged: what the contact has is kept, its blanks are
+// filled in, and the row's works types and tags are added. Any other
+// row is added as a new contact. A row that can't be saved is skipped,
+// with why.
+export async function importMarketingContacts(rows: MarketingImportRow[]): Promise<MarketingImportResult> {
+  await requireAdmin();
+  const result: MarketingImportResult = { created: 0, merged: 0, skipped: [] };
+
+  // Every contact's email and site, to match against — added to as
+  // rows are created, so a file can't add the same gallery twice.
+  const known = await db.marketingContact.findMany({ select: { id: true, type: true, email: true, website: true } });
+  const byEmail = new Map<string, string>();
+  const bySite = new Map<string, string>();
+  const remember = (c: { id: string; type: MarketingContactType; email: string | null; website: string | null }) => {
+    if (c.email) byEmail.set(`${c.type}:${c.email.toLowerCase()}`, c.id);
+    const site = siteKey(c.website);
+    if (site) bySite.set(`${c.type}:${site}`, c.id);
+  };
+  known.forEach(remember);
+
+  for (const { line, contact } of rows.slice(0, MAX_IMPORT_BATCH)) {
+    const check = checked({ ...contact, links: [] });
+    if ("error" in check) {
+      result.skipped.push({ line, reason: check.error! });
+      continue;
+    }
+    const { data, tags } = check;
+    const site = siteKey(data.website);
+    const matchId =
+      (data.email && byEmail.get(`${data.type}:${data.email}`)) || (site && bySite.get(`${data.type}:${site}`)) || null;
+
+    if (matchId) {
+      const merged = await db.$transaction(async (tx) => {
+        const old = await tx.marketingContact.findUniqueOrThrow({ where: { id: matchId } });
+        const hasPrice = old.priceMin !== null || old.priceMax !== null;
+        const c = await tx.marketingContact.update({
+          where: { id: matchId },
+          select: { id: true, type: true, email: true, website: true },
+          data: {
+            contactPerson: old.contactPerson ?? data.contactPerson,
+            email: old.email ?? data.email,
+            phone: old.phone ?? data.phone,
+            website: old.website ?? data.website,
+            instagram: old.instagram ?? data.instagram,
+            tiktok: old.tiktok ?? data.tiktok,
+            town: old.town ?? data.town,
+            country: old.country ?? data.country,
+            notes: old.notes ?? data.notes,
+            ...(!hasPrice && {
+              priceMin: data.priceMin,
+              priceMax: data.priceMax,
+              priceCurrency: data.priceCurrency,
+            }),
+            worksTypes: WORKS_TYPES.filter((w) => old.worksTypes.includes(w) || data.worksTypes.includes(w)),
+          },
+        });
+        await addTags(tx, matchId, tags);
+        return c;
+      });
+      remember(merged);
+      result.merged++;
+    } else {
+      const created = await db.$transaction(async (tx) => {
+        const c = await tx.marketingContact.create({
+          data,
+          select: { id: true, type: true, email: true, website: true },
+        });
+        await addTags(tx, c.id, tags);
+        return c;
+      });
+      remember(created);
+      result.created++;
+    }
+  }
+  return result;
 }
