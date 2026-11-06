@@ -26,8 +26,10 @@ export type MarketingContactInput = {
   town: string;
   country: string;
   notes: string;
-  priceMin: number | null;
-  priceMax: number | null;
+  originalsMin: number | null;
+  originalsMax: number | null;
+  printsMin: number | null;
+  printsMax: number | null;
   priceCurrency: MarketingCurrency | null;
   worksTypes: MarketingWorksType[];
   links: MarketingContactLinkRef[];
@@ -49,6 +51,12 @@ export const WORKS_LABEL: Record<MarketingWorksType, string> = {
 };
 export const CURRENCY_SIGN: Record<MarketingCurrency, string> = { GBP: "£", EUR: "€", USD: "$" };
 
+// A contact's two price bands (2026-11-06).
+export const PRICE_BANDS = [
+  { min: "originalsMin", max: "originalsMax", label: "Originals" },
+  { min: "printsMin", max: "printsMax", label: "Prints" },
+] as const;
+
 export const EMPTY_CONTACT: MarketingContactInput = {
   type: "GALLERY",
   name: "",
@@ -61,8 +69,10 @@ export const EMPTY_CONTACT: MarketingContactInput = {
   town: "",
   country: "",
   notes: "",
-  priceMin: null,
-  priceMax: null,
+  originalsMin: null,
+  originalsMax: null,
+  printsMin: null,
+  printsMax: null,
   priceCurrency: null,
   worksTypes: [],
   links: [],
@@ -84,8 +94,10 @@ export const IMPORT_COLUMNS = [
   "TikTok",
   "Town",
   "Country",
-  "Price from",
-  "Price to",
+  "Originals from",
+  "Originals to",
+  "Prints from",
+  "Prints to",
   "Currency",
   "Works",
   "Tags",
@@ -138,8 +150,10 @@ export function contactFromCsv(record: Record<string, string>): MarketingContact
     town: get("Town"),
     country: get("Country"),
     notes: get("Notes"),
-    priceMin: amount(get("Price from")),
-    priceMax: amount(get("Price to")),
+    originalsMin: amount(get("Originals from")),
+    originalsMax: amount(get("Originals to")),
+    printsMin: amount(get("Prints from")),
+    printsMax: amount(get("Prints to")),
     priceCurrency: currency(get("Currency")),
     worksTypes: WORKS_TYPES.filter((w) => several(get("Works")).map(worksType).includes(w)),
     tags: several(get("Tags")).map((name) => ({ id: null, name })),

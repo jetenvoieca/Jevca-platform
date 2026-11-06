@@ -10,6 +10,7 @@ import {
   CURRENCIES,
   CURRENCY_SIGN,
   EMPTY_CONTACT,
+  PRICE_BANDS,
   WORKS_LABEL,
   WORKS_TYPES,
   type MarketingContactInput,
@@ -52,13 +53,16 @@ type Showing = (typeof SHOWING)[number]["value"];
 const MAX_SUGGESTIONS = 8;
 const ALL_TAGS = "";
 
-// "£500–£5,000", "from £500", "up to £5,000", or nothing.
-function priceBand(c: Pick<MarketingContactRow, "priceMin" | "priceMax" | "priceCurrency">) {
+type PriceBand = (typeof PRICE_BANDS)[number];
+
+// A band as "£500–£5,000", "from £500", "up to £5,000", or nothing.
+function priceBand(c: MarketingContactRow, band: PriceBand) {
+  const [min, max] = [c[band.min], c[band.max]];
   if (!c.priceCurrency) return "";
   const amount = (n: number) => `${CURRENCY_SIGN[c.priceCurrency!]}${n.toLocaleString("en-GB")}`;
-  if (c.priceMin !== null && c.priceMax !== null) return `${amount(c.priceMin)}–${amount(c.priceMax)}`;
-  if (c.priceMin !== null) return `from ${amount(c.priceMin)}`;
-  if (c.priceMax !== null) return `up to ${amount(c.priceMax)}`;
+  if (min !== null && max !== null) return `${amount(min)}–${amount(max)}`;
+  if (min !== null) return `from ${amount(min)}`;
+  if (max !== null) return `up to ${amount(max)}`;
   return "";
 }
 const worksText = (c: Pick<MarketingContactRow, "worksTypes">) => c.worksTypes.map((w) => WORKS_LABEL[w]).join(", ");
@@ -100,7 +104,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         c.town,
         c.country,
         c.notes,
-        priceBand(c),
+        ...PRICE_BANDS.map((b) => priceBand(c, b)),
         worksText(c),
         ...c.links.map((l) => l.name),
         ...c.tags.map((t) => t.name),
@@ -187,7 +191,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                   "Website",
                   "Town",
                   "Country",
-                  "Price band",
+                  ...PRICE_BANDS.map((b) => b.label),
                   "Tags",
                 ].map((h) => (
                   <th key={h} className="whitespace-nowrap px-3 py-2 font-medium">
@@ -214,7 +218,11 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                   </td>
                   <td className="px-3 py-2">{c.town}</td>
                   <td className="px-3 py-2">{c.country}</td>
-                  <td className="whitespace-nowrap px-3 py-2">{priceBand(c)}</td>
+                  {PRICE_BANDS.map((b) => (
+                    <td key={b.label} className="whitespace-nowrap px-3 py-2">
+                      {priceBand(c, b)}
+                    </td>
+                  ))}
                   <td className="px-3 py-2 text-neutral-600">{c.tags.map((t) => t.name).join(", ")}</td>
                 </tr>
               ))}
@@ -320,7 +328,14 @@ function ContactModal({
   const field = (
     key: Exclude<
       keyof MarketingContactInput,
-      "type" | "notes" | "links" | "tags" | "priceMin" | "priceMax" | "priceCurrency" | "worksTypes"
+      | "type"
+      | "notes"
+      | "links"
+      | "tags"
+      | PriceBand["min"]
+      | PriceBand["max"]
+      | "priceCurrency"
+      | "worksTypes"
     >,
     label: string,
     type = "text",
@@ -331,7 +346,7 @@ function ContactModal({
     </div>
   );
   // A price as typed — blank is none.
-  const priceField = (key: "priceMin" | "priceMax", label: string) => (
+  const priceField = (key: PriceBand["min"] | PriceBand["max"], label: string) => (
     <div>
       <label className={labelCls}>{label}</label>
       <input
@@ -388,8 +403,6 @@ function ContactModal({
         {field("country", "Country")}
       </div>
       <div className="grid grid-cols-3 gap-2">
-        {priceField("priceMin", "Price from")}
-        {priceField("priceMax", "Price to")}
         <div>
           <label className={labelCls}>Currency</label>
           <select
@@ -406,6 +419,12 @@ function ContactModal({
           </select>
         </div>
       </div>
+      {PRICE_BANDS.map((b) => (
+        <div key={b.label} className="grid grid-cols-2 gap-2">
+          {priceField(b.min, `${b.label} from`)}
+          {priceField(b.max, `${b.label} to`)}
+        </div>
+      ))}
       <div>
         <label className={labelCls}>Works</label>
         <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-neutral-700">

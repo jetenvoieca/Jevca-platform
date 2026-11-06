@@ -2936,10 +2936,12 @@ model MarketingContact {
   town          String?
   country       String?
   notes         String?
-  // What its works sell for, lowest to highest, and what they are
-  // (2026-11-06).
-  priceMin      Int?
-  priceMax      Int?
+  // What its originals and its prints sell for, lowest to highest, in
+  // one currency, and what kinds of works it has (2026-11-06).
+  originalsMin  Int?
+  originalsMax  Int?
+  printsMin     Int?
+  printsMax     Int?
   priceCurrency MarketingCurrency?
   worksTypes    MarketingWorksType[] @default([])
   createdAt     DateTime             @default(now())

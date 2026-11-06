@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   CURRENCIES,
+  PRICE_BANDS,
   WORKS_TYPES,
   type MarketingContactInput,
   type MarketingContactLinkRef,
@@ -21,8 +22,9 @@ import {
 // Admin only. A gallery lists its artists and an artist their galleries
 // (MarketingContactLink, 2026-11-04); a name added that isn't yet a
 // contact of that type becomes one. Contacts also have a contact person,
-// a price band, works types and tags (2026-11-06) — a tag added that
-// doesn't exist yet is created, and one no contact has any more goes.
+// price bands for originals and prints, works types and tags
+// (2026-11-06) — a tag added that doesn't exist yet is created, and one
+// no contact has any more goes.
 // Contacts can also be imported from a CSV (2026-11-06).
 
 const MAX_FIELD = 300;
@@ -48,8 +50,10 @@ const select = {
   town: true,
   country: true,
   notes: true,
-  priceMin: true,
-  priceMax: true,
+  originalsMin: true,
+  originalsMax: true,
+  printsMin: true,
+  printsMax: true,
   priceCurrency: true,
   worksTypes: true,
   tags: { select: { tag: { select: { id: true, name: true } } } },
@@ -70,8 +74,10 @@ type Stored = {
   town: string | null;
   country: string | null;
   notes: string | null;
-  priceMin: number | null;
-  priceMax: number | null;
+  originalsMin: number | null;
+  originalsMax: number | null;
+  printsMin: number | null;
+  printsMax: number | null;
   priceCurrency: MarketingCurrency | null;
   worksTypes: MarketingWorksType[];
   tags: { tag: { id: string; name: string } }[];
@@ -96,8 +102,10 @@ function toRow(c: Stored): MarketingContactRow {
     town: c.town ?? "",
     country: c.country ?? "",
     notes: c.notes ?? "",
-    priceMin: c.priceMin,
-    priceMax: c.priceMax,
+    originalsMin: c.originalsMin,
+    originalsMax: c.originalsMax,
+    printsMin: c.printsMin,
+    printsMax: c.printsMax,
     priceCurrency: c.priceCurrency,
     worksTypes: WORKS_TYPES.filter((w) => c.worksTypes.includes(w)),
     links: links.sort(byName),
@@ -128,12 +136,19 @@ function checked(input: MarketingContactInput) {
   if (!name) return { error: "A name is needed." };
   const email = text(input.email)?.toLowerCase() ?? null;
   if (email && !EMAIL.test(email)) return { error: "That email doesn't look right." };
-  const priceMin = price(input.priceMin);
-  const priceMax = price(input.priceMax);
-  if (priceMin !== null && priceMax !== null && priceMin > priceMax)
-    return { error: "The lowest price is above the highest." };
+  const prices = {
+    originalsMin: price(input.originalsMin),
+    originalsMax: price(input.originalsMax),
+    printsMin: price(input.printsMin),
+    printsMax: price(input.printsMax),
+  };
+  for (const band of PRICE_BANDS) {
+    const [min, max] = [prices[band.min], prices[band.max]];
+    if (min !== null && max !== null && min > max)
+      return { error: `${band.label}: the lowest price is above the highest.` };
+  }
   const priceCurrency = CURRENCIES.includes(input.priceCurrency as MarketingCurrency) ? input.priceCurrency : null;
-  if ((priceMin !== null || priceMax !== null) && !priceCurrency) return { error: "Choose the price's currency." };
+  if (Object.values(prices).some((p) => p !== null) && !priceCurrency) return { error: "Choose the prices' currency." };
   const worksTypes = WORKS_TYPES.filter((w) => Array.isArray(input.worksTypes) && input.worksTypes.includes(w));
   return {
     data: {
@@ -148,8 +163,7 @@ function checked(input: MarketingContactInput) {
       town: text(input.town),
       country: text(input.country),
       notes: text(input.notes, MAX_NOTES),
-      priceMin,
-      priceMax,
+      ...prices,
       priceCurrency,
       worksTypes,
     },
@@ -272,6 +286,29 @@ const siteKey = (v: string | null) =>
     .replace(/^www\./, "")
     .split(/[/?#]/)[0] || null;
 
+type Prices = Pick<
+  MarketingContactInput,
+  "originalsMin" | "originalsMax" | "printsMin" | "printsMax" | "priceCurrency"
+>;
+
+// An imported row's prices for a contact already there: all of them if
+// it has none; otherwise, in the same currency, any band it hasn't got;
+// otherwise none.
+function mergedPrices(old: Prices, row: Prices): Partial<Prices> {
+  const has = (p: Prices, band: (typeof PRICE_BANDS)[number]) => p[band.min] !== null || p[band.max] !== null;
+  if (!PRICE_BANDS.some((b) => has(old, b))) {
+    const { originalsMin, originalsMax, printsMin, printsMax, priceCurrency } = row;
+    return { originalsMin, originalsMax, printsMin, printsMax, priceCurrency };
+  }
+  if (old.priceCurrency !== row.priceCurrency) return {};
+  return Object.fromEntries(
+    PRICE_BANDS.filter((b) => !has(old, b)).flatMap((b) => [
+      [b.min, row[b.min]],
+      [b.max, row[b.max]],
+    ]),
+  );
+}
+
 // Imports CSV rows (up to MAX_IMPORT_BATCH a call — the screen sends
 // them in batches). A row matching a contact of its type, by email or
 // website, is merged: what the contact has is kept, its blanks are
@@ -308,7 +345,6 @@ export async function importMarketingContacts(rows: MarketingImportRow[]): Promi
     if (matchId) {
       const merged = await db.$transaction(async (tx) => {
         const old = await tx.marketingContact.findUniqueOrThrow({ where: { id: matchId } });
-        const hasPrice = old.priceMin !== null || old.priceMax !== null;
         const c = await tx.marketingContact.update({
           where: { id: matchId },
           select: { id: true, type: true, email: true, website: true },
@@ -322,11 +358,7 @@ export async function importMarketingContacts(rows: MarketingImportRow[]): Promi
             town: old.town ?? data.town,
             country: old.country ?? data.country,
             notes: old.notes ?? data.notes,
-            ...(!hasPrice && {
-              priceMin: data.priceMin,
-              priceMax: data.priceMax,
-              priceCurrency: data.priceCurrency,
-            }),
+            ...mergedPrices(old, data),
             worksTypes: WORKS_TYPES.filter((w) => old.worksTypes.includes(w) || data.worksTypes.includes(w)),
           },
         });
