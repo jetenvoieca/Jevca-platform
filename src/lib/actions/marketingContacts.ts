@@ -318,11 +318,13 @@ function mergedPrices(old: Prices, row: Prices): Partial<Prices> {
 }
 
 // Imports CSV rows (up to MAX_IMPORT_BATCH a call — the screen sends
-// them in batches). A row matching a contact of its type, by email or
-// website, is merged: what the contact has is kept, its blanks are
-// filled in, and the row's works types and tags are added. Any other
-// row is added as a new contact. A row that can't be saved is skipped,
-// with why.
+// them in batches). A row matching a contact of its type is merged: what
+// the contact has is kept, its blanks are filled in, and the row's works
+// types and tags are added. It matches a contact with the same email; or,
+// on the same website, one where either has no email — so branches of
+// one gallery sharing a website but with their own emails stay separate
+// (2026-11-06). Any other row is added as a new contact. A row that
+// can't be saved is skipped, with why.
 export async function importMarketingContacts(rows: MarketingImportRow[]): Promise<MarketingImportResult> {
   await requireAdmin();
   const result: MarketingImportResult = { created: 0, merged: 0, skipped: [] };
@@ -331,11 +333,14 @@ export async function importMarketingContacts(rows: MarketingImportRow[]): Promi
   // rows are created, so a file can't add the same gallery twice.
   const known = await db.marketingContact.findMany({ select: { id: true, type: true, email: true, website: true } });
   const byEmail = new Map<string, string>();
-  const bySite = new Map<string, string>();
+  const bySite = new Map<string, { id: string; email: string | null }[]>();
   const remember = (c: { id: string; type: MarketingContactType; email: string | null; website: string | null }) => {
     if (c.email) byEmail.set(`${c.type}:${c.email.toLowerCase()}`, c.id);
     const site = siteKey(c.website);
-    if (site) bySite.set(`${c.type}:${site}`, c.id);
+    if (!site) return;
+    const key = `${c.type}:${site}`;
+    const others = (bySite.get(key) ?? []).filter((s) => s.id !== c.id);
+    bySite.set(key, [...others, { id: c.id, email: c.email }]);
   };
   known.forEach(remember);
 
@@ -347,8 +352,11 @@ export async function importMarketingContacts(rows: MarketingImportRow[]): Promi
     }
     const { data, tags } = check;
     const site = siteKey(data.website);
+    const sameSite = site ? (bySite.get(`${data.type}:${site}`) ?? []) : [];
     const matchId =
-      (data.email && byEmail.get(`${data.type}:${data.email}`)) || (site && bySite.get(`${data.type}:${site}`)) || null;
+      (data.email && byEmail.get(`${data.type}:${data.email}`)) ||
+      sameSite.find((s) => !data.email || !s.email)?.id ||
+      null;
 
     if (matchId) {
       const merged = await db.$transaction(async (tx) => {
