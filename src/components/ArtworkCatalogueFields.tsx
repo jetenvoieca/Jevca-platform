@@ -5,6 +5,7 @@ import type { ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import { addArtworkType, addSettingOption } from "@/lib/actions/artworkSettings";
 import { createLocation, type LocationSummary } from "@/lib/actions/locations";
 import { useClientWords } from "@/components/ClientWordsProvider";
+import { formatEdition, isOpenEditionType, parseEdition } from "@/lib/derivatives";
 
 // Keeps a select from silently dropping an existing value that isn't (yet)
 // in the preset list — e.g. legacy data typed in before Settings existed,
@@ -47,6 +48,55 @@ const inputCls = "w-full rounded-md border border-neutral-300 px-3 py-[6.4px] te
 // of line. Shared with the Catalogue window's own Name and price boxes.
 export const FIELD_HEIGHT = "h-9";
 const lineCls = `w-full rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`;
+
+// An edition's number "of" its size, kept as "3/10" in the form's
+// `edition` (2026-11-06). An older free-text edition that isn't written
+// that way is kept until both are filled in, and shown beneath.
+function EditionNumberFields({ edition, onDone }: { edition: string; onDone: (form: HTMLFormElement) => void }) {
+  const parsed = parseEdition(edition);
+  const [number, setNumber] = useState(parsed ? String(parsed.number) : "");
+  const [size, setSize] = useState(parsed ? String(parsed.size) : "");
+  const n = Number(number);
+  const total = Number(size);
+  // Both filled in: "3/10"; both cleared: none (an old free-text one is
+  // kept); half filled in: as it was, until finished.
+  const value =
+    Number.isInteger(n) && Number.isInteger(total) && n > 0 && total > 0
+      ? formatEdition(n, total)
+      : !number && !size && parsed
+        ? ""
+        : edition;
+  const box = `w-full min-w-0 rounded-md border border-neutral-300 px-3 text-sm ${FIELD_HEIGHT}`;
+  return (
+    <>
+      <div className="flex items-center gap-2 text-sm text-neutral-600">
+        <input
+          type="number"
+          min={1}
+          value={number}
+          onChange={(e) => setNumber(e.target.value)}
+          onBlur={(e) => onDone(e.currentTarget.form!)}
+          aria-label="Number"
+          placeholder="Number"
+          className={box}
+        />
+        <span className="shrink-0">of</span>
+        <input
+          type="number"
+          min={1}
+          value={size}
+          onChange={(e) => setSize(e.target.value)}
+          onBlur={(e) => onDone(e.currentTarget.form!)}
+          aria-label="Edition size"
+          placeholder="Edition"
+          className={box}
+        />
+      </div>
+      <input type="hidden" name="edition" value={value} />
+      {!parsed && edition && <p className="mt-1 text-xs text-neutral-400">Was: {edition}</p>}
+    </>
+  );
+}
 const labelCls = "mb-1 block text-sm font-medium text-neutral-700";
 
 // Sentinel option value for "+ Add new…" (2026-09-11) — never a real
@@ -164,7 +214,9 @@ export default function ArtworkCatalogueFields({
   // Substring rather than exact match, since Type is free text from the
   // artist's own preset list and can be phrased several ways ("Edition",
   // "Giclée Edition", "Limited Edition").
-  const isEditionType = typeValue.trim().toLowerCase().includes("edition");
+  // Numbered (2026-11-06): an edition that isn't an open one.
+  const isEditionType =
+    typeValue.trim().toLowerCase().includes("edition") && !isOpenEditionType(typeValue);
 
   const words = useClientWords();
   const onAddType = async (name: string) => {
@@ -269,16 +321,15 @@ export default function ArtworkCatalogueFields({
           {/* Edition only applies to editioned work — Originals and Uniques
               are one-offs (2026-08-15 decision). Always shown, below Type,
               and greyed out unless the Type includes "Edition" (2026-10-29,
-              Craig's mockup); any value on record is kept either way. */}
+              Craig's mockup) and isn't an open one; any value on record is
+              kept either way. Its number of how many (2026-11-06, Craig's
+              mockup — see lib/derivatives.ts). */}
           <div>
             <label className={`${labelCls} ${isEditionType ? "" : "text-neutral-400"}`}>Edition</label>
             {isEditionType ? (
-              <input
-                type="text"
-                name="edition"
-                defaultValue={values.edition}
-                onBlur={(e) => onAutosave?.(e.currentTarget.form!)}
-                className={lineCls}
+              <EditionNumberFields
+                edition={values.edition}
+                onDone={(form) => setTimeout(() => onAutosave?.(form), 0)}
               />
             ) : (
               <>
