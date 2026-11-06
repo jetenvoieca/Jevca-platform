@@ -253,12 +253,17 @@ export default function ArtworksCatalogueView({
     setLoadingMore(true);
     setLoadMoreError(false);
     try {
-      const { rows } = await listArtworks(artistId, {
+      const { rows, total: freshTotal } = await listArtworks(artistId, {
         ...toListFilters({ name, availability, location, type, curation, base, sort }),
         offset: artworks.length,
         limit: pageSize,
       });
       setArtworks((prev) => [...prev, ...rows]);
+      // The count as it is now (2026-11-06): works deleted or changed
+      // since the list loaded had left it too high, so the end of the
+      // list kept asking for more ("Loading…" flickering). A short page
+      // means the end has been reached.
+      setTotal(rows.length < pageSize ? artworks.length + rows.length : freshTotal);
     } catch {
       // See the note on loadMoreError above — this is what actually
       // breaks the retry loop: without catching here, the error would
