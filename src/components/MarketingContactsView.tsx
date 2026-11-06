@@ -35,7 +35,9 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // name is added as a contact when saved. A contact also has a contact
 // person, a price band, works types and tags (2026-11-06); the list can
 // be narrowed to a tag, e.g. "Louise Dear criteria". Import adds
-// contacts from a CSV (MarketingContactsImport).
+// contacts from a CSV (MarketingContactsImport). The table shows the
+// main details only (2026-11-06, Craig); the rest are in the window, and
+// search covers them all.
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -61,13 +63,9 @@ function priceBand(c: Pick<MarketingContactRow, "priceMin" | "priceMax" | "price
 }
 const worksText = (c: Pick<MarketingContactRow, "worksTypes">) => c.worksTypes.map((w) => WORKS_LABEL[w]).join(", ");
 
-// Links for what was typed: a full address as it is, otherwise the site
-// or the account's page.
-const handle = (v: string) => v.trim().replace(/^@/, "");
-const isAddress = (v: string) => /^https?:\/\//i.test(v.trim());
-const websiteLink = (v: string) => (isAddress(v) ? v.trim() : `https://${v.trim()}`);
-const instagramLink = (v: string) => (isAddress(v) ? v.trim() : `https://www.instagram.com/${handle(v)}`);
-const tiktokLink = (v: string) => (isAddress(v) ? v.trim() : `https://www.tiktok.com/@${handle(v)}`);
+// A website as typed, as a link: a full address as it is, otherwise
+// the site.
+const websiteLink = (v: string) => (/^https?:\/\//i.test(v.trim()) ? v.trim() : `https://${v.trim()}`);
 
 export default function MarketingContactsView({ contacts: initial }: { contacts: MarketingContactRow[] }) {
   const [contacts, setContacts] = useState(initial);
@@ -185,16 +183,11 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                   "Type",
                   "Name",
                   "Contact",
-                  showing === "ALL" ? "Artists / Galleries" : LINKS_LABEL[showing],
                   "Email",
-                  "Phone",
                   "Website",
-                  "Instagram",
-                  "TikTok",
                   "Town",
                   "Country",
                   "Price band",
-                  "Works",
                   "Tags",
                 ].map((h) => (
                   <th key={h} className="whitespace-nowrap px-3 py-2 font-medium">
@@ -213,24 +206,15 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                   <td className="whitespace-nowrap px-3 py-2 text-neutral-500">{TYPE_LABEL[c.type]}</td>
                   <td className="px-3 py-2 font-medium text-neutral-900">{c.name}</td>
                   <td className="px-3 py-2">{c.contactPerson}</td>
-                  <td className="px-3 py-2 text-neutral-600">{c.links.map((l) => l.name).join(", ")}</td>
                   <td className="px-3 py-2">
                     {c.email && <ContactLink href={`mailto:${c.email}`} text={c.email} />}
                   </td>
-                  <td className="whitespace-nowrap px-3 py-2">{c.phone}</td>
                   <td className="px-3 py-2">
                     {c.website && <ContactLink href={websiteLink(c.website)} text={c.website} newTab />}
-                  </td>
-                  <td className="px-3 py-2">
-                    {c.instagram && <ContactLink href={instagramLink(c.instagram)} text={c.instagram} newTab />}
-                  </td>
-                  <td className="px-3 py-2">
-                    {c.tiktok && <ContactLink href={tiktokLink(c.tiktok)} text={c.tiktok} newTab />}
                   </td>
                   <td className="px-3 py-2">{c.town}</td>
                   <td className="px-3 py-2">{c.country}</td>
                   <td className="whitespace-nowrap px-3 py-2">{priceBand(c)}</td>
-                  <td className="px-3 py-2">{worksText(c)}</td>
                   <td className="px-3 py-2 text-neutral-600">{c.tags.map((t) => t.name).join(", ")}</td>
                 </tr>
               ))}
