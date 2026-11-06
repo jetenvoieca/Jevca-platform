@@ -46,9 +46,13 @@ export type ArtworkFilterInput = {
   sort?: string;
 };
 
-// The one alternative to the standard order: catalogue number, lowest
-// first, whatever the availability. Unset means the standard order.
+// The alternatives to the standard order (unset): catalogue number,
+// lowest first, whatever the availability; by Type, then name (2026-11-06,
+// Craig's request — to help tidying); by Curation (2026-11-06) — see
+// orderByCuration in lib/artworkOrder.ts.
 export const ARTWORK_SORT_NUMBER = "number";
+export const ARTWORK_SORT_TYPE = "type";
+export const ARTWORK_SORT_CURATION = "curation";
 
 // The Location, Type and Curation filters' "none" choice (2026-10-27,
 // Craig's request — to spot works not yet put under one): No location,
@@ -145,9 +149,24 @@ export function artworkMatchesFilters(
 // Numbers are always generated as AW- plus four digits
 // (nextCatalogueNumber in lib/actions/artworks.ts), so a plain text
 // sort puts them in number order.
+//
+// By Type (2026-11-06): A–Z, works with none last, each A–Z by name. By
+// Curation can't be a database order (a work can be in several) — it's
+// put in order afterwards (lib/artworkOrder.ts); this gives the name
+// order it starts from.
 export function buildArtworkOrderBy(sort?: string) {
   if (sort === ARTWORK_SORT_NUMBER) {
     return [{ catalogueNumber: "asc" as const }, { createdAt: "asc" as const }];
+  }
+  if (sort === ARTWORK_SORT_TYPE) {
+    return [
+      { type: { sort: "asc" as const, nulls: "last" as const } },
+      { catalogueName: "asc" as const },
+      { createdAt: "asc" as const },
+    ];
+  }
+  if (sort === ARTWORK_SORT_CURATION) {
+    return [{ catalogueName: "asc" as const }, { createdAt: "asc" as const }];
   }
   return [
     { availability: "asc" as const },

@@ -3,7 +3,7 @@
 import type { ReactNode } from "react";
 import type { CurationSummary } from "@/lib/actions/curations";
 import type { ArtworkNameCount } from "@/lib/actions/artworks";
-import { ARTWORK_SORT_NUMBER, FILTER_NONE } from "@/lib/artworkFilters";
+import { ARTWORK_SORT_CURATION, ARTWORK_SORT_NUMBER, ARTWORK_SORT_TYPE, FILTER_NONE } from "@/lib/artworkFilters";
 
 // The artwork filters (Curation, Name, Location, Type) and the Sort —
 // shared by the Artwork Catalogue and the Media Catalogue's Artworks view
@@ -14,8 +14,9 @@ export type ArtworkFilterValues = {
   name: string;
   location: string;
   type: string;
-  // "" = the standard order (by name), or ARTWORK_SORT_NUMBER
-  // (2026-10-26) — see buildArtworkOrderBy in lib/artworkFilters.ts.
+  // "" = the standard order (by name), ARTWORK_SORT_NUMBER (2026-10-26),
+  // ARTWORK_SORT_TYPE or ARTWORK_SORT_CURATION (2026-11-06) — see
+  // buildArtworkOrderBy in lib/artworkFilters.ts.
   sort: string;
 };
 
@@ -115,6 +116,8 @@ export default function ArtworkFilterBar({
         >
           <option value="">Sort: Name</option>
           <option value={ARTWORK_SORT_NUMBER}>Sort: Catalogue number</option>
+          <option value={ARTWORK_SORT_TYPE}>Sort: Type</option>
+          <option value={ARTWORK_SORT_CURATION}>Sort: Curation</option>
         </select>
       </div>
     </div>

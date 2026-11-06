@@ -7,12 +7,14 @@ import { publicMediaUrl } from "@/lib/r2";
 import {
   buildArtworkWhere,
   buildArtworkOrderBy,
+  ARTWORK_SORT_CURATION,
   isSold,
   SOLD_AVAILABILITIES,
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
 import { isCurrency } from "@/lib/currencies";
 import { formatEdition, isOpenEditionType, isOriginalType, parseEdition } from "@/lib/derivatives";
+import { inIdOrder, orderByCuration } from "@/lib/artworkOrder";
 import { ARTWORK_IMAGE_SELECT, toArtworkImage } from "@/lib/artworkImages";
 import { getArtistDefaultCurrency } from "@/lib/primarySite";
 import type { PurchaseDetail } from "./payments";
@@ -403,10 +405,14 @@ export async function listArtworks(
 
   const orderBy = buildArtworkOrderBy(filters.sort);
   const where = buildArtworkWhere(artistId, filters);
+  // By Curation (2026-11-06), this page's works are picked from the
+  // whole filtered set put in that order.
+  const byCuration = filters.sort === ARTWORK_SORT_CURATION;
+  const curationIds = byCuration ? await orderByCuration(where) : null;
 
-  const [rows, total, soldCount] = await Promise.all([
+  const [found, total, soldCount] = await Promise.all([
     db.artwork.findMany({
-      where,
+      where: curationIds ? { id: { in: curationIds.slice(offset, offset + limit) } } : where,
       orderBy,
       select: {
         id: true,
@@ -421,10 +427,9 @@ export async function listArtworks(
         mainImage: { select: { url: true, thumbnailKey: true } },
         curationItems: { select: { curation: { select: { name: true } } } },
       },
-      skip: offset,
-      take: limit,
+      ...(curationIds ? {} : { skip: offset, take: limit }),
     }),
-    db.artwork.count({ where }),
+    curationIds ? curationIds.length : db.artwork.count({ where }),
     // Over the whole filtered set, not just this page — otherwise the
     // "X sold" summary would silently only ever reflect whatever
     // happened to be on the current page. Includes RESERVED ("Sold -
@@ -436,6 +441,7 @@ export async function listArtworks(
   // falls back to the original proxied url for any image uploaded before
   // 2026-08-13 that hasn't been backfilled yet, so nothing breaks or goes
   // blank in the meantime.
+  const rows = curationIds ? inIdOrder(found, curationIds) : found;
   const listRows: ArtworkListRow[] = rows.map(({ mainImage, presentationPrice, curationItems, ...rest }) => ({
     ...rest,
     curations: curationItems.map((i) => i.curation.name).sort((a, b) => a.localeCompare(b)),

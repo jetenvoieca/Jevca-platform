@@ -7,11 +7,13 @@ import { publicMediaUrl } from "@/lib/r2";
 import {
   buildArtworkWhere,
   buildArtworkOrderBy,
+  ARTWORK_SORT_CURATION,
   FILTER_NONE,
   type ArtworkFilterInput,
 } from "@/lib/artworkFilters";
 import { catalogueFileName, clientWords, type ClientKind } from "@/lib/clientKind";
 import { formatMoney } from "@/lib/currencies";
+import { inIdOrder, orderByCuration } from "@/lib/artworkOrder";
 
 // The shared catalogue filters (lib/artworkFilters.ts — the same ones
 // the on-screen grid uses), plus this export's own header wording.
@@ -99,11 +101,12 @@ export async function generateArtworkCataloguePdf(
   const where = buildArtworkWhere(artistId, filters);
   const orderBy = buildArtworkOrderBy(filters.sort);
 
-  const [artworks, curation] = await Promise.all([
+  const [found, curation, curationIds] = await Promise.all([
     db.artwork.findMany({
       where,
       orderBy,
       select: {
+        id: true,
         catalogueName: true,
         catalogueNumber: true,
         type: true,
@@ -123,7 +126,10 @@ export async function generateArtworkCataloguePdf(
           select: { name: true },
         })
       : Promise.resolve(null),
+    filters.sort === ARTWORK_SORT_CURATION ? orderByCuration(where) : Promise.resolve(null),
   ]);
+  // Sorted by Curation (2026-11-06): put in that order here.
+  const artworks = curationIds ? inIdOrder(found, curationIds) : found;
 
   const doc = await PDFDocument.create();
   const font = await doc.embedFont(StandardFonts.Helvetica);

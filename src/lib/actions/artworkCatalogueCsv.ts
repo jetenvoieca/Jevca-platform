@@ -4,7 +4,13 @@ import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import Papa from "papaparse";
 import { publicMediaUrl } from "@/lib/r2";
-import { buildArtworkWhere, buildArtworkOrderBy, type ArtworkFilterInput } from "@/lib/artworkFilters";
+import {
+  buildArtworkWhere,
+  buildArtworkOrderBy,
+  ARTWORK_SORT_CURATION,
+  type ArtworkFilterInput,
+} from "@/lib/artworkFilters";
+import { inIdOrder, orderByCuration } from "@/lib/artworkOrder";
 import { catalogueFileName } from "@/lib/clientKind";
 
 // CSV export (2026-09-11, direct request) — the counterpart to the
@@ -25,22 +31,28 @@ export async function generateArtworkCatalogueCsv(
   const where = buildArtworkWhere(artistId, filters);
   const orderBy = buildArtworkOrderBy(filters.sort);
 
-  const artworks = await db.artwork.findMany({
-    where,
-    orderBy,
-    select: {
-      catalogueName: true,
-      presentationPrice: true,
-      size: true,
-      medium: true,
-      location: true,
-      type: true,
-      description: true,
-      availability: true,
-      studioNotes: true,
-      mainImage: { select: { key: true, displayKey: true, thumbnailKey: true } },
-    },
-  });
+  const [found, curationIds] = await Promise.all([
+    db.artwork.findMany({
+      where,
+      orderBy,
+      select: {
+        id: true,
+        catalogueName: true,
+        presentationPrice: true,
+        size: true,
+        medium: true,
+        location: true,
+        type: true,
+        description: true,
+        availability: true,
+        studioNotes: true,
+        mainImage: { select: { key: true, displayKey: true, thumbnailKey: true } },
+      },
+    }),
+    filters.sort === ARTWORK_SORT_CURATION ? orderByCuration(where) : Promise.resolve(null),
+  ]);
+  // Sorted by Curation (2026-11-06): put in that order here.
+  const artworks = curationIds ? inIdOrder(found, curationIds) : found;
 
   const rows = artworks.map((a) => {
     const img = a.mainImage;
