@@ -2906,26 +2906,70 @@ enum MarketingContactType {
   ARTIST
 }
 
+// What a contact sells (2026-11-06) — it can have several.
+enum MarketingWorksType {
+  ORIGINALS
+  PRINTS
+  SCULPTURE
+  PHOTOGRAPHY
+  MIXED_MEDIA
+}
+
+// The currency of a contact's price band (2026-11-06).
+enum MarketingCurrency {
+  GBP
+  EUR
+  USD
+}
+
 model MarketingContact {
-  id        String               @id @default(cuid())
-  type      MarketingContactType
-  name      String
-  email     String?
-  phone     String?
-  website   String?
-  instagram String?
-  tiktok    String?
-  town      String?
-  country   String?
-  notes     String?
-  createdAt DateTime             @default(now())
-  updatedAt DateTime             @updatedAt
+  id            String               @id @default(cuid())
+  type          MarketingContactType
+  name          String
+  // The person to write to at a gallery (2026-11-06).
+  contactPerson String?
+  email         String?
+  phone         String?
+  website       String?
+  instagram     String?
+  tiktok        String?
+  town          String?
+  country       String?
+  notes         String?
+  // What its works sell for, lowest to highest, and what they are
+  // (2026-11-06).
+  priceMin      Int?
+  priceMax      Int?
+  priceCurrency MarketingCurrency?
+  worksTypes    MarketingWorksType[] @default([])
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
   // As a gallery, its artists; as an artist, their galleries.
   artists   MarketingContactLink[] @relation("GalleryArtists")
   galleries MarketingContactLink[] @relation("ArtistGalleries")
+  tags      MarketingContactTag[]
 
   @@index([type])
+}
+
+// A label grouping contacts, e.g. "Louise Dear criteria" for the
+// galleries found for her (2026-11-06). A contact can have several.
+model MarketingTag {
+  id        String                @id @default(cuid())
+  name      String                @unique
+  createdAt DateTime              @default(now())
+  contacts  MarketingContactTag[]
+}
+
+model MarketingContactTag {
+  contactId String
+  contact   MarketingContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  tagId     String
+  tag       MarketingTag     @relation(fields: [tagId], references: [id], onDelete: Cascade)
+
+  @@id([contactId, tagId])
+  @@index([tagId])
 }
 
 // A gallery and an artist it shows (2026-11-04), in Contacts.

@@ -2,12 +2,16 @@
 
 import { useEffect, useMemo, useState, useTransition } from "react";
 import {
+  CURRENCIES,
+  WORKS_TYPES,
   deleteMarketingContact,
   saveMarketingContact,
   type MarketingContactInput,
   type MarketingContactLinkRef,
   type MarketingContactRow,
   type MarketingContactType,
+  type MarketingCurrency,
+  type MarketingWorksType,
 } from "@/lib/actions/marketingContacts";
 import AddIconButton from "@/components/AddIconButton";
 import FormModal from "@/components/FormModal";
@@ -21,7 +25,9 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // also be deleted. Changes save themselves (useAutoSave, 2026-11-04, as
 // the other editors) once it has a name. A gallery lists its artists and an artist their
 // galleries (2026-11-04): typing a name suggests existing ones, and a new
-// name is added as a contact when saved.
+// name is added as a contact when saved. A contact also has a contact
+// person, a price band, works types and tags (2026-11-06); the list can
+// be narrowed to a tag, e.g. "Louise Dear criteria".
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -34,10 +40,32 @@ const SHOWING = [
 ] as const;
 type Showing = (typeof SHOWING)[number]["value"];
 const MAX_SUGGESTIONS = 8;
+const ALL_TAGS = "";
+
+const WORKS_LABEL: Record<MarketingWorksType, string> = {
+  ORIGINALS: "Originals",
+  PRINTS: "Prints",
+  SCULPTURE: "Sculpture",
+  PHOTOGRAPHY: "Photography",
+  MIXED_MEDIA: "Mixed media",
+};
+const CURRENCY_SIGN: Record<MarketingCurrency, string> = { GBP: "£", EUR: "€", USD: "$" };
+
+// "£500–£5,000", "from £500", "up to £5,000", or nothing.
+function priceBand(c: Pick<MarketingContactRow, "priceMin" | "priceMax" | "priceCurrency">) {
+  if (!c.priceCurrency) return "";
+  const amount = (n: number) => `${CURRENCY_SIGN[c.priceCurrency!]}${n.toLocaleString("en-GB")}`;
+  if (c.priceMin !== null && c.priceMax !== null) return `${amount(c.priceMin)}–${amount(c.priceMax)}`;
+  if (c.priceMin !== null) return `from ${amount(c.priceMin)}`;
+  if (c.priceMax !== null) return `up to ${amount(c.priceMax)}`;
+  return "";
+}
+const worksText = (c: Pick<MarketingContactRow, "worksTypes">) => c.worksTypes.map((w) => WORKS_LABEL[w]).join(", ");
 
 const EMPTY: MarketingContactInput = {
   type: "GALLERY",
   name: "",
+  contactPerson: "",
   email: "",
   phone: "",
   website: "",
@@ -46,7 +74,12 @@ const EMPTY: MarketingContactInput = {
   town: "",
   country: "",
   notes: "",
+  priceMin: null,
+  priceMax: null,
+  priceCurrency: null,
+  worksTypes: [],
   links: [],
+  tags: [],
 };
 
 // Links for what was typed: a full address as it is, otherwise the site
@@ -61,15 +94,26 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   const [contacts, setContacts] = useState(initial);
   const [showing, setShowing] = useState<Showing>("ALL");
   const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState(ALL_TAGS);
   // The contact being edited — "new" for Add.
   const [editing, setEditing] = useState<MarketingContactRow | "new" | null>(null);
+
+  // Every tag a contact has, by name.
+  const tags = useMemo(() => {
+    const byId = new Map(contacts.flatMap((c) => c.tags).map((t) => [t.id, t]));
+    return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
+  }, [contacts]);
+  // A tag filtered by that has since gone shows everything.
+  const activeTag = tags.some((t) => t.id === tagFilter) ? tagFilter : ALL_TAGS;
 
   const shown = useMemo(() => {
     const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return contacts.filter((c) => {
       if (showing !== "ALL" && c.type !== showing) return false;
+      if (activeTag && !c.tags.some((t) => t.id === activeTag)) return false;
       const all = [
         c.name,
+        c.contactPerson,
         c.email,
         c.phone,
         c.website,
@@ -78,13 +122,16 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         c.town,
         c.country,
         c.notes,
+        priceBand(c),
+        worksText(c),
         ...c.links.map((l) => l.name),
+        ...c.tags.map((t) => t.name),
       ]
         .join(" ")
         .toLowerCase();
       return words.every((w) => all.includes(w));
     });
-  }, [contacts, showing, search]);
+  }, [contacts, showing, activeTag, search]);
 
   // Gone from the list, and from the others' links.
   const deleted = (id: string) => {
@@ -122,6 +169,21 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
           placeholder="Search"
           className={`${inputCls} max-w-xs`}
         />
+        {tags.length > 0 && (
+          <select
+            value={activeTag}
+            onChange={(e) => setTagFilter(e.target.value)}
+            aria-label="Tag"
+            className={`${inputCls} max-w-xs`}
+          >
+            <option value={ALL_TAGS}>All tags</option>
+            {tags.map((t) => (
+              <option key={t.id} value={t.id}>
+                {t.name}
+              </option>
+            ))}
+          </select>
+        )}
         <span className="text-sm text-neutral-500">
           {shown.length} of {contacts.length}
         </span>
@@ -139,6 +201,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                 {[
                   "Type",
                   "Name",
+                  "Contact",
                   showing === "ALL" ? "Artists / Galleries" : LINKS_LABEL[showing],
                   "Email",
                   "Phone",
@@ -147,6 +210,9 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                   "TikTok",
                   "Town",
                   "Country",
+                  "Price band",
+                  "Works",
+                  "Tags",
                 ].map((h) => (
                   <th key={h} className="whitespace-nowrap px-3 py-2 font-medium">
                     {h}
@@ -163,6 +229,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                 >
                   <td className="whitespace-nowrap px-3 py-2 text-neutral-500">{TYPE_LABEL[c.type]}</td>
                   <td className="px-3 py-2 font-medium text-neutral-900">{c.name}</td>
+                  <td className="px-3 py-2">{c.contactPerson}</td>
                   <td className="px-3 py-2 text-neutral-600">{c.links.map((l) => l.name).join(", ")}</td>
                   <td className="px-3 py-2">
                     {c.email && <ContactLink href={`mailto:${c.email}`} text={c.email} />}
@@ -179,6 +246,9 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                   </td>
                   <td className="px-3 py-2">{c.town}</td>
                   <td className="px-3 py-2">{c.country}</td>
+                  <td className="whitespace-nowrap px-3 py-2">{priceBand(c)}</td>
+                  <td className="px-3 py-2">{worksText(c)}</td>
+                  <td className="px-3 py-2 text-neutral-600">{c.tags.map((t) => t.name).join(", ")}</td>
                 </tr>
               ))}
             </tbody>
@@ -190,6 +260,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         <ContactModal
           contact={editing === "new" ? null : editing}
           contacts={contacts}
+          tags={tags}
           onSaved={setContacts}
           onDeleted={deleted}
           onClose={() => setEditing(null)}
@@ -216,12 +287,15 @@ function ContactLink({ href, text, newTab = false }: { href: string; text: strin
 function ContactModal({
   contact,
   contacts,
+  tags,
   onSaved,
   onDeleted,
   onClose,
 }: {
   contact: MarketingContactRow | null;
   contacts: MarketingContactRow[];
+  // Every tag in use, to suggest.
+  tags: { id: string; name: string }[];
   // Every contact, after each save (its links change the others too).
   onSaved: (all: MarketingContactRow[]) => void;
   onDeleted: (id: string) => void;
@@ -270,7 +344,10 @@ function ContactModal({
   };
 
   const field = (
-    key: Exclude<keyof MarketingContactInput, "type" | "notes" | "links">,
+    key: Exclude<
+      keyof MarketingContactInput,
+      "type" | "notes" | "links" | "tags" | "priceMin" | "priceMax" | "priceCurrency" | "worksTypes"
+    >,
     label: string,
     type = "text",
   ) => (
@@ -279,6 +356,26 @@ function ContactModal({
       <input type={type} value={values[key]} onChange={(e) => set({ [key]: e.target.value })} className={inputCls} />
     </div>
   );
+  // A price as typed — blank is none.
+  const priceField = (key: "priceMin" | "priceMax", label: string) => (
+    <div>
+      <label className={labelCls}>{label}</label>
+      <input
+        type="number"
+        min={0}
+        step={1}
+        value={values[key] ?? ""}
+        onChange={(e) => set({ [key]: e.target.value === "" ? null : Number(e.target.value) })}
+        className={inputCls}
+      />
+    </div>
+  );
+  const toggleWorks = (w: MarketingWorksType) =>
+    set({
+      worksTypes: values.worksTypes.includes(w)
+        ? values.worksTypes.filter((x) => x !== w)
+        : WORKS_TYPES.filter((x) => x === w || values.worksTypes.includes(x)),
+    });
 
   return (
     <FormModal title={contact ? "Edit contact" : "Add contact"} busy={isPending} onClose={close}>
@@ -296,9 +393,10 @@ function ContactModal({
         </div>
       </div>
       {field("name", "Name")}
-      <LinksEditor
+      {field("contactPerson", "Contact person")}
+      <NamesEditor
         label={LINKS_LABEL[values.type]}
-        links={values.links}
+        names={values.links}
         options={contacts.filter((c) => c.type === otherType(values.type))}
         onChange={(links) => set({ links })}
       />
@@ -315,6 +413,37 @@ function ContactModal({
         {field("town", "Town")}
         {field("country", "Country")}
       </div>
+      <div className="grid grid-cols-3 gap-2">
+        {priceField("priceMin", "Price from")}
+        {priceField("priceMax", "Price to")}
+        <div>
+          <label className={labelCls}>Currency</label>
+          <select
+            value={values.priceCurrency ?? ""}
+            onChange={(e) => set({ priceCurrency: (e.target.value || null) as MarketingCurrency | null })}
+            className={inputCls}
+          >
+            <option value="">—</option>
+            {CURRENCIES.map((c) => (
+              <option key={c} value={c}>
+                {CURRENCY_SIGN[c]} {c}
+              </option>
+            ))}
+          </select>
+        </div>
+      </div>
+      <div>
+        <label className={labelCls}>Works</label>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-neutral-700">
+          {WORKS_TYPES.map((w) => (
+            <label key={w} className="flex items-center gap-2">
+              <input type="checkbox" checked={values.worksTypes.includes(w)} onChange={() => toggleWorks(w)} />
+              {WORKS_LABEL[w]}
+            </label>
+          ))}
+        </div>
+      </div>
+      <NamesEditor label="Tags" names={values.tags} options={tags} onChange={(tags) => set({ tags })} />
       <div>
         <label className={labelCls}>Notes</label>
         <textarea
@@ -353,25 +482,25 @@ function ContactModal({
   );
 }
 
-// A gallery's artists or an artist's galleries: each with ✕ to take it
-// off, then a box to add one — suggesting existing contacts of that type
-// as you type; a name that isn't one yet is marked "new" and added as a
-// contact when saved.
-function LinksEditor({
+// A gallery's artists, an artist's galleries, or a contact's tags: each
+// with ✕ to take it off, then a box to add one — suggesting existing
+// ones as you type; a name that isn't one yet is marked "new" and added
+// when saved.
+function NamesEditor({
   label,
-  links,
+  names,
   options,
   onChange,
 }: {
   label: string;
-  links: MarketingContactLinkRef[];
-  options: MarketingContactRow[];
-  onChange: (links: MarketingContactLinkRef[]) => void;
+  names: MarketingContactLinkRef[];
+  options: { id: string; name: string; town?: string }[];
+  onChange: (names: MarketingContactLinkRef[]) => void;
 }) {
   const [typed, setTyped] = useState("");
   const query = typed.trim().toLowerCase();
   const taken = (name: string, id: string | null) =>
-    links.some((l) => (id && l.id === id) || l.name.toLowerCase() === name.toLowerCase());
+    names.some((l) => (id && l.id === id) || l.name.toLowerCase() === name.toLowerCase());
   const suggestions = query
     ? options
         .filter((o) => o.name.toLowerCase().includes(query) && !taken(o.name, o.id))
@@ -380,10 +509,10 @@ function LinksEditor({
 
   const add = (link: MarketingContactLinkRef) => {
     if (!link.name.trim() || taken(link.name, link.id)) return setTyped("");
-    onChange([...links, link]);
+    onChange([...names, link]);
     setTyped("");
   };
-  // What was typed: an existing contact of that name, or a new one.
+  // What was typed: an existing one of that name, or a new one.
   const addTyped = () => {
     const name = typed.trim();
     const existing = options.find((o) => o.name.toLowerCase() === name.toLowerCase());
@@ -393,9 +522,9 @@ function LinksEditor({
   return (
     <div>
       <label className={labelCls}>{label}</label>
-      {links.length > 0 && (
+      {names.length > 0 && (
         <div className="mb-2 flex flex-wrap gap-1.5">
-          {links.map((l) => (
+          {names.map((l) => (
             <span
               key={l.id ?? `new:${l.name}`}
               className="inline-flex items-center gap-1 rounded-full bg-neutral-100 py-0.5 pl-2.5 pr-1 text-sm text-neutral-800"
@@ -406,7 +535,7 @@ function LinksEditor({
               )}
               <button
                 type="button"
-                onClick={() => onChange(links.filter((x) => x !== l))}
+                onClick={() => onChange(names.filter((x) => x !== l))}
                 aria-label={`Take off ${l.name}`}
                 className="rounded-full px-1 text-neutral-500 hover:bg-neutral-200 hover:text-neutral-800"
               >
