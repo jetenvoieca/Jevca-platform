@@ -38,7 +38,8 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // be narrowed to a tag, e.g. "Louise Dear criteria". Import adds
 // contacts from a CSV (MarketingContactsImport). The table shows the
 // main details only (2026-11-06, Craig); the rest are in the window, and
-// search covers them all.
+// search covers them all. The window's fields are in the order Craig
+// set out (2026-11-06): prices and works first, then contact details.
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -382,25 +383,36 @@ function ContactModal({
         </div>
       </div>
       {field("name", "Name")}
-      {field("contactPerson", "Contact person")}
-      <NamesEditor
-        label={LINKS_LABEL[values.type]}
-        names={values.links}
-        options={contacts.filter((c) => c.type === otherType(values.type))}
-        onChange={(links) => set({ links })}
-      />
+      {PRICE_BANDS.map((b) => (
+        <div key={b.label} className="grid grid-cols-2 gap-2">
+          {priceField(b.min, `${b.label} from`)}
+          {priceField(b.max, `${b.label} to`)}
+        </div>
+      ))}
+      <div>
+        <label className={labelCls}>Works</label>
+        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-neutral-700">
+          {WORKS_TYPES.map((w) => (
+            <label key={w} className="flex items-center gap-2">
+              <input type="checkbox" checked={values.worksTypes.includes(w)} onChange={() => toggleWorks(w)} />
+              {WORKS_LABEL[w]}
+            </label>
+          ))}
+        </div>
+      </div>
       <div className="grid grid-cols-2 gap-2">
         {field("email", "Email", "email")}
         {field("phone", "Phone", "tel")}
       </div>
       {field("website", "Website")}
-      <div className="grid grid-cols-2 gap-2">
-        {field("instagram", "Instagram")}
-        {field("tiktok", "TikTok")}
-      </div>
+      {field("contactPerson", "Contact person")}
       <div className="grid grid-cols-2 gap-2">
         {field("town", "Town")}
         {field("country", "Country")}
+      </div>
+      <div className="grid grid-cols-2 gap-2">
+        {field("instagram", "Instagram")}
+        {field("tiktok", "TikTok")}
       </div>
       <div className="grid grid-cols-3 gap-2">
         <div>
@@ -419,23 +431,12 @@ function ContactModal({
           </select>
         </div>
       </div>
-      {PRICE_BANDS.map((b) => (
-        <div key={b.label} className="grid grid-cols-2 gap-2">
-          {priceField(b.min, `${b.label} from`)}
-          {priceField(b.max, `${b.label} to`)}
-        </div>
-      ))}
-      <div>
-        <label className={labelCls}>Works</label>
-        <div className="flex flex-wrap gap-x-4 gap-y-1 text-sm text-neutral-700">
-          {WORKS_TYPES.map((w) => (
-            <label key={w} className="flex items-center gap-2">
-              <input type="checkbox" checked={values.worksTypes.includes(w)} onChange={() => toggleWorks(w)} />
-              {WORKS_LABEL[w]}
-            </label>
-          ))}
-        </div>
-      </div>
+      <NamesEditor
+        label={LINKS_LABEL[values.type]}
+        names={values.links}
+        options={contacts.filter((c) => c.type === otherType(values.type))}
+        onChange={(links) => set({ links })}
+      />
       <NamesEditor label="Tags" names={values.tags} options={tags} onChange={(tags) => set({ tags })} />
       <div>
         <label className={labelCls}>Notes</label>
