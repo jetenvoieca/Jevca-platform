@@ -35,13 +35,15 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // galleries (2026-11-04): typing a name suggests existing ones, and a new
 // name is added as a contact when saved. A contact also has a contact
 // person, a price band, works types and tags (2026-11-06); the list can
-// be narrowed to a tag, e.g. "Louise Dear criteria". Import adds
+// be narrowed to a tag, e.g. "Louise Dear", and to a country. Import adds
 // contacts from a CSV (MarketingContactsImport). The table shows the
-// main details only (2026-11-06, Craig); the rest are in the window, and
+// main details only (2026-11-06, Craig — type and country are shown by the
+// filters, so not as columns); the rest are in the window, and
 // search covers them all. The window's fields are in the order Craig
 // set out (2026-11-06): prices and works first, then contact details.
 // Contacts show as a list or as tiles with a photo of the gallery — a
-// link to it on the gallery's own site (2026-11-06).
+// link to it on the gallery's own site — and a link to its website
+// (2026-11-06).
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -59,7 +61,8 @@ const LAYOUTS = [
 ] as const;
 type Layout = (typeof LAYOUTS)[number]["value"];
 const MAX_SUGGESTIONS = 8;
-const ALL_TAGS = "";
+// A filter's "everything" value.
+const ALL = "";
 
 type PriceBand = (typeof PRICE_BANDS)[number];
 
@@ -83,7 +86,8 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   const [contacts, setContacts] = useState(initial);
   const [showing, setShowing] = useState<Showing>("ALL");
   const [search, setSearch] = useState("");
-  const [tagFilter, setTagFilter] = useState(ALL_TAGS);
+  const [tagFilter, setTagFilter] = useState(ALL);
+  const [countryFilter, setCountryFilter] = useState(ALL);
   const [layout, setLayout] = useState<Layout>("LIST");
   // The contact being edited — "new" for Add.
   const [editing, setEditing] = useState<MarketingContactRow | "new" | null>(null);
@@ -94,14 +98,21 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
     const byId = new Map(contacts.flatMap((c) => c.tags).map((t) => [t.id, t]));
     return [...byId.values()].sort((a, b) => a.name.localeCompare(b.name));
   }, [contacts]);
-  // A tag filtered by that has since gone shows everything.
-  const activeTag = tags.some((t) => t.id === tagFilter) ? tagFilter : ALL_TAGS;
+  // Every country a contact is in, by name.
+  const countries = useMemo(
+    () => [...new Set(contacts.map((c) => c.country.trim()).filter(Boolean))].sort((a, b) => a.localeCompare(b)),
+    [contacts],
+  );
+  // A tag or country filtered by that has since gone shows everything.
+  const activeTag = tags.some((t) => t.id === tagFilter) ? tagFilter : ALL;
+  const activeCountry = countries.includes(countryFilter) ? countryFilter : ALL;
 
   const shown = useMemo(() => {
     const words = search.trim().toLowerCase().split(/\s+/).filter(Boolean);
     return contacts.filter((c) => {
       if (showing !== "ALL" && c.type !== showing) return false;
       if (activeTag && !c.tags.some((t) => t.id === activeTag)) return false;
+      if (activeCountry && c.country.trim() !== activeCountry) return false;
       const all = [
         c.name,
         c.contactPerson,
@@ -122,7 +133,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         .toLowerCase();
       return words.every((w) => all.includes(w));
     });
-  }, [contacts, showing, activeTag, search]);
+  }, [contacts, showing, activeTag, activeCountry, search]);
 
   // Gone from the list, and from the others' links.
   const deleted = (id: string) => {
@@ -152,21 +163,20 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
           placeholder="Search"
           className={`${inputCls} max-w-xs`}
         />
-        {tags.length > 0 && (
-          <select
-            value={activeTag}
-            onChange={(e) => setTagFilter(e.target.value)}
-            aria-label="Tag"
-            className={`${inputCls} max-w-xs`}
-          >
-            <option value={ALL_TAGS}>All tags</option>
-            {tags.map((t) => (
-              <option key={t.id} value={t.id}>
-                {t.name}
-              </option>
-            ))}
-          </select>
-        )}
+        <FilterSelect
+          label="Tag"
+          allLabel="All tags"
+          options={tags.map((t) => ({ value: t.id, label: t.name }))}
+          value={activeTag}
+          onChange={setTagFilter}
+        />
+        <FilterSelect
+          label="Country"
+          allLabel="All countries"
+          options={countries.map((c) => ({ value: c, label: c }))}
+          value={activeCountry}
+          onChange={setCountryFilter}
+        />
         <span className="text-sm text-neutral-500">
           {shown.length} of {contacts.length}
         </span>
@@ -182,18 +192,41 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
       ) : layout === "TILES" ? (
         <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
           {shown.map((c) => (
-            <button
+            <div
               key={c.id}
-              type="button"
-              onClick={() => setEditing(c)}
-              className="overflow-hidden rounded-lg border border-neutral-200 text-left hover:border-neutral-400"
+              className="relative overflow-hidden rounded-lg border border-neutral-200 hover:border-neutral-400"
             >
-              <Photo url={c.photoUrl} className="aspect-[4/3] w-full" />
-              <div className="px-3 py-2">
-                <p className="truncate text-sm font-medium text-neutral-900">{c.name}</p>
-                <p className="truncate text-xs text-neutral-500">{c.town || "\u00a0"}</p>
-              </div>
-            </button>
+              <button type="button" onClick={() => setEditing(c)} className="block w-full text-left">
+                <Photo url={c.photoUrl} className="aspect-[4/3] w-full" />
+                <div className="py-2 pl-3 pr-10">
+                  <p className="truncate text-sm font-medium text-neutral-900">{c.name}</p>
+                  <p className="truncate text-xs text-neutral-500">{c.town || "\u00a0"}</p>
+                </div>
+              </button>
+              {c.website && (
+                <a
+                  href={websiteLink(c.website)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  aria-label={`${c.name} website`}
+                  title="Website"
+                  className="absolute bottom-2.5 right-2.5 rounded p-1 text-neutral-700 hover:bg-neutral-100"
+                >
+                  <svg
+                    width="18"
+                    height="18"
+                    viewBox="0 0 18 18"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="1.3"
+                    aria-hidden
+                  >
+                    <circle cx="9" cy="9" r="7.5" />
+                    <path d="M1.5 9h15M9 1.5c2 2.1 3 4.6 3 7.5s-1 5.4-3 7.5c-2-2.1-3-4.6-3-7.5s1-5.4 3-7.5z" />
+                  </svg>
+                </a>
+              )}
+            </div>
           ))}
         </div>
       ) : (
@@ -202,13 +235,11 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
             <thead className="bg-neutral-50 text-xs text-neutral-500">
               <tr>
                 {[
-                  "Type",
                   "Name",
                   "Contact",
                   "Email",
                   "Website",
                   "Town",
-                  "Country",
                   ...PRICE_BANDS.map((b) => b.label),
                   "Tags",
                 ].map((h) => (
@@ -225,7 +256,6 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                   onClick={() => setEditing(c)}
                   className="cursor-pointer border-t border-neutral-100 hover:bg-neutral-50"
                 >
-                  <td className="whitespace-nowrap px-3 py-2 text-neutral-500">{TYPE_LABEL[c.type]}</td>
                   <td className="px-3 py-2 font-medium text-neutral-900">{c.name}</td>
                   <td className="px-3 py-2">{c.contactPerson}</td>
                   <td className="px-3 py-2">
@@ -235,7 +265,6 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                     {c.website && <ContactLink href={websiteLink(c.website)} text={c.website} newTab />}
                   </td>
                   <td className="px-3 py-2">{c.town}</td>
-                  <td className="px-3 py-2">{c.country}</td>
                   {PRICE_BANDS.map((b) => (
                     <td key={b.label} className="whitespace-nowrap px-3 py-2">
                       {priceBand(c, b)}
@@ -267,6 +296,38 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         />
       )}
     </div>
+  );
+}
+
+// A drop-down narrowing the list — hidden when there's nothing to choose.
+function FilterSelect({
+  label,
+  allLabel,
+  options,
+  value,
+  onChange,
+}: {
+  label: string;
+  allLabel: string;
+  options: { value: string; label: string }[];
+  value: string;
+  onChange: (value: string) => void;
+}) {
+  if (options.length === 0) return null;
+  return (
+    <select
+      value={value}
+      onChange={(e) => onChange(e.target.value)}
+      aria-label={label}
+      className={`${inputCls} max-w-[12rem]`}
+    >
+      <option value={ALL}>{allLabel}</option>
+      {options.map((o) => (
+        <option key={o.value} value={o.value}>
+          {o.label}
+        </option>
+      ))}
+    </select>
   );
 }
 

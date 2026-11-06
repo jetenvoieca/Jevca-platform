@@ -15,7 +15,7 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 
 // Contacts → Import (2026-11-06, Craig's request): choose a CSV laid out
 // as the template (IMPORT_COLUMNS), optionally name a tag to give every
-// row (e.g. "Louise Dear criteria"), check the preview, then import. A
+// row (e.g. "Louise Dear"), check the preview, then import. A
 // contact already there (same type, matched by email, or by website when
 // one has no email) keeps what it has — its blanks are filled and the
 // row's works and tags added; see importMarketingContacts.
@@ -164,7 +164,7 @@ export default function MarketingContactsImport({
               list="import-tags"
               value={tagAll}
               onChange={(e) => setTagAll(e.target.value)}
-              placeholder="e.g. Louise Dear criteria"
+              placeholder="e.g. Louise Dear"
               className={inputCls}
             />
             <datalist id="import-tags">
