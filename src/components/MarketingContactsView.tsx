@@ -40,6 +40,8 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // main details only (2026-11-06, Craig); the rest are in the window, and
 // search covers them all. The window's fields are in the order Craig
 // set out (2026-11-06): prices and works first, then contact details.
+// Contacts show as a list or as tiles with a photo of the gallery — a
+// link to it on the gallery's own site (2026-11-06).
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -51,6 +53,11 @@ const SHOWING = [
   { value: "ARTIST", label: "Artists" },
 ] as const;
 type Showing = (typeof SHOWING)[number]["value"];
+const LAYOUTS = [
+  { value: "LIST", label: "List" },
+  { value: "TILES", label: "Tiles" },
+] as const;
+type Layout = (typeof LAYOUTS)[number]["value"];
 const MAX_SUGGESTIONS = 8;
 const ALL_TAGS = "";
 
@@ -77,6 +84,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   const [showing, setShowing] = useState<Showing>("ALL");
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState(ALL_TAGS);
+  const [layout, setLayout] = useState<Layout>("LIST");
   // The contact being edited — "new" for Add.
   const [editing, setEditing] = useState<MarketingContactRow | "new" | null>(null);
   const [importing, setImporting] = useState(false);
@@ -136,18 +144,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
       <p className="mb-6 text-sm text-neutral-500">Artists and galleries to keep in touch with.</p>
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
-          {SHOWING.map((s) => (
-            <button
-              key={s.value}
-              type="button"
-              onClick={() => setShowing(s.value)}
-              className={`px-3 py-1.5 ${showing === s.value ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"}`}
-            >
-              {s.label}
-            </button>
-          ))}
-        </div>
+        <Segmented options={SHOWING} value={showing} onChange={setShowing} />
         <input
           type="search"
           value={search}
@@ -173,12 +170,32 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         <span className="text-sm text-neutral-500">
           {shown.length} of {contacts.length}
         </span>
+        <div className="ml-auto">
+          <Segmented options={LAYOUTS} value={layout} onChange={setLayout} />
+        </div>
       </div>
 
       {shown.length === 0 ? (
         <p className="py-12 text-center text-sm text-neutral-500">
           {contacts.length === 0 ? "No contacts yet." : "No contacts match."}
         </p>
+      ) : layout === "TILES" ? (
+        <div className="grid grid-cols-2 gap-4 sm:grid-cols-3 lg:grid-cols-4">
+          {shown.map((c) => (
+            <button
+              key={c.id}
+              type="button"
+              onClick={() => setEditing(c)}
+              className="overflow-hidden rounded-lg border border-neutral-200 text-left hover:border-neutral-400"
+            >
+              <Photo url={c.photoUrl} className="aspect-[4/3] w-full" />
+              <div className="px-3 py-2">
+                <p className="truncate text-sm font-medium text-neutral-900">{c.name}</p>
+                <p className="truncate text-xs text-neutral-500">{c.town || "\u00a0"}</p>
+              </div>
+            </button>
+          ))}
+        </div>
       ) : (
         <div className="overflow-x-auto rounded-lg border border-neutral-200">
           <table className="w-full text-left text-sm">
@@ -247,6 +264,55 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
           tagNames={tags.map((t) => t.name)}
           onImported={async () => setContacts(await listMarketingContacts())}
           onClose={() => setImporting(false)}
+        />
+      )}
+    </div>
+  );
+}
+
+// A row of buttons choosing one of a few options.
+function Segmented<T extends string>({
+  options,
+  value,
+  onChange,
+}: {
+  options: readonly { value: T; label: string }[];
+  value: T;
+  onChange: (value: T) => void;
+}) {
+  return (
+    <div className="flex overflow-hidden rounded-md border border-neutral-300 text-sm">
+      {options.map((o) => (
+        <button
+          key={o.value}
+          type="button"
+          onClick={() => onChange(o.value)}
+          className={`px-3 py-1.5 ${value === o.value ? "bg-neutral-900 text-white" : "hover:bg-neutral-50"}`}
+        >
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+// A contact's photo, from its link on the gallery's site — a grey panel
+// when there's none or it won't load.
+function Photo({ url, className }: { url: string; className: string }) {
+  const [failed, setFailed] = useState<string | null>(null);
+  const show = url && failed !== url;
+  return (
+    <div className={`${className} bg-neutral-100`}>
+      {show && (
+        // A link to another site, so not next/image.
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={url}
+          alt=""
+          loading="lazy"
+          referrerPolicy="no-referrer"
+          onError={() => setFailed(url)}
+          className="h-full w-full object-cover"
         />
       )}
     </div>
@@ -405,6 +471,10 @@ function ContactModal({
         {field("phone", "Phone", "tel")}
       </div>
       {field("website", "Website")}
+      <div>
+        {field("photoUrl", "Photo (link to an image on the gallery's site)")}
+        {values.photoUrl.trim() && <Photo url={values.photoUrl.trim()} className="mt-2 aspect-[4/3] w-48 rounded-md" />}
+      </div>
       {field("contactPerson", "Contact person")}
       <div className="grid grid-cols-2 gap-2">
         {field("town", "Town")}

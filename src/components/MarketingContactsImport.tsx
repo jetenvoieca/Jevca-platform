@@ -34,6 +34,7 @@ function downloadTemplate() {
     Email: "info@example.com",
     Phone: "",
     Website: "https://example.com",
+    Photo: "https://example.com/images/gallery-interior.jpg",
     Instagram: "",
     TikTok: "",
     Town: "London",

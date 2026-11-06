@@ -29,6 +29,8 @@ import {
 
 const MAX_FIELD = 300;
 const MAX_NOTES = 5000;
+const MAX_URL = 2000;
+const WEB_ADDRESS = /^https?:\/\/\S+$/i;
 const MAX_LINKS = 500;
 const MAX_TAGS = 50;
 const MAX_PRICE = 100_000_000;
@@ -45,6 +47,7 @@ const select = {
   email: true,
   phone: true,
   website: true,
+  photoUrl: true,
   instagram: true,
   tiktok: true,
   town: true,
@@ -69,6 +72,7 @@ type Stored = {
   email: string | null;
   phone: string | null;
   website: string | null;
+  photoUrl: string | null;
   instagram: string | null;
   tiktok: string | null;
   town: string | null;
@@ -97,6 +101,7 @@ function toRow(c: Stored): MarketingContactRow {
     email: c.email ?? "",
     phone: c.phone ?? "",
     website: c.website ?? "",
+    photoUrl: c.photoUrl ?? "",
     instagram: c.instagram ?? "",
     tiktok: c.tiktok ?? "",
     town: c.town ?? "",
@@ -147,6 +152,8 @@ function checked(input: MarketingContactInput) {
     if (min !== null && max !== null && min > max)
       return { error: `${band.label}: the lowest price is above the highest.` };
   }
+  const photoUrl = text(input.photoUrl, MAX_URL);
+  if (photoUrl && !WEB_ADDRESS.test(photoUrl)) return { error: "The photo needs a full web address (https://…)." };
   const priceCurrency = CURRENCIES.includes(input.priceCurrency as MarketingCurrency) ? input.priceCurrency : null;
   if (Object.values(prices).some((p) => p !== null) && !priceCurrency) return { error: "Choose the prices' currency." };
   const worksTypes = WORKS_TYPES.filter((w) => Array.isArray(input.worksTypes) && input.worksTypes.includes(w));
@@ -158,6 +165,7 @@ function checked(input: MarketingContactInput) {
       email,
       phone: text(input.phone),
       website: text(input.website),
+      photoUrl,
       instagram: text(input.instagram),
       tiktok: text(input.tiktok),
       town: text(input.town),
@@ -353,6 +361,7 @@ export async function importMarketingContacts(rows: MarketingImportRow[]): Promi
             email: old.email ?? data.email,
             phone: old.phone ?? data.phone,
             website: old.website ?? data.website,
+            photoUrl: old.photoUrl ?? data.photoUrl,
             instagram: old.instagram ?? data.instagram,
             tiktok: old.tiktok ?? data.tiktok,
             town: old.town ?? data.town,

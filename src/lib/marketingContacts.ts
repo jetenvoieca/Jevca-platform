@@ -21,6 +21,7 @@ export type MarketingContactInput = {
   email: string;
   phone: string;
   website: string;
+  photoUrl: string;
   instagram: string;
   tiktok: string;
   town: string;
@@ -64,6 +65,7 @@ export const EMPTY_CONTACT: MarketingContactInput = {
   email: "",
   phone: "",
   website: "",
+  photoUrl: "",
   instagram: "",
   tiktok: "",
   town: "",
@@ -90,6 +92,7 @@ export const IMPORT_COLUMNS = [
   "Email",
   "Phone",
   "Website",
+  "Photo",
   "Instagram",
   "TikTok",
   "Town",
@@ -145,6 +148,7 @@ export function contactFromCsv(record: Record<string, string>): MarketingContact
     email: get("Email"),
     phone: get("Phone"),
     website: get("Website"),
+    photoUrl: get("Photo"),
     instagram: get("Instagram"),
     tiktok: get("TikTok"),
     town: get("Town"),
