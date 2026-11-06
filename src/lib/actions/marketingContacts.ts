@@ -3,6 +3,16 @@
 import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import type { Prisma } from "@/generated/prisma/client";
+import {
+  CURRENCIES,
+  WORKS_TYPES,
+  type MarketingContactInput,
+  type MarketingContactLinkRef,
+  type MarketingContactRow,
+  type MarketingContactType,
+  type MarketingCurrency,
+  type MarketingWorksType,
+} from "@/lib/marketingContacts";
 
 // Administration → Contacts (2026-11-04, Craig's request): the platform's
 // own marketing list of artists and galleries — see MarketingContact.
@@ -11,43 +21,6 @@ import type { Prisma } from "@/generated/prisma/client";
 // contact of that type becomes one. Contacts also have a contact person,
 // a price band, works types and tags (2026-11-06) — a tag added that
 // doesn't exist yet is created, and one no contact has any more goes.
-
-export type MarketingContactType = "GALLERY" | "ARTIST";
-export type MarketingWorksType = "ORIGINALS" | "PRINTS" | "SCULPTURE" | "PHOTOGRAPHY" | "MIXED_MEDIA";
-export type MarketingCurrency = "GBP" | "EUR" | "USD";
-
-export const WORKS_TYPES: MarketingWorksType[] = ["ORIGINALS", "PRINTS", "SCULPTURE", "PHOTOGRAPHY", "MIXED_MEDIA"];
-export const CURRENCIES: MarketingCurrency[] = ["GBP", "EUR", "USD"];
-
-// A gallery's artist or an artist's gallery, or a tag: an existing one
-// (`id`), or, when saving, a new name (`id` null).
-export type MarketingContactLinkRef = { id: string | null; name: string };
-
-export type MarketingContactInput = {
-  type: MarketingContactType;
-  name: string;
-  contactPerson: string;
-  email: string;
-  phone: string;
-  website: string;
-  instagram: string;
-  tiktok: string;
-  town: string;
-  country: string;
-  notes: string;
-  priceMin: number | null;
-  priceMax: number | null;
-  priceCurrency: MarketingCurrency | null;
-  worksTypes: MarketingWorksType[];
-  links: MarketingContactLinkRef[];
-  tags: MarketingContactLinkRef[];
-};
-
-export type MarketingContactRow = Omit<MarketingContactInput, "links" | "tags"> & {
-  id: string;
-  links: { id: string; name: string }[];
-  tags: { id: string; name: string }[];
-};
 
 const MAX_FIELD = 300;
 const MAX_NOTES = 5000;

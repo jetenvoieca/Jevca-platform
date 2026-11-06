@@ -1,18 +1,17 @@
 "use client";
 
 import { useEffect, useMemo, useState, useTransition } from "react";
+import { deleteMarketingContact, saveMarketingContact } from "@/lib/actions/marketingContacts";
 import {
   CURRENCIES,
   WORKS_TYPES,
-  deleteMarketingContact,
-  saveMarketingContact,
   type MarketingContactInput,
   type MarketingContactLinkRef,
   type MarketingContactRow,
   type MarketingContactType,
   type MarketingCurrency,
   type MarketingWorksType,
-} from "@/lib/actions/marketingContacts";
+} from "@/lib/marketingContacts";
 import AddIconButton from "@/components/AddIconButton";
 import FormModal from "@/components/FormModal";
 import { useAutoSave } from "@/components/useAutoSave";
