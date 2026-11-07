@@ -177,6 +177,7 @@ const AMOUNT = String.raw`\d{1,3}(?:[.,\s  ]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,
 const SIGN = String.raw`£|€|\$|GBP|EUR|USD`;
 const PRICE_IN_TEXT = new RegExp(String.raw`(${SIGN})\s?(${AMOUNT})|(${AMOUNT})\s?(${SIGN})`, "g");
 const CONTEXT = 100;
+const NAME_WORDS = 12;
 
 // Prices written on the page, each with the words just before it.
 function textItems(html: string): Item[] {
@@ -199,7 +200,17 @@ function band(items: Item[]): MarketingPriceBandFind | null {
   if (items.length === 0) return null;
   const sorted = [...items].sort((a, b) => a.price - b.price);
   const [low, high] = [sorted[0], sorted[sorted.length - 1]];
-  const name = (i: Item) => i.title || i.about.slice(-60).trim();
+  // A price found in the page's text has no name, only the words before
+  // it — e.g. "… Medium: oil on linen Price:" — so it's named by up to
+  // NAME_WORDS of them, without a "Price:" label at the end.
+  const name = (i: Item) => {
+    if (i.title) return i.title;
+    const words = i.about
+      .replace(/\b(price|prix|precio|prezzo|preis)\s*:?\s*$/i, "")
+      .trim()
+      .split(/\s+/);
+    return (words.length > NAME_WORDS ? "… " : "") + words.slice(-NAME_WORDS).join(" ");
+  };
   return {
     min: Math.round(low.price),
     max: Math.round(high.price),

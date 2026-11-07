@@ -270,8 +270,12 @@ function FoundRow({
                   </span>
                 </label>
                 <div className="ml-5 break-words text-xs text-neutral-500">
-                  <p>Cheapest: {b.lowest || "—"}</p>
-                  <p>Dearest: {b.highest || "—"}</p>
+                  <p>
+                    Cheapest: {b.lowest || "—"} — {money(f.currency, b.min)}
+                  </p>
+                  <p>
+                    Dearest: {b.highest || "—"} — {money(f.currency, b.max)}
+                  </p>
                 </div>
               </div>
             );

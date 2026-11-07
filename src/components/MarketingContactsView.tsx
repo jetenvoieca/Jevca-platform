@@ -230,9 +230,9 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                     className="rounded p-1 text-neutral-900 hover:bg-neutral-100"
                   >
                     <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
-                      <path d="M9 1.2 12.6 4.4V16a1 1 0 0 1-1 1H6.4a1 1 0 0 1-1-1V4.4z" fill="currentColor" />
-                      <circle cx="9" cy="4.6" r="0.9" fill="white" />
-                      <text x="9" y="13.6" textAnchor="middle" fontSize="7" fontWeight="700" fill="white">
+                      <path d="M9 1 14 5.2V16a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V5.2z" fill="currentColor" />
+                      <circle cx="9" cy="5" r="1" fill="white" />
+                      <text x="9" y="14.2" textAnchor="middle" fontSize="8.5" fontWeight="700" fill="white">
                         {CURRENCY_SIGN[c.priceCurrency ?? countryCurrency(c.country) ?? "USD"]}
                       </text>
                     </svg>
