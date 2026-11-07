@@ -8,7 +8,8 @@ import { listMarketingContacts } from "@/lib/actions/marketingContacts";
 export const dynamic = "force-dynamic";
 
 // Administration → Contacts (2026-11-04, Craig's request): the platform's
-// own marketing list of artists and galleries.
+// own marketing list of artists and galleries. Uses the full width of
+// the page, for the table's many columns (2026-11-07, Craig).
 export default async function ContactsPage() {
   const [contacts, openAlerts, recentSites] = await Promise.all([
     listMarketingContacts(),
@@ -20,7 +21,7 @@ export default async function ContactsPage() {
     <AppShell
       navItems={buildTopNavItems("contacts", openAlerts.length, recentSites)}
       content={
-        <div className="mx-auto max-w-6xl px-6 py-6">
+        <div className="px-6 py-6">
           <MarketingContactsView contacts={contacts} />
         </div>
       }
