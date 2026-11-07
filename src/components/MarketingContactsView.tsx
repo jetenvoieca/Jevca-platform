@@ -23,6 +23,7 @@ import {
 } from "@/lib/marketingContacts";
 import AddIconButton from "@/components/AddIconButton";
 import MarketingContactsImport from "@/components/MarketingContactsImport";
+import MarketingGalleryArtists from "@/components/MarketingGalleryArtists";
 import MarketingPriceFinder from "@/components/MarketingPriceFinder";
 import FormModal from "@/components/FormModal";
 import { useAutoSave } from "@/components/useAutoSave";
@@ -48,7 +49,9 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // (2026-11-06). A contact can have its shop page, and Find prices
 // suggests the price ranges of the contacts shown from what they sell
 // (MarketingPriceFinder, 2026-11-07) — for one gallery from the price
-// tag on its tile, showing the gallery's own currency.
+// tag on its tile, showing the gallery's own currency. The artist icon
+// on a gallery's tile shows the artists its website lists
+// (MarketingGalleryArtists, 2026-11-07).
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -101,6 +104,8 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   // from one tile (so starts straight away).
   const [findingPrices, setFindingPrices] = useState<{ contacts: MarketingContactRow[]; one: boolean } | null>(null);
   const canFindPrices = (c: MarketingContactRow) => !!(c.shopUrl.trim() || c.website.trim());
+  // The gallery whose website's artists are shown.
+  const [artistsOf, setArtistsOf] = useState<MarketingContactRow | null>(null);
 
   // Every tag a contact has, by name.
   const tags = useMemo(() => {
@@ -215,12 +220,30 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
             >
               <button type="button" onClick={() => setEditing(c)} className="block w-full text-left">
                 <Photo url={c.photoUrl} className="aspect-[4/3] w-full" />
-                <div className="py-2 pl-3 pr-20">
+                <div className="py-2 pl-3 pr-28">
                   <p className="truncate text-sm font-medium text-neutral-900">{c.name}</p>
                   <p className="truncate text-xs text-neutral-500">{c.town || "\u00a0"}</p>
                 </div>
               </button>
               <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1">
+                {c.type === "GALLERY" && canFindPrices(c) && (
+                  <button
+                    type="button"
+                    onClick={() => setArtistsOf(c)}
+                    aria-label={`${c.name} artists`}
+                    title="Artists"
+                    className="rounded p-1 text-neutral-900 hover:bg-neutral-100"
+                  >
+                    <svg width="18" height="18" viewBox="0 0 18 18" fill="currentColor" aria-hidden>
+                      <ellipse cx="7.5" cy="3.6" rx="4.6" ry="1.9" />
+                      <circle cx="7.5" cy="1.4" r="0.8" />
+                      <circle cx="7.5" cy="7.6" r="3" />
+                      <path d="M1.5 17.5a6 5.2 0 0 1 12 0z" />
+                      <path d="M15.6 5.2 12.2 13" stroke="currentColor" strokeWidth="1.4" strokeLinecap="round" />
+                      <path d="M15.2 3.4l1.6.7-.7 1.6-1.6-.7z" />
+                    </svg>
+                  </button>
+                )}
                 {canFindPrices(c) && (
                   <button
                     type="button"
@@ -331,6 +354,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
           onClose={() => setImporting(false)}
         />
       )}
+      {artistsOf && <MarketingGalleryArtists gallery={artistsOf} onClose={() => setArtistsOf(null)} />}
       {findingPrices && (
         <MarketingPriceFinder
           contacts={findingPrices.contacts}

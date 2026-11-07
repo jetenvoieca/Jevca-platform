@@ -2,12 +2,14 @@
 
 import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
+import { findArtists } from "@/lib/artistFinder";
 import { findPrices } from "@/lib/priceFinder";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   CURRENCIES,
   PRICE_BANDS,
   WORKS_TYPES,
+  type MarketingArtistFind,
   type MarketingContactInput,
   type MarketingContactLinkRef,
   type MarketingContactRow,
@@ -28,7 +30,8 @@ import {
 // (2026-11-06) — a tag added that doesn't exist yet is created, and one
 // no contact has any more goes.
 // Contacts can also be imported from a CSV (2026-11-06), and their price
-// bands found from their shop pages (2026-11-07, see priceFinder.ts).
+// bands found from their shop pages (2026-11-07, see priceFinder.ts), and
+// a gallery's artists looked up on its website (artistFinder.ts).
 
 const MAX_FIELD = 300;
 const MAX_NOTES = 5000;
@@ -454,4 +457,13 @@ export async function saveMarketingPrices(
   });
   if (saved.count === 0) return { error: "That contact has gone." };
   return { contact: toRow(await db.marketingContact.findUniqueOrThrow({ where: { id }, select })) };
+}
+
+// A gallery's artists, as its website lists them (2026-11-07). Saves
+// nothing.
+export async function findGalleryArtists(id: string): Promise<MarketingArtistFind> {
+  await requireAdmin();
+  const contact = await db.marketingContact.findUnique({ where: { id }, select: { website: true, shopUrl: true } });
+  if (!contact) return { found: false, reason: "That contact has gone." };
+  return findArtists(contact);
 }

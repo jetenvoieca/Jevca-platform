@@ -121,6 +121,13 @@ export type MarketingPriceFind =
     }
   | { found: false; reason: string };
 
+// A gallery's artists (2026-11-07): those its website lists, each with
+// its page there and a thumbnail when found.
+export type MarketingFoundArtist = { name: string; url: string | null; image: string | null };
+export type MarketingArtistFind =
+  | { found: true; source: string; url: string; artists: MarketingFoundArtist[] }
+  | { found: false; reason: string };
+
 // Import (2026-11-06): the CSV's columns, as the template has them.
 // Headings are matched ignoring capitals and spaces; Type is Gallery or
 // Artist (blank is Gallery); Works and Tags list several with ";"
