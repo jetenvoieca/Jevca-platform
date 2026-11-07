@@ -43,13 +43,13 @@ const MIN_ARTISTS = 2;
 // Fewer links than this outside a page's menu, header and footer means
 // its list is probably in them.
 const FEW_LINKS = 5;
-// Pictures from artists' own pages: how many a request looks at, how
-// many at once, and how often one picture may appear before it's taken
-// for the site's logo rather than an artist's.
+// Pictures from artists' own pages: how many a request looks at, and
+// how many at once.
 const PICTURES_PER_REQUEST = 24;
 const PICTURES_AT_ONCE = 6;
 const PICTURES_TIME_MS = 20000;
-const LOGO_REPEATS = 3;
+// Pictures considered on each artist's page.
+const PICTURES_PER_PAGE = 15;
 const MAX_ARTISTS = 200;
 const MAX_LINKS = 400;
 const MAX_TEXT = 80;
@@ -419,21 +419,34 @@ export async function readArtists(
   return { found: false, reason: "Couldn't find a list of artists on the site.", tryHarder };
 }
 
-// The picture an artist's own page gives for sharing (og:image or
-// twitter:image) — usually one of their works, or their portrait.
-function sharingPicture(html: string, base: string): string | null {
+// The pictures on an artist's own page, likeliest first: the one it
+// gives for sharing (og:image / twitter:image), then those in the page
+// outside its menu, header and footer — not icons or drawings (SVG).
+function pagePictures(html: string, base: string): string[] {
   const doc = parseDocument(html);
-  const meta = DomUtils.findAll((e) => e.name === "meta", doc.children).find((m) =>
-    /^(og:image|og:image:url|twitter:image)$/i.test(m.attribs.property ?? m.attribs.name ?? ""),
-  );
-  const url = meta?.attribs.content ? urlOf(meta.attribs.content, base) : null;
-  return url ? sharpImage(url) : null;
+  const shared = DomUtils.findAll((e) => e.name === "meta", doc.children)
+    .filter((m) => /^(og:image|og:image:url|twitter:image)$/i.test(m.attribs.property ?? m.attribs.name ?? ""))
+    .map((m) => m.attribs.content);
+  const inPage = DomUtils.findAll((e) => e.name === "img", doc.children)
+    .filter((img) => {
+      for (let n = img.parent; isTag(n); n = n.parent) if (LAYOUT.test(n.name)) return false;
+      return true;
+    })
+    .map((img) => imageIn(img, base));
+  const pictures = [...shared, ...inPage].flatMap((v) => {
+    const url = v ? urlOf(v, base) : null;
+    return url && !/\.svg$/i.test(url.pathname) ? [sharpImage(url)] : [];
+  });
+  return [...new Set(pictures)].slice(0, PICTURES_PER_PAGE);
 }
 
 // Fills in pictures for artists the gallery's artists page showed none
 // for, from each artist's own page — read directly, so it costs nothing.
-// Looks at up to PICTURES_PER_REQUEST of them from `from` on; returns the
-// artists and where to carry on, or null when done.
+// A picture found on more than one artist's page is the site's own (its
+// logo, or a sharing picture it gives every page — Wix does), so each
+// artist gets the first of theirs no other page has (2026-11-07, Galerie
+// 337). Looks at up to PICTURES_PER_REQUEST artists from `from` on;
+// returns the artists and where to carry on, or null when done.
 export async function fillArtistPictures(
   artists: MarketingFoundArtist[],
   from: number,
@@ -443,7 +456,7 @@ export async function fillArtistPictures(
   const todo: number[] = [];
   let i = from;
   for (; i < artists.length && todo.length < PICTURES_PER_REQUEST; i++) if (!artists[i].image && artists[i].url) todo.push(i);
-  const found = new Map<number, string>();
+  const found = new Map<number, string[]>();
   for (let k = 0; k < todo.length; k += PICTURES_AT_ONCE) {
     if (Date.now() > deadline) {
       i = todo[k];
@@ -453,17 +466,16 @@ export async function fillArtistPictures(
       todo.slice(k, k + PICTURES_AT_ONCE).map(async (j) => {
         const res = await read(artists[j].url!);
         if ("error" in res || res.status !== 200) return;
-        const picture = sharingPicture(res.body, res.url);
-        if (picture) found.set(j, picture);
+        found.set(j, pagePictures(res.body, res.url));
       }),
     );
   }
-  // One picture on several artists' pages is the site's own, not theirs.
-  const counts = new Map<string, number>();
-  for (const a of [...artists.map((x) => x.image), ...found.values()]) if (a) counts.set(a, (counts.get(a) ?? 0) + 1);
+  const pagesWith = new Map<string, number>();
+  for (const pictures of found.values()) for (const p of pictures) pagesWith.set(p, (pagesWith.get(p) ?? 0) + 1);
+  const taken = new Set(artists.map((a) => a.image).filter(Boolean));
   const updated = artists.map((a, j) => {
-    const picture = found.get(j);
-    return picture && (counts.get(picture) ?? 0) < LOGO_REPEATS ? { ...a, image: picture } : a;
+    const picture = found.get(j)?.find((p) => (pagesWith.get(p) ?? 0) < 2 && !taken.has(p));
+    return picture ? { ...a, image: picture } : a;
   });
   return { artists: updated, next: i < artists.length ? i : null };
 }
