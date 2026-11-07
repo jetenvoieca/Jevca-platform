@@ -24,7 +24,9 @@ import type { MarketingArtistFind, MarketingArtistsPage, MarketingFoundArtist } 
 // (see publicFetch.ts).
 
 type Element = ReturnType<typeof DomUtils.findAll>[number];
-type PageLink = { url: string; text: string; image: string | null };
+// A page's link to one address: what it says, and every <a> to it (an
+// artist is often linked from both their picture and their name).
+type PageLink = { url: string; key: string; text: string; anchors: Element[] };
 
 const MODEL = "claude-haiku-5-5";
 // Reading the site, then Claude's answers, all inside the server's
@@ -33,7 +35,10 @@ const FETCH_TIME_MS = 9000;
 // Through the page-reading service, which opens pages in a browser.
 const SERVICE_FETCH_TIME_MS = 15000;
 const PICK_PAGE_TIME_MS = 6000;
-const PICK_ARTISTS_TIME_MS = 12000;
+// Claude's reading of the artists page gets what's left of the request's
+// time (a long list of artists takes a while to answer).
+const REQUEST_TIME_MS = 27000;
+const MIN_PICK_TIME_MS = 8000;
 const MIN_ARTISTS = 2;
 const MAX_ARTISTS = 200;
 const MAX_LINKS = 400;
@@ -56,8 +61,10 @@ const plainText = (v: string) => v.replace(/\s+/g, " ").trim();
 const parts = (url: URL) => url.pathname.split("/").filter(Boolean);
 const sameSite = (a: URL, b: URL) => a.hostname.replace(/^www\./, "") === b.hostname.replace(/^www\./, "");
 const isTag = (n: unknown): n is Element => !!n && (n as Element).type === "tag";
-// A link's address as one page: without its # part or a closing "/".
-const linkKey = (url: URL) => url.toString().replace(/\/$/, "");
+// A link's address as one page: without "www.", its # part or a closing
+// "/" — so castlefineart.com/x and www.castlefineart.com/x/ are one.
+const linkKey = (url: URL) =>
+  `${url.hostname.replace(/^www\./, "")}${url.pathname.replace(/\/$/, "")}${url.search}`;
 const withScheme = (v: string) => (/^https?:\/\//i.test(v) ? v : `https://${v}`);
 
 function urlOf(href: string, base: string): URL | null {
@@ -105,25 +112,31 @@ function imageIn(node: Element, base: string): string | null {
   return null;
 }
 
-// The picture beside a link: in the nearest wrapper holding a picture and
-// no link to anywhere else (a card), else in the link itself.
-function cardImage(a: Element, key: string, base: string): string | null {
-  for (let n: Element = a, step = 0; step < CARD_DEPTH && isTag(n.parent); step++) {
-    n = n.parent;
-    const elsewhere = anchors([n]).some((o) => {
-      const u = urlOf(o.attribs.href, base);
-      return u && linkKey(u) !== key;
-    });
-    if (elsewhere) break;
-    const image = imageIn(n, base);
-    if (image) return image;
+// An artist's picture: in their link, else in the nearest wrapper around
+// it — their card — going up no further than a wrapper that also links
+// to another of the artists found (2026-11-07: Castle's cards also link
+// to the artist's works, so "no other links" was too strict).
+function artistImage(link: PageLink, otherArtists: Set<string>, base: string): string | null {
+  for (const a of link.anchors) {
+    const own = imageIn(a, base);
+    if (own) return own;
+    for (let n: Element = a, step = 0; step < CARD_DEPTH && isTag(n.parent); step++) {
+      n = n.parent;
+      const reachesOthers = anchors([n]).some((o) => {
+        const u = urlOf(o.attribs.href, base);
+        return !!u && otherArtists.has(linkKey(u));
+      });
+      if (reachesOthers) break;
+      const image = imageIn(n, base);
+      if (image) return image;
+    }
   }
-  return imageIn(a, base);
+  return null;
 }
 
 // A page's links to other pages of the same site, outside its menu,
-// header and footer, one per address: what each says (its words, else
-// its picture's description) and the picture beside it.
+// header and footer (unless `withLayout`), one per address: what each
+// says (its words, else its picture's description).
 function pageLinks(html: string, pageUrl: string, withLayout = false): PageLink[] {
   const page = new URL(pageUrl);
   const here = linkKey(page);
@@ -142,12 +155,8 @@ function pageLinks(html: string, pageUrl: string, withLayout = false): PageLink[
       .map((v) => plainText(v ?? ""))
       .find(Boolean)
       ?.slice(0, MAX_TEXT);
-    const was = found.get(key) ?? { url: key, text: "", image: null };
-    found.set(key, {
-      ...was,
-      text: was.text || text || "",
-      image: was.image || (withLayout ? null : cardImage(a, key, pageUrl)),
-    });
+    const was = found.get(key) ?? { url: url.toString(), key, text: "", anchors: [] };
+    found.set(key, { ...was, text: was.text || text || "", anchors: [...was.anchors, a] });
     if (found.size >= MAX_LINKS) break;
   }
   return [...found.values()];
@@ -210,15 +219,17 @@ async function pickArtistsPage(links: PageLink[]): Promise<string | null> {
   return links[i]?.url ?? null;
 }
 
-// Claude says which of a page's links lead to one artist's own page.
-async function pickArtists(links: PageLink[]): Promise<MarketingFoundArtist[]> {
+// Claude says which of a page's links lead to one artist's own page;
+// each artist's picture is then taken from the page.
+async function pickArtists(links: PageLink[], base: string, timeout: number): Promise<MarketingFoundArtist[]> {
   const out = await askClaude(
     "You are given the numbered links of a page on an art gallery's website (number, link words, " +
       "address). List the links that lead to one individual artist's own page — the gallery's artists. " +
       "Leave out everything else: menus, categories, mediums, price bands, artworks, exhibitions, news, " +
-      "policies, contact, search, social media. Give each artist's name as normally written (e.g. " +
-      "'JEAN MICHEL BASQUIAT' → 'Jean-Michel Basquiat'), worked out from the link words or address. " +
-      "If no link is an artist, answer an empty list.",
+      "policies, contact, search, social media. When a link's words aren't already the artist's name " +
+      "as normally written, give the name (e.g. 'JEAN MICHEL BASQUIAT' → 'Jean-Michel Basquiat', or " +
+      "'View Artist' at /collections/alan-somers → 'Alan Somers'); otherwise give an empty name, to keep " +
+      "the answer short. If no link is an artist, answer an empty list.",
     listed(links),
     {
       type: "object",
@@ -229,7 +240,7 @@ async function pickArtists(links: PageLink[]): Promise<MarketingFoundArtist[]> {
             type: "object",
             properties: {
               link: { type: "integer", description: "The link's number." },
-              name: { type: "string", description: "The artist's name." },
+              name: { type: "string", description: "The artist's name, or empty if the link words are it." },
             },
             required: ["link", "name"],
             additionalProperties: false,
@@ -239,16 +250,19 @@ async function pickArtists(links: PageLink[]): Promise<MarketingFoundArtist[]> {
       required: ["artists"],
       additionalProperties: false,
     },
-    PICK_ARTISTS_TIME_MS,
+    timeout,
     6000,
   );
-  const seen = new Set<string>();
-  return (Array.isArray(out?.artists) ? out.artists : []).flatMap((a: { link?: unknown; name?: unknown }) => {
+  const picked = new Map<string, { name: string; link: PageLink }>();
+  for (const a of (Array.isArray(out?.artists) ? out.artists : []) as { link?: unknown; name?: unknown }[]) {
     const link = typeof a.link === "number" ? links[a.link] : undefined;
-    const name = typeof a.name === "string" ? plainText(a.name).slice(0, MAX_TEXT) : "";
-    if (!link || !name || seen.has(link.url)) return [];
-    seen.add(link.url);
-    return [{ name, url: link.url, image: link.image }];
+    const name = plainText((typeof a.name === "string" && a.name) || link?.text || "").slice(0, MAX_TEXT);
+    if (link && name && !picked.has(link.key)) picked.set(link.key, { name, link });
+  }
+  const keys = new Set(picked.keys());
+  return [...picked.values()].map(({ name, link }) => {
+    const others = new Set([...keys].filter((k) => k !== link.key));
+    return { name, url: link.url, image: artistImage(link, others, base) };
   });
 }
 
@@ -336,7 +350,8 @@ export async function readArtists(
 ): Promise<MarketingArtistFind> {
   const sites = siteAddresses(contact).map((a) => new URL(a));
   const tryHarder = !viaService && pageServiceAvailable();
-  const read = pageReader(viaService, Date.now() + (viaService ? SERVICE_FETCH_TIME_MS : FETCH_TIME_MS));
+  const started = Date.now();
+  const read = pageReader(viaService, started + (viaService ? SERVICE_FETCH_TIME_MS : FETCH_TIME_MS));
 
   if (pageUrl) {
     let page: URL;
@@ -350,7 +365,8 @@ export async function readArtists(
     if ("error" in res) return { found: false, reason: res.error, tryHarder };
     if (res.status !== 200) return { found: false, reason: `The artists page answered ${res.status}.`, tryHarder };
     try {
-      const artists = await pickArtists(pageLinks(res.body, res.url));
+      const timeLeft = Math.max(MIN_PICK_TIME_MS, started + REQUEST_TIME_MS - Date.now());
+      const artists = await pickArtists(pageLinks(res.body, res.url), res.url, timeLeft);
       if (artists.length >= MIN_ARTISTS) return found("the gallery's artists page", res.url, artists);
     } catch (err) {
       console.log("[readArtists]", err);
