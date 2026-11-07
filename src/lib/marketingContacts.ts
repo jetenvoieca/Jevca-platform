@@ -129,6 +129,8 @@ export type MarketingFoundArtist = { name: string; url: string | null; image: st
 export type MarketingArtistFind =
   | { found: true; source: string; url: string; artists: MarketingFoundArtist[] }
   | { found: false; reason: string; tryHarder?: boolean };
+// A gallery's artists as last looked up, kept (MarketingArtistsLookup).
+export type MarketingSavedArtists = Extract<MarketingArtistFind, { found: true }> & { checkedAt: string };
 // Where a gallery's artists page is — the first step of finding them.
 export type MarketingArtistsPage =
   | { found: true; pageUrl: string | null; shopify: boolean }

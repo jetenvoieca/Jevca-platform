@@ -11,6 +11,8 @@ import {
   WORKS_TYPES,
   type MarketingArtistFind,
   type MarketingArtistsPage,
+  type MarketingFoundArtist,
+  type MarketingSavedArtists,
   type MarketingContactInput,
   type MarketingContactLinkRef,
   type MarketingContactRow,
@@ -464,7 +466,21 @@ export async function saveMarketingPrices(
 // A gallery's artists, as its website lists them (2026-11-07), in two
 // steps (see artistFinder.ts): where its artists page is, then the
 // artists on it. `viaService` reads the site through the page-reading
-// service. Saves nothing.
+// service. What's found is kept (MarketingArtistsLookup), replacing what
+// was, and shown from then on until looked up again.
+export async function getGalleryArtists(id: string): Promise<MarketingSavedArtists | null> {
+  await requireAdmin();
+  const saved = await db.marketingArtistsLookup.findUnique({ where: { contactId: id } });
+  if (!saved) return null;
+  return {
+    found: true,
+    source: saved.source,
+    url: saved.url,
+    artists: Array.isArray(saved.artists) ? (saved.artists as MarketingFoundArtist[]) : [],
+    checkedAt: saved.checkedAt.toISOString(),
+  };
+}
+
 export async function findGalleryArtistsPage(id: string, viaService = false): Promise<MarketingArtistsPage> {
   await requireAdmin();
   const contact = await db.marketingContact.findUnique({ where: { id }, select: { website: true, shopUrl: true } });
@@ -477,9 +493,13 @@ export async function readGalleryArtists(
   pageUrl: string | null,
   shopify: boolean,
   viaService = false,
-): Promise<MarketingArtistFind> {
+): Promise<MarketingSavedArtists | Extract<MarketingArtistFind, { found: false }>> {
   await requireAdmin();
   const contact = await db.marketingContact.findUnique({ where: { id }, select: { website: true, shopUrl: true } });
   if (!contact) return { found: false, reason: "That contact has gone." };
-  return readArtists(contact, pageUrl, shopify, viaService);
+  const result = await readArtists(contact, pageUrl, shopify, viaService);
+  if (!result.found) return result;
+  const kept = { source: result.source, url: result.url, artists: result.artists, checkedAt: new Date() };
+  await db.marketingArtistsLookup.upsert({ where: { contactId: id }, create: { contactId: id, ...kept }, update: kept });
+  return { ...result, checkedAt: kept.checkedAt.toISOString() };
 }

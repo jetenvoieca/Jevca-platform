@@ -2957,6 +2957,7 @@ model MarketingContact {
   artists   MarketingContactLink[] @relation("GalleryArtists")
   galleries MarketingContactLink[] @relation("ArtistGalleries")
   tags      MarketingContactTag[]
+  artistsLookup MarketingArtistsLookup?
 
   @@index([type])
 }
@@ -2968,6 +2969,18 @@ model MarketingTag {
   name      String                @unique
   createdAt DateTime              @default(now())
   contacts  MarketingContactTag[]
+}
+
+// The artists a gallery's website lists, as last looked up (2026-11-07):
+// kept so the lookup — which may cost page-reading credits — runs again
+// only when Update is clicked. `artists` is a list of { name, url, image }.
+model MarketingArtistsLookup {
+  contactId String           @id
+  contact   MarketingContact @relation(fields: [contactId], references: [id], onDelete: Cascade)
+  source    String
+  url       String
+  artists   Json
+  checkedAt DateTime         @default(now())
 }
 
 model MarketingContactTag {
