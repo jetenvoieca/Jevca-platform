@@ -66,6 +66,8 @@ const ARTISTS_PART =
 // Menu wording for it.
 const ARTISTS_TEXT = /^(our |the |gallery |all |nos |i nostri |nuestros )?(artists?|artistes?|artisti|artistas)$/i;
 const LAYOUT = /^(nav|header|footer)$/;
+// A page in a Wix site's list of its pages.
+const WIX_PAGE = /"title":"((?:[^"\\]|\\.)*)","pageUriSEO":"([^"\\/]+)"/g;
 
 const plainText = (v: string) => v.replace(/\s+/g, " ").trim();
 const parts = (url: URL) => url.pathname.split("/").filter(Boolean);
@@ -168,6 +170,23 @@ function pageLinks(html: string, pageUrl: string, withLayout = false): PageLink[
     const was = found.get(key) ?? { url: url.toString(), key, text: "", anchors: [] };
     found.set(key, { ...was, text: was.text || text || "", anchors: [...was.anchors, a] });
     if (found.size >= MAX_LINKS) break;
+  }
+  // Wix galleries open each artist from a picture grid by script, with no
+  // link in the page — but the page carries the site's list of pages
+  // ("title", then "pageUriSEO"), artists' among them (2026-11-07,
+  // Galerie 337). Those are offered as links too, without pictures (the
+  // artists' own pages give them — see fillArtistPictures).
+  for (const m of html.matchAll(WIX_PAGE)) {
+    if (found.size >= MAX_LINKS) break;
+    const url = urlOf(`/${m[2]}`, pageUrl);
+    if (!url) continue;
+    const key = linkKey(url);
+    if (key === here || found.has(key)) continue;
+    let title = "";
+    try {
+      title = plainText(JSON.parse(`"${m[1]}"`)).slice(0, MAX_TEXT);
+    } catch {}
+    found.set(key, { url: url.toString(), key, text: title, anchors: [] });
   }
   return [...found.values()];
 }
