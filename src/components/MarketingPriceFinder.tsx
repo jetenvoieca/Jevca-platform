@@ -255,9 +255,10 @@ function FoundRow({
                     </span>
                   </span>
                 </label>
-                <p className="ml-5 truncate text-xs text-neutral-500" title={`${b.lowest} — ${b.highest}`}>
-                  Cheapest: {b.lowest || "—"} · Dearest: {b.highest || "—"}
-                </p>
+                <div className="ml-5 break-words text-xs text-neutral-500">
+                  <p>Cheapest: {b.lowest || "—"}</p>
+                  <p>Dearest: {b.highest || "—"}</p>
+                </div>
               </div>
             );
           })}
