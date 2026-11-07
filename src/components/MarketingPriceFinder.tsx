@@ -95,6 +95,9 @@ export default function MarketingPriceFinder({
         let f: MarketingPriceFind;
         try {
           f = await findMarketingPrices(contact.id);
+          // A site that refused, or showed nothing, is read again through
+          // the page-reading service.
+          if (!f.found && f.tryHarder) f = await findMarketingPrices(contact.id, true);
         } catch {
           f = { found: false, reason: "Something went wrong looking." };
         }

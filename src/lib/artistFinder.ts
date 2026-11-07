@@ -1,8 +1,8 @@
 import Anthropic from "@anthropic-ai/sdk";
 import { DomUtils, parseDocument } from "htmlparser2";
 import { readJson } from "@/lib/claudeJson";
-import { fetchPublicPage } from "@/lib/publicFetch";
-import type { MarketingArtistFind, MarketingFoundArtist } from "@/lib/marketingContacts";
+import { pageReader, pageServiceAvailable, type PageReader } from "@/lib/publicFetch";
+import type { MarketingArtistFind, MarketingArtistsPage, MarketingFoundArtist } from "@/lib/marketingContacts";
 
 // Contacts → a gallery's artists (2026-11-07, Craig's request): reads the
 // gallery's website and lists the artists it shows, each with a thumbnail
@@ -17,6 +17,11 @@ import type { MarketingArtistFind, MarketingFoundArtist } from "@/lib/marketingC
 // pictures shown are always the page's own, never made up. A Shopify shop
 // with no artists page lists its works' artists (each product's vendor),
 // with a work of theirs as the thumbnail.
+//
+// Two steps, each its own request to stay inside the server's time
+// limit: find the artists page, then read it. Either can be done again
+// through the page-reading service when reading the site directly fails
+// (see publicFetch.ts).
 
 type Element = ReturnType<typeof DomUtils.findAll>[number];
 type PageLink = { url: string; text: string; image: string | null };
@@ -25,6 +30,8 @@ const MODEL = "claude-haiku-5-5";
 // Reading the site, then Claude's answers, all inside the server's
 // 30-second limit.
 const FETCH_TIME_MS = 9000;
+// Through the page-reading service, which opens pages in a browser.
+const SERVICE_FETCH_TIME_MS = 15000;
 const PICK_PAGE_TIME_MS = 6000;
 const PICK_ARTISTS_TIME_MS = 12000;
 const MIN_ARTISTS = 2;
@@ -234,15 +241,11 @@ async function pickArtists(links: PageLink[]): Promise<MarketingFoundArtist[]> {
 
 // Shopify: each product's vendor (usually its artist), with a work's
 // picture.
-async function shopifyArtists(base: string, deadline: number): Promise<MarketingFoundArtist[]> {
+async function shopifyArtists(base: string, read: PageReader): Promise<MarketingFoundArtist[]> {
   const origin = new URL(base).origin;
   const byVendor = new Map<string, MarketingFoundArtist>();
   for (let page = 1; page <= SHOPIFY_PAGES; page++) {
-    const res = await fetchPublicPage(
-      `${origin}/products.json?limit=${SHOPIFY_PAGE_SIZE}&page=${page}`,
-      deadline,
-      "application/json",
-    );
+    const res = await read(`${origin}/products.json?limit=${SHOPIFY_PAGE_SIZE}&page=${page}`, "application/json");
     if ("error" in res || res.status !== 200) break;
     let products: { vendor?: string; images?: { src?: string }[] }[] = [];
     try {
@@ -272,49 +275,78 @@ const found = (source: string, url: string, artists: MarketingFoundArtist[]): Ma
   url,
   artists: artists.slice(0, MAX_ARTISTS).sort(byName),
 });
+const isShopify = (html: string) => /cdn\.shopify\.com|Shopify\.shop\s*=/.test(html);
+const isArtistsPage = (u: string) => ARTISTS_PART.test(parts(new URL(u)).at(-1) ?? "");
 
-// Finds a gallery's artists from its website (or shop page).
-export async function findArtists(contact: {
-  website: string | null;
-  shopUrl: string | null;
-}): Promise<MarketingArtistFind> {
-  const deadline = Date.now() + FETCH_TIME_MS;
-  const start = [contact.website, contact.shopUrl].find((v) => v?.trim());
+type Site = { website: string | null; shopUrl: string | null };
+const siteAddresses = (c: Site) =>
+  [c.website, c.shopUrl].filter((v): v is string => !!v?.trim()).map((v) => withScheme(v.trim()));
+
+// Step 1: where the gallery's artists page is — the shop page or home
+// page when it is one, else the menu's, else Claude's pick from the home
+// page's links. None, on a Shopify shop, means its works' artists.
+export async function findArtistsPage(contact: Site, viaService = false): Promise<MarketingArtistsPage> {
+  const [start] = siteAddresses(contact);
   if (!start) return { found: false, reason: "No website." };
+  const tryHarder = !viaService && pageServiceAvailable();
+  const read = pageReader(viaService, Date.now() + (viaService ? SERVICE_FETCH_TIME_MS : FETCH_TIME_MS));
 
-  const home = await fetchPublicPage(withScheme(start.trim()), deadline);
-  if ("error" in home) return { found: false, reason: home.error };
-  if (home.status !== 200) return { found: false, reason: `The site answered ${home.status}.` };
+  const home = await read(start);
+  if ("error" in home) return { found: false, reason: home.error, tryHarder };
+  if (home.status !== 200) return { found: false, reason: `The site answered ${home.status}.`, tryHarder };
+  const shopify = isShopify(home.body);
+  const shop = contact.shopUrl?.trim() ? withScheme(contact.shopUrl.trim()) : null;
   const homeLinks = pageLinks(home.body, home.url, true);
-
-  try {
-    // The artists page: the shop page or home page when it is one, else
-    // the menu's, else Claude's pick.
-    const shop = contact.shopUrl?.trim() ? withScheme(contact.shopUrl.trim()) : null;
-    const isArtistsPage = (u: string) => ARTISTS_PART.test(parts(new URL(u)).at(-1) ?? "");
-    const pageUrl =
-      [home.url, shop].find((u) => u && isArtistsPage(u)) ??
-      artistsPages(homeLinks)[0] ??
-      (await pickArtistsPage(homeLinks));
-
-    if (pageUrl) {
-      const page = pageUrl === home.url ? home : await fetchPublicPage(pageUrl, deadline);
-      if ("error" in page) return { found: false, reason: page.error };
-      if (page.status !== 200) return { found: false, reason: `The artists page answered ${page.status}.` };
-      const artists = await pickArtists(pageLinks(page.body, page.url));
-      if (artists.length >= MIN_ARTISTS) return found("the gallery's artists page", page.url, artists);
+  let pageUrl: string | null =
+    [home.url, shop].find((u) => u && isArtistsPage(u)) ?? artistsPages(homeLinks)[0] ?? null;
+  if (!pageUrl) {
+    try {
+      pageUrl = await pickArtistsPage(homeLinks);
+    } catch (err) {
+      console.log("[findArtistsPage]", err);
+      return { found: false, reason: "Couldn't read the site's menu just now — try again." };
     }
-  } catch (err) {
-    console.log("[findArtists]", err);
-    return { found: false, reason: "Couldn't read the site's artists just now — try again." };
   }
+  if (!pageUrl && !shopify)
+    return { found: false, reason: "Couldn't find an artists page on the site.", tryHarder };
+  return { found: true, pageUrl, shopify };
+}
 
-  if (/cdn\.shopify\.com|Shopify\.shop\s*=/.test(home.body)) {
-    const artists = await shopifyArtists(home.url, deadline);
-    if (artists.length) return found("the artists of the shop's works", home.url, artists);
+// Step 2: the artists on that page, as Claude reads its links — or, on a
+// Shopify shop without them, its works' artists. The page must be on the
+// gallery's own site.
+export async function readArtists(
+  contact: Site,
+  pageUrl: string | null,
+  shopify: boolean,
+  viaService = false,
+): Promise<MarketingArtistFind> {
+  const sites = siteAddresses(contact).map((a) => new URL(a));
+  const tryHarder = !viaService && pageServiceAvailable();
+  const read = pageReader(viaService, Date.now() + (viaService ? SERVICE_FETCH_TIME_MS : FETCH_TIME_MS));
+
+  if (pageUrl) {
+    let page: URL;
+    try {
+      page = new URL(pageUrl);
+    } catch {
+      return { found: false, reason: "Not a web address." };
+    }
+    if (!sites.some((s) => sameSite(s, page))) return { found: false, reason: "That page isn't on the gallery's site." };
+    const res = await read(page.toString());
+    if ("error" in res) return { found: false, reason: res.error, tryHarder };
+    if (res.status !== 200) return { found: false, reason: `The artists page answered ${res.status}.`, tryHarder };
+    try {
+      const artists = await pickArtists(pageLinks(res.body, res.url));
+      if (artists.length >= MIN_ARTISTS) return found("the gallery's artists page", res.url, artists);
+    } catch (err) {
+      console.log("[readArtists]", err);
+      return { found: false, reason: "Couldn't read the site's artists just now — try again." };
+    }
   }
-  return {
-    found: false,
-    reason: Date.now() > deadline ? "The site was too slow." : "Couldn't find a list of artists on the site.",
-  };
+  if (shopify && sites[0]) {
+    const artists = await shopifyArtists(sites[0].toString(), read);
+    if (artists.length) return found("the artists of the shop's works", sites[0].toString(), artists);
+  }
+  return { found: false, reason: "Couldn't find a list of artists on the site.", tryHarder };
 }

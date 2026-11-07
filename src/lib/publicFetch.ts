@@ -6,8 +6,16 @@ import { isIP } from "node:net";
 // checked first — only http(s), and only a host on the public internet,
 // never this server's own network — and so is each redirect. A slow or
 // huge page is cut short.
+//
+// Some sites refuse servers like ours, and some build their pages with
+// scripts after loading, so the page we get has nothing in it. Those can
+// be read through ScrapingBee instead (2026-11-07, Craig's trial
+// account; SCRAPINGBEE_API_KEY), which opens the page in a real browser
+// — and, if the site still refuses, through its premium proxies. It
+// costs credits, so callers use it only when reading directly fails.
 
 const MAX_REDIRECTS = 4;
+const SCRAPINGBEE_API = "https://app.scrapingbee.com/api/v1/";
 const MAX_BYTES = 3_000_000;
 const USER_AGENT =
   "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/124.0.0.0 Safari/537.36";
@@ -122,3 +130,61 @@ async function limitedText(res: Response) {
   await reader.cancel().catch(() => {});
   return Buffer.concat(chunks).subarray(0, MAX_BYTES).toString("utf8");
 }
+
+// Whether pages can be read through ScrapingBee.
+export const pageServiceAvailable = () => !!process.env.SCRAPINGBEE_API_KEY;
+
+// The page at `address` read through ScrapingBee — in a browser, so its
+// scripts run, unless it's JSON — or why not. Tries again through its
+// premium proxies when the site refused. Gives up at `deadline`.
+export async function fetchPageViaService(
+  address: string,
+  deadline: number,
+  accept = "text/html",
+): Promise<PublicPage | { error: string }> {
+  const apiKey = process.env.SCRAPINGBEE_API_KEY;
+  if (!apiKey) return { error: "The page-reading service isn't set up." };
+  let problem = "The page-reading service couldn't read it.";
+  for (const premium of [false, true]) {
+    const left = deadline - Date.now();
+    if (left < 3000) return { error: "Took too long." };
+    const query = new URLSearchParams({
+      api_key: apiKey,
+      url: address,
+      render_js: String(!accept.includes("json")),
+      premium_proxy: String(premium),
+      timeout: String(left - 1000),
+    });
+    try {
+      const res = await fetch(`${SCRAPINGBEE_API}?${query}`, { signal: AbortSignal.timeout(left) });
+      if (res.ok) {
+        return {
+          url: res.headers.get("spb-resolved-url") || address,
+          status: 200,
+          contentType: res.headers.get("content-type") ?? "",
+          body: await limitedText(res),
+        };
+      }
+      await res.body?.cancel();
+      console.log(`[publicFetch] ScrapingBee ${res.status} for ${new URL(address).host}`);
+      problem =
+        res.status === 401
+          ? "The page-reading service's key isn't right."
+          : res.status === 402
+            ? "The page-reading service has run out of credits."
+            : `The site refused even the page-reading service (${res.status}).`;
+      if (res.status === 401 || res.status === 402) break;
+    } catch (err) {
+      if (err instanceof Error && err.name === "TimeoutError") return { error: "Took too long." };
+      problem = "Couldn't reach the page-reading service.";
+    }
+  }
+  return { error: problem };
+}
+
+// Reads pages directly or through ScrapingBee, all by one deadline.
+export type PageReader = (address: string, accept?: string) => Promise<PublicPage | { error: string }>;
+export const pageReader =
+  (viaService: boolean, deadline: number): PageReader =>
+  (address, accept) =>
+    viaService ? fetchPageViaService(address, deadline, accept) : fetchPublicPage(address, deadline, accept);

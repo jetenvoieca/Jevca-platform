@@ -1,15 +1,17 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { findGalleryArtists } from "@/lib/actions/marketingContacts";
+import { findGalleryArtistsPage, readGalleryArtists } from "@/lib/actions/marketingContacts";
 import type { MarketingArtistFind, MarketingContactRow } from "@/lib/marketingContacts";
 import FormModal from "@/components/FormModal";
 
 // Contacts → a gallery's artists (2026-11-07, Craig's request): opened
 // from the artist icon on a gallery's tile, looks up the artists its
-// website lists (findGalleryArtists) and shows them as thumbnails, each
+// website lists (findGalleryArtistsPage, readGalleryArtists) and shows them as thumbnails, each
 // linking to the artist's page on the gallery's site. Only shown, not
-// saved — it looks again each time.
+// saved — it looks again each time. Finds the artists page, then reads
+// it; either step is tried again through the page-reading service when
+// reading the site directly fails (see artistFinder.ts).
 
 export default function MarketingGalleryArtists({
   gallery,
@@ -19,10 +21,27 @@ export default function MarketingGalleryArtists({
   onClose: () => void;
 }) {
   const [find, setFind] = useState<MarketingArtistFind | null>(null);
+  // Reading the site through the page-reading service.
+  const [harder, setHarder] = useState(false);
 
   useEffect(() => {
     let open = true;
-    findGalleryArtists(gallery.id)
+    const look = async (): Promise<MarketingArtistFind> => {
+      let viaService = false;
+      let page = await findGalleryArtistsPage(gallery.id);
+      if (!page.found && page.tryHarder && open) {
+        setHarder((viaService = true));
+        page = await findGalleryArtistsPage(gallery.id, true);
+      }
+      if (!page.found) return page;
+      let artists = await readGalleryArtists(gallery.id, page.pageUrl, page.shopify, viaService);
+      if (!artists.found && artists.tryHarder && open) {
+        setHarder(true);
+        artists = await readGalleryArtists(gallery.id, page.pageUrl, page.shopify, true);
+      }
+      return artists;
+    };
+    look()
       .catch((): MarketingArtistFind => ({ found: false, reason: "Something went wrong looking." }))
       .then((f) => open && setFind(f));
     return () => {
@@ -33,7 +52,9 @@ export default function MarketingGalleryArtists({
   return (
     <FormModal title={`${gallery.name} — artists`} busy={false} onClose={onClose}>
       {!find ? (
-        <p className="text-sm text-neutral-500">Looking at the gallery&apos;s website…</p>
+        <p className="text-sm text-neutral-500">
+          {harder ? "Looking harder — opening the site in a browser…" : "Looking at the gallery's website…"}
+        </p>
       ) : !find.found ? (
         <p className="text-sm text-neutral-500">{find.reason}</p>
       ) : (

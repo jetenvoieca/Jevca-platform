@@ -1,4 +1,4 @@
-import { fetchPublicPage } from "@/lib/publicFetch";
+import { pageReader, pageServiceAvailable, type PageReader } from "@/lib/publicFetch";
 import {
   countryCurrency,
   type MarketingCurrency,
@@ -19,6 +19,8 @@ import {
 // for Craig to accept or not.
 
 const TIME_LIMIT_MS = 8000;
+// Through the page-reading service, which opens pages in a browser.
+const SERVICE_TIME_LIMIT_MS = 24000;
 const MIN_PRICE = 20;
 const MAX_PRICE = 10_000_000;
 const SHOPIFY_PAGES = 4;
@@ -79,7 +81,7 @@ const json = (body: string): unknown => {
 
 // Shopify: the shop's product list — the collection's, when the shop
 // page is one.
-async function shopifyItems(pageUrl: string, html: string, deadline: number): Promise<Item[]> {
+async function shopifyItems(pageUrl: string, html: string, read: PageReader): Promise<Item[]> {
   const url = new URL(pageUrl);
   const collection = url.pathname.match(/^(\/[a-z]{2}(?:-[a-z]{2})?)?\/collections\/[^/]+/i)?.[0];
   const list = `${url.origin}${collection ?? ""}/products.json`;
@@ -92,7 +94,7 @@ async function shopifyItems(pageUrl: string, html: string, deadline: number): Pr
 
   const items: Item[] = [];
   for (let page = 1; page <= SHOPIFY_PAGES; page++) {
-    const res = await fetchPublicPage(`${list}?limit=${SHOPIFY_PAGE_SIZE}&page=${page}`, deadline, "application/json");
+    const res = await read(`${list}?limit=${SHOPIFY_PAGE_SIZE}&page=${page}`, "application/json");
     if ("error" in res || res.status !== 200) break;
     const products = (json(res.body) as { products?: unknown[] } | null)?.products;
     if (!Array.isArray(products)) break;
@@ -113,15 +115,11 @@ async function shopifyItems(pageUrl: string, html: string, deadline: number): Pr
 }
 
 // WooCommerce: the shop's product list (its Store API).
-async function wooItems(pageUrl: string, deadline: number): Promise<Item[]> {
+async function wooItems(pageUrl: string, read: PageReader): Promise<Item[]> {
   const origin = new URL(pageUrl).origin;
   const items: Item[] = [];
   for (let page = 1; page <= WOO_PAGES; page++) {
-    const res = await fetchPublicPage(
-      `${origin}/wp-json/wc/store/v1/products?per_page=${WOO_PAGE_SIZE}&page=${page}`,
-      deadline,
-      "application/json",
-    );
+    const res = await read(`${origin}/wp-json/wc/store/v1/products?per_page=${WOO_PAGE_SIZE}&page=${page}`, "application/json");
     if ("error" in res || res.status !== 200) break;
     const products = json(res.body);
     if (!Array.isArray(products)) break;
@@ -227,14 +225,21 @@ const SOURCE = {
   text: "the prices written on the page",
 } as const;
 
-// Finds a contact's price bands from its shop page or website.
-export async function findPrices(contact: {
-  shopUrl: string | null;
-  website: string | null;
-  country: string | null;
-  priceCurrency: MarketingCurrency | null;
-}): Promise<MarketingPriceFind> {
-  const deadline = Date.now() + TIME_LIMIT_MS;
+// Finds a contact's price bands from its shop page or website — reading
+// it directly, or through the page-reading service (`viaService`, for a
+// site that refused or showed nothing directly).
+export async function findPrices(
+  contact: {
+    shopUrl: string | null;
+    website: string | null;
+    country: string | null;
+    priceCurrency: MarketingCurrency | null;
+  },
+  viaService = false,
+): Promise<MarketingPriceFind> {
+  const deadline = Date.now() + (viaService ? SERVICE_TIME_LIMIT_MS : TIME_LIMIT_MS);
+  const read = pageReader(viaService, deadline);
+  const tryHarder = !viaService && pageServiceAvailable();
   const withScheme = (v: string) => (/^https?:\/\//i.test(v) ? v : `https://${v}`);
   const addresses = [contact.shopUrl, contact.website].filter((v): v is string => !!v?.trim()).map(withScheme);
   if (addresses.length === 0) return { found: false, reason: "No shop page or website." };
@@ -242,7 +247,7 @@ export async function findPrices(contact: {
   let page: { url: string; body: string } | null = null;
   let problem = "";
   for (const address of [...new Set(addresses)]) {
-    const res = await fetchPublicPage(address, deadline);
+    const res = await read(address);
     if ("error" in res) problem = res.error;
     else if (res.status !== 200) problem = `The site answered ${res.status}.`;
     else {
@@ -250,13 +255,13 @@ export async function findPrices(contact: {
       break;
     }
   }
-  if (!page) return { found: false, reason: problem || "Couldn't read the site." };
+  if (!page) return { found: false, reason: problem || "Couldn't read the site.", tryHarder };
   const { url, body } = page;
 
   const attempts: [keyof typeof SOURCE, () => Promise<Item[]> | Item[]][] = [];
   if (/cdn\.shopify\.com|Shopify\.shop\s*=/.test(body))
-    attempts.push(["shopify", () => shopifyItems(url, body, deadline)]);
-  if (/woocommerce/i.test(body)) attempts.push(["woo", () => wooItems(url, deadline)]);
+    attempts.push(["shopify", () => shopifyItems(url, body, read)]);
+  if (/woocommerce/i.test(body)) attempts.push(["woo", () => wooItems(url, read)]);
   attempts.push(["jsonLd", () => jsonLdItems(body)], ["text", () => textItems(body)]);
 
   for (const [source, attempt] of attempts) {
@@ -288,5 +293,6 @@ export async function findPrices(contact: {
   return {
     found: false,
     reason: Date.now() > deadline ? "The site was too slow." : "No prices shown on the shop page.",
+    tryHarder,
   };
 }

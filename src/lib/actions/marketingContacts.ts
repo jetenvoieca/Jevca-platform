@@ -2,7 +2,7 @@
 
 import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
-import { findArtists } from "@/lib/artistFinder";
+import { findArtistsPage, readArtists } from "@/lib/artistFinder";
 import { findPrices } from "@/lib/priceFinder";
 import type { Prisma } from "@/generated/prisma/client";
 import {
@@ -10,6 +10,7 @@ import {
   PRICE_BANDS,
   WORKS_TYPES,
   type MarketingArtistFind,
+  type MarketingArtistsPage,
   type MarketingContactInput,
   type MarketingContactLinkRef,
   type MarketingContactRow,
@@ -430,15 +431,16 @@ export async function importMarketingContacts(rows: MarketingImportRow[]): Promi
 }
 
 // Find prices (2026-11-07): what a contact's shop page (or website)
-// suggests for its price bands. Saves nothing — see saveMarketingPrices.
-export async function findMarketingPrices(id: string): Promise<MarketingPriceFind> {
+// suggests for its price bands — `viaService` reads it through the
+// page-reading service. Saves nothing — see saveMarketingPrices.
+export async function findMarketingPrices(id: string, viaService = false): Promise<MarketingPriceFind> {
   await requireAdmin();
   const contact = await db.marketingContact.findUnique({
     where: { id },
     select: { shopUrl: true, website: true, country: true, priceCurrency: true },
   });
   if (!contact) return { found: false, reason: "That contact has gone." };
-  return findPrices(contact);
+  return findPrices(contact, viaService);
 }
 
 // Saves a contact's price bands and their currency — what Find prices
@@ -459,11 +461,25 @@ export async function saveMarketingPrices(
   return { contact: toRow(await db.marketingContact.findUniqueOrThrow({ where: { id }, select })) };
 }
 
-// A gallery's artists, as its website lists them (2026-11-07). Saves
-// nothing.
-export async function findGalleryArtists(id: string): Promise<MarketingArtistFind> {
+// A gallery's artists, as its website lists them (2026-11-07), in two
+// steps (see artistFinder.ts): where its artists page is, then the
+// artists on it. `viaService` reads the site through the page-reading
+// service. Saves nothing.
+export async function findGalleryArtistsPage(id: string, viaService = false): Promise<MarketingArtistsPage> {
   await requireAdmin();
   const contact = await db.marketingContact.findUnique({ where: { id }, select: { website: true, shopUrl: true } });
   if (!contact) return { found: false, reason: "That contact has gone." };
-  return findArtists(contact);
+  return findArtistsPage(contact, viaService);
+}
+
+export async function readGalleryArtists(
+  id: string,
+  pageUrl: string | null,
+  shopify: boolean,
+  viaService = false,
+): Promise<MarketingArtistFind> {
+  await requireAdmin();
+  const contact = await db.marketingContact.findUnique({ where: { id }, select: { website: true, shopUrl: true } });
+  if (!contact) return { found: false, reason: "That contact has gone." };
+  return readArtists(contact, pageUrl, shopify, viaService);
 }
