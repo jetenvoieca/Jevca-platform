@@ -2,7 +2,7 @@
 
 import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
-import { findArtistsPage, readArtists } from "@/lib/artistFinder";
+import { fillArtistPictures, findArtistsPage, readArtists } from "@/lib/artistFinder";
 import { findPrices } from "@/lib/priceFinder";
 import type { Prisma } from "@/generated/prisma/client";
 import {
@@ -502,4 +502,19 @@ export async function readGalleryArtists(
   const kept = { source: result.source, url: result.url, artists: result.artists, checkedAt: new Date() };
   await db.marketingArtistsLookup.upsert({ where: { contactId: id }, create: { contactId: id, ...kept }, update: kept });
   return { ...result, checkedAt: kept.checkedAt.toISOString() };
+}
+
+// Pictures for the kept artists that have none, from their own pages
+// (see fillArtistPictures), from `from` on. Returns the artists as kept
+// now and where to carry on, or null when done.
+export async function fillGalleryArtistPictures(
+  id: string,
+  from: number,
+): Promise<{ saved: MarketingSavedArtists; next: number | null } | null> {
+  await requireAdmin();
+  const saved = await getGalleryArtists(id);
+  if (!saved) return null;
+  const { artists, next } = await fillArtistPictures(saved.artists, from);
+  await db.marketingArtistsLookup.update({ where: { contactId: id }, data: { artists } });
+  return { saved: { ...saved, artists }, next };
 }

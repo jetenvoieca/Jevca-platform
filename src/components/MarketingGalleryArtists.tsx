@@ -1,7 +1,12 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import { findGalleryArtistsPage, getGalleryArtists, readGalleryArtists } from "@/lib/actions/marketingContacts";
+import {
+  fillGalleryArtistPictures,
+  findGalleryArtistsPage,
+  getGalleryArtists,
+  readGalleryArtists,
+} from "@/lib/actions/marketingContacts";
 import type { MarketingContactRow, MarketingSavedArtists } from "@/lib/marketingContacts";
 import FormModal from "@/components/FormModal";
 
@@ -13,6 +18,8 @@ import FormModal from "@/components/FormModal";
 // opening a gallery never looked up. Either step is tried again through
 // the page-reading service when reading the site directly fails (see
 // artistFinder.ts) — which costs credits, hence keeping the results.
+// Artists the artists page showed no picture for then get one from their
+// own page, a batch at a time (fillGalleryArtistPictures).
 
 const checkedOn = (iso: string) =>
   new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
@@ -31,6 +38,23 @@ export default function MarketingGalleryArtists({
   const [harder, setHarder] = useState(false);
   // Why the last look found nothing.
   const [problem, setProblem] = useState("");
+  const [fillingPictures, setFillingPictures] = useState(false);
+
+  const fillPictures = async () => {
+    setFillingPictures(true);
+    try {
+      for (let from: number | null = 0; from !== null; ) {
+        const filled = await fillGalleryArtistPictures(gallery.id, from);
+        if (!filled) break;
+        setSaved(filled.saved);
+        from = filled.next;
+      }
+    } catch {
+      // The pictures are a nicety; the list is already kept.
+    } finally {
+      setFillingPictures(false);
+    }
+  };
 
   const look = async () => {
     setLooking(true);
@@ -49,8 +73,9 @@ export default function MarketingGalleryArtists({
         setHarder(true);
         artists = await readGalleryArtists(gallery.id, page.pageUrl, page.shopify, true);
       }
-      if (artists.found) setSaved(artists);
-      else setProblem(artists.reason);
+      if (!artists.found) return setProblem(artists.reason);
+      setSaved(artists);
+      if (artists.artists.some((a) => !a.image && a.url)) fillPictures();
     } catch {
       setProblem("Something went wrong looking.");
     } finally {
@@ -96,6 +121,7 @@ export default function MarketingGalleryArtists({
               {saved.source}
             </a>
             , checked {checkedOn(saved.checkedAt)}
+            {fillingPictures && " — getting pictures from the artists' pages…"}
           </p>
           <div className="grid grid-cols-3 gap-3">
             {saved.artists.map((a) => {

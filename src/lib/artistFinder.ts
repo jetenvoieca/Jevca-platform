@@ -40,6 +40,16 @@ const PICK_PAGE_TIME_MS = 6000;
 const REQUEST_TIME_MS = 27000;
 const MIN_PICK_TIME_MS = 8000;
 const MIN_ARTISTS = 2;
+// Fewer links than this outside a page's menu, header and footer means
+// its list is probably in them.
+const FEW_LINKS = 5;
+// Pictures from artists' own pages: how many a request looks at, how
+// many at once, and how often one picture may appear before it's taken
+// for the site's logo rather than an artist's.
+const PICTURES_PER_REQUEST = 24;
+const PICTURES_AT_ONCE = 6;
+const PICTURES_TIME_MS = 20000;
+const LOGO_REPEATS = 3;
 const MAX_ARTISTS = 200;
 const MAX_LINKS = 400;
 const MAX_TEXT = 80;
@@ -201,6 +211,7 @@ async function askClaude(
 
 // Claude picks the site's artists page from its home page's links, if any.
 async function pickArtistsPage(links: PageLink[]): Promise<string | null> {
+  if (links.length === 0) return null;
   const out = await askClaude(
     "You are given the numbered links of an art gallery's home page (number, link words, address). " +
       "Pick the one leading to the page listing the gallery's artists (often called Artists, Artistes, " +
@@ -222,11 +233,12 @@ async function pickArtistsPage(links: PageLink[]): Promise<string | null> {
 // Claude says which of a page's links lead to one artist's own page;
 // each artist's picture is then taken from the page.
 async function pickArtists(links: PageLink[], base: string, timeout: number): Promise<MarketingFoundArtist[]> {
+  if (links.length === 0) return [];
   const out = await askClaude(
     "You are given the numbered links of a page on an art gallery's website (number, link words, " +
       "address). List the links that lead to one individual artist's own page — the gallery's artists. " +
-      "Leave out everything else: menus, categories, mediums, price bands, artworks, exhibitions, news, " +
-      "policies, contact, search, social media. When a link's words aren't already the artist's name " +
+      "Leave out everything else: menus, navigation (Back, Next, View all), categories, mediums, price " +
+      "bands, artworks, exhibitions, news, policies, contact, search, social media. When a link's words aren't already the artist's name " +
       "as normally written, give the name (e.g. 'JEAN MICHEL BASQUIAT' → 'Jean-Michel Basquiat', or " +
       "'View Artist' at /collections/alan-somers → 'Alan Somers'); otherwise give an empty name, to keep " +
       "the answer short. If no link is an artist, answer an empty list.",
@@ -302,6 +314,8 @@ const found = (source: string, url: string, artists: MarketingFoundArtist[]): Ma
   url,
   artists: artists.slice(0, MAX_ARTISTS).sort(byName),
 });
+// A page that isn't there — reading it another way won't help.
+const gone = (status: number) => status === 404 || status === 410;
 const isShopify = (html: string) => /cdn\.shopify\.com|Shopify\.shop\s*=/.test(html);
 const isArtistsPage = (u: string) => ARTISTS_PART.test(parts(new URL(u)).at(-1) ?? "");
 
@@ -320,6 +334,7 @@ export async function findArtistsPage(contact: Site, viaService = false): Promis
 
   const home = await read(start);
   if ("error" in home) return { found: false, reason: home.error, tryHarder };
+  if (gone(home.status)) return { found: false, reason: `The website wasn't found (${home.status}).` };
   if (home.status !== 200) return { found: false, reason: `The site answered ${home.status}.`, tryHarder };
   const shopify = isShopify(home.body);
   const shop = contact.shopUrl?.trim() ? withScheme(contact.shopUrl.trim()) : null;
@@ -363,10 +378,15 @@ export async function readArtists(
     if (!sites.some((s) => sameSite(s, page))) return { found: false, reason: "That page isn't on the gallery's site." };
     const res = await read(page.toString());
     if ("error" in res) return { found: false, reason: res.error, tryHarder };
+    if (gone(res.status)) return { found: false, reason: `The artists page wasn't found (${res.status}).` };
     if (res.status !== 200) return { found: false, reason: `The artists page answered ${res.status}.`, tryHarder };
     try {
       const timeLeft = Math.max(MIN_PICK_TIME_MS, started + REQUEST_TIME_MS - Date.now());
-      const artists = await pickArtists(pageLinks(res.body, res.url), res.url, timeLeft);
+      // Some sites list their artists in the menu only (Castle's is in
+      // its header), so with hardly any links outside it, take the menu's.
+      const outside = pageLinks(res.body, res.url);
+      const links = outside.length >= FEW_LINKS ? outside : pageLinks(res.body, res.url, true);
+      const artists = await pickArtists(links, res.url, timeLeft);
       if (artists.length >= MIN_ARTISTS) return found("the gallery's artists page", res.url, artists);
     } catch (err) {
       console.log("[readArtists]", err);
@@ -378,4 +398,53 @@ export async function readArtists(
     if (artists.length) return found("the artists of the shop's works", sites[0].toString(), artists);
   }
   return { found: false, reason: "Couldn't find a list of artists on the site.", tryHarder };
+}
+
+// The picture an artist's own page gives for sharing (og:image or
+// twitter:image) — usually one of their works, or their portrait.
+function sharingPicture(html: string, base: string): string | null {
+  const doc = parseDocument(html);
+  const meta = DomUtils.findAll((e) => e.name === "meta", doc.children).find((m) =>
+    /^(og:image|og:image:url|twitter:image)$/i.test(m.attribs.property ?? m.attribs.name ?? ""),
+  );
+  const url = meta?.attribs.content ? urlOf(meta.attribs.content, base) : null;
+  return url ? sharpImage(url) : null;
+}
+
+// Fills in pictures for artists the gallery's artists page showed none
+// for, from each artist's own page — read directly, so it costs nothing.
+// Looks at up to PICTURES_PER_REQUEST of them from `from` on; returns the
+// artists and where to carry on, or null when done.
+export async function fillArtistPictures(
+  artists: MarketingFoundArtist[],
+  from: number,
+): Promise<{ artists: MarketingFoundArtist[]; next: number | null }> {
+  const deadline = Date.now() + PICTURES_TIME_MS;
+  const read = pageReader(false, deadline);
+  const todo: number[] = [];
+  let i = from;
+  for (; i < artists.length && todo.length < PICTURES_PER_REQUEST; i++) if (!artists[i].image && artists[i].url) todo.push(i);
+  const found = new Map<number, string>();
+  for (let k = 0; k < todo.length; k += PICTURES_AT_ONCE) {
+    if (Date.now() > deadline) {
+      i = todo[k];
+      break;
+    }
+    await Promise.all(
+      todo.slice(k, k + PICTURES_AT_ONCE).map(async (j) => {
+        const res = await read(artists[j].url!);
+        if ("error" in res || res.status !== 200) return;
+        const picture = sharingPicture(res.body, res.url);
+        if (picture) found.set(j, picture);
+      }),
+    );
+  }
+  // One picture on several artists' pages is the site's own, not theirs.
+  const counts = new Map<string, number>();
+  for (const a of [...artists.map((x) => x.image), ...found.values()]) if (a) counts.set(a, (counts.get(a) ?? 0) + 1);
+  const updated = artists.map((a, j) => {
+    const picture = found.get(j);
+    return picture && (counts.get(picture) ?? 0) < LOGO_REPEATS ? { ...a, image: picture } : a;
+  });
+  return { artists: updated, next: i < artists.length ? i : null };
 }
