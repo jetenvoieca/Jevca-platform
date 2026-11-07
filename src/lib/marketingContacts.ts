@@ -53,6 +53,24 @@ export const WORKS_LABEL: Record<MarketingWorksType, string> = {
 };
 export const CURRENCY_SIGN: Record<MarketingCurrency, string> = { GBP: "£", EUR: "€", USD: "$" };
 
+// What a country's prices are probably in (2026-11-07 — for Find prices
+// and the price tag on a gallery's tile).
+export function countryCurrency(country: string): MarketingCurrency | null {
+  const c = country
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "")
+    .toLowerCase();
+  if (/united kingdom|\buk\b|england|scotland|wales|northern ireland|great britain/.test(c)) return "GBP";
+  if (/united states|\busa?\b|america/.test(c)) return "USD";
+  if (
+    /france|italy|italia|spain|espana|germany|netherlands|belgium|portugal|ireland|austria|luxembourg|monaco|greece|finland/.test(
+      c,
+    )
+  )
+    return "EUR";
+  return null;
+}
+
 // A contact's two price bands (2026-11-06).
 export const PRICE_BANDS = [
   { min: "originalsMin", max: "originalsMax", label: "Originals" },

@@ -1,5 +1,10 @@
 import { fetchPublicPage } from "@/lib/publicFetch";
-import type { MarketingCurrency, MarketingPriceBandFind, MarketingPriceFind } from "@/lib/marketingContacts";
+import {
+  countryCurrency,
+  type MarketingCurrency,
+  type MarketingPriceBandFind,
+  type MarketingPriceFind,
+} from "@/lib/marketingContacts";
 
 // Contacts → Find prices (2026-11-07, Craig's request): reads a
 // gallery's shop page (or, without one, its website) and works out what
@@ -187,20 +192,6 @@ function textItems(html: string): Item[] {
     if (price !== null) items.push({ title: "", about, price, currency: currencyOf(m[1] ?? m[4]) });
   }
   return items;
-}
-
-// What a country's prices are probably in.
-function countryCurrency(country: string): MarketingCurrency | null {
-  const c = plain(country);
-  if (/united kingdom|\buk\b|england|scotland|wales|northern ireland|great britain/.test(c)) return "GBP";
-  if (/united states|\busa?\b|america/.test(c)) return "USD";
-  if (
-    /france|italy|italia|spain|espana|germany|netherlands|belgium|portugal|ireland|austria|luxembourg|monaco|greece|finland/.test(
-      c,
-    )
-  )
-    return "EUR";
-  return null;
 }
 
 // The cheapest and dearest of some works.

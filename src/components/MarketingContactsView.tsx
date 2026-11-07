@@ -10,6 +10,7 @@ import {
   CURRENCIES,
   CURRENCY_SIGN,
   EMPTY_CONTACT,
+  countryCurrency,
   PRICE_BANDS,
   WORKS_LABEL,
   WORKS_TYPES,
@@ -47,7 +48,7 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // (2026-11-06). A contact can have its shop page, and Find prices
 // suggests the price ranges of the contacts shown from what they sell
 // (MarketingPriceFinder, 2026-11-07) — for one gallery from the price
-// tag on its tile.
+// tag on its tile, showing the gallery's own currency.
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -232,7 +233,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
                       <path d="M9 1.2 12.6 4.4V16a1 1 0 0 1-1 1H6.4a1 1 0 0 1-1-1V4.4z" fill="currentColor" />
                       <circle cx="9" cy="4.6" r="0.9" fill="white" />
                       <text x="9" y="13.6" textAnchor="middle" fontSize="7" fontWeight="700" fill="white">
-                        $
+                        {CURRENCY_SIGN[c.priceCurrency ?? countryCurrency(c.country) ?? "USD"]}
                       </text>
                     </svg>
                   </button>
