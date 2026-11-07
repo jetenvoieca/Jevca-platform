@@ -18,6 +18,8 @@ const MIN_ARTISTS = 3;
 const MAX_ARTISTS = 200;
 const MAX_PAGES_TRIED = 3;
 const MAX_NAME = 60;
+// How far up from an artist's link to look for its card's picture.
+const CARD_DEPTH = 5;
 const SHOPIFY_PAGES = 2;
 const SHOPIFY_PAGE_SIZE = 250;
 
@@ -95,7 +97,14 @@ function artistsPages(html: string, base: string): string[] {
 // The artists an artists page links to: links to a page one step under
 // an artists path (…/artists/jane-doe), merged by address — a grid often
 // links each artist twice, once from the picture and once from the name.
+// A site whose artists' pages aren't under such a path (…/jane-doe) is
+// read by its grid instead (artistsInGrid, 2026-11-07 — DTR Modern).
 function artistsOn(html: string, pageUrl: string): MarketingFoundArtist[] {
+  const under = artistsUnderPath(html, pageUrl);
+  return under.length >= MIN_ARTISTS ? under : artistsInGrid(html, pageUrl);
+}
+
+function artistsUnderPath(html: string, pageUrl: string): MarketingFoundArtist[] {
   const page = new URL(pageUrl);
   const found = new Map<string, MarketingFoundArtist>();
   for (const { a, url } of links(html, pageUrl)) {
@@ -141,6 +150,61 @@ async function shopifyArtists(base: string, deadline: number): Promise<Marketing
   }
   // One vendor is the gallery itself, not its artists.
   return byVendor.size >= MIN_ARTISTS ? [...byVendor.values()].slice(0, MAX_ARTISTS) : [];
+}
+
+// A link's address as one page: without its # part or a closing "/".
+const linkKey = (url: URL) => url.toString().replace(/\/$/, "");
+
+const isTag = (n: unknown): n is Element => !!n && (n as Element).type === "tag";
+const LAYOUT = /^(nav|header|footer)$/;
+
+// The artists in a page's grid or list of cards: each card a link to one
+// page of the site, usually with a picture. The cards are grouped by the
+// element holding them, and the largest group is taken — the site's menu,
+// header and footer aside.
+function artistsInGrid(html: string, pageUrl: string): MarketingFoundArtist[] {
+  const page = new URL(pageUrl);
+  const here = page.pathname.replace(/\/$/, "");
+  const groups = new Map<Element, Map<string, MarketingFoundArtist>>();
+  for (const { a, url } of links(html, pageUrl)) {
+    const path = url.pathname.replace(/\/$/, "");
+    if (!sameSite(url, page) || url.search || !path || path === here) continue;
+    let inLayout = false;
+    for (let n = a.parent; isTag(n); n = n.parent) if (LAYOUT.test(n.name)) inLayout = true;
+    if (inLayout) continue;
+
+    // The card: the nearest wrapper with a picture, else the link's own.
+    let card: Element = isTag(a.parent) ? a.parent : a;
+    for (let n: Element = a, step = 0; step < CARD_DEPTH && isTag(n.parent); step++) {
+      n = n.parent;
+      if (DomUtils.findOne((e) => e.name === "img" || /url\(/i.test(e.attribs.style ?? ""), [n])) {
+        card = n;
+        break;
+      }
+    }
+    if (!isTag(card.parent)) continue;
+    // A card links to one page only — else it's a menu or a block of text.
+    const key = linkKey(url);
+    const others = DomUtils.findAll((e) => e.name === "a" && !!e.attribs.href, [card]).some((o) => {
+      try {
+        const u = new URL(o.attribs.href, pageUrl);
+        u.hash = "";
+        return linkKey(u) !== key;
+      } catch {
+        return false;
+      }
+    });
+    if (others) continue;
+
+    const group = groups.get(card.parent) ?? new Map<string, MarketingFoundArtist>();
+    const was = group.get(key) ?? { name: "", url: key, image: null };
+    group.set(key, { ...was, name: was.name || nameOf(a), image: was.image || imageIn(card, pageUrl) });
+    groups.set(card.parent, group);
+  }
+  const largest = [...groups.values()]
+    .map((g) => [...g.values()].filter((f) => f.name))
+    .sort((x, y) => y.length - x.length)[0];
+  return largest && largest.length >= MIN_ARTISTS ? largest.slice(0, MAX_ARTISTS) : [];
 }
 
 const byName = (a: MarketingFoundArtist, b: MarketingFoundArtist) => a.name.localeCompare(b.name);
