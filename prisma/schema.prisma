@@ -2931,6 +2931,9 @@ model MarketingContact {
   email         String?
   phone         String?
   website       String?
+  // The page of its site listing works for sale — where Find prices
+  // looks first (2026-11-07).
+  shopUrl       String?
   // A photo of the gallery, as a link to it on the gallery's own site —
   // shown, not copied (2026-11-06).
   photoUrl      String?

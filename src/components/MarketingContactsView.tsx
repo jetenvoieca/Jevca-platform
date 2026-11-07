@@ -22,6 +22,7 @@ import {
 } from "@/lib/marketingContacts";
 import AddIconButton from "@/components/AddIconButton";
 import MarketingContactsImport from "@/components/MarketingContactsImport";
+import MarketingPriceFinder from "@/components/MarketingPriceFinder";
 import FormModal from "@/components/FormModal";
 import { useAutoSave } from "@/components/useAutoSave";
 import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberFormParts";
@@ -43,7 +44,9 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // set out (2026-11-06): prices and works first, then contact details.
 // Contacts show as a list or as tiles with a photo of the gallery — a
 // link to it on the gallery's own site — and a link to its website
-// (2026-11-06).
+// (2026-11-06). A contact can have its shop page, and Find prices
+// suggests the price ranges of the contacts shown from what they sell
+// (MarketingPriceFinder, 2026-11-07).
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -92,6 +95,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   // The contact being edited — "new" for Add.
   const [editing, setEditing] = useState<MarketingContactRow | "new" | null>(null);
   const [importing, setImporting] = useState(false);
+  const [findingPrices, setFindingPrices] = useState(false);
 
   // Every tag a contact has, by name.
   const tags = useMemo(() => {
@@ -119,6 +123,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         c.email,
         c.phone,
         c.website,
+        c.shopUrl,
         c.instagram,
         c.tiktok,
         c.town,
@@ -148,7 +153,10 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
       <div className="mb-1 flex items-center gap-2">
         <h1 className="text-2xl font-semibold text-neutral-900">Contacts</h1>
         <AddIconButton label="Add a contact" onClick={() => setEditing("new")} />
-        <button type="button" onClick={() => setImporting(true)} className={`${secondaryButtonCls} ml-auto`}>
+        <button type="button" onClick={() => setFindingPrices(true)} className={`${secondaryButtonCls} ml-auto`}>
+          Find prices
+        </button>
+        <button type="button" onClick={() => setImporting(true)} className={secondaryButtonCls}>
           Import
         </button>
       </div>
@@ -293,6 +301,13 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
           tagNames={tags.map((t) => t.name)}
           onImported={async () => setContacts(await listMarketingContacts())}
           onClose={() => setImporting(false)}
+        />
+      )}
+      {findingPrices && (
+        <MarketingPriceFinder
+          contacts={shown.filter((c) => c.shopUrl.trim() || c.website.trim())}
+          onSaved={(saved) => setContacts((old) => old.map((c) => (c.id === saved.id ? saved : c)))}
+          onClose={() => setFindingPrices(false)}
         />
       )}
     </div>
@@ -532,6 +547,7 @@ function ContactModal({
         {field("phone", "Phone", "tel")}
       </div>
       {field("website", "Website")}
+      {field("shopUrl", "Shop page (link to the works for sale)")}
       <div>
         {field("photoUrl", "Photo (link to an image on the gallery's site)")}
         {values.photoUrl.trim() && <Photo url={values.photoUrl.trim()} className="mt-2 aspect-[4/3] w-48 rounded-md" />}

@@ -2,6 +2,7 @@
 
 import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
+import { findPrices } from "@/lib/priceFinder";
 import type { Prisma } from "@/generated/prisma/client";
 import {
   CURRENCIES,
@@ -14,6 +15,7 @@ import {
   type MarketingCurrency,
   type MarketingImportResult,
   type MarketingImportRow,
+  type MarketingPriceFind,
   type MarketingWorksType,
 } from "@/lib/marketingContacts";
 
@@ -25,7 +27,8 @@ import {
 // price bands for originals and prints, works types and tags
 // (2026-11-06) — a tag added that doesn't exist yet is created, and one
 // no contact has any more goes.
-// Contacts can also be imported from a CSV (2026-11-06).
+// Contacts can also be imported from a CSV (2026-11-06), and their price
+// bands found from their shop pages (2026-11-07, see priceFinder.ts).
 
 const MAX_FIELD = 300;
 const MAX_NOTES = 5000;
@@ -47,6 +50,7 @@ const select = {
   email: true,
   phone: true,
   website: true,
+  shopUrl: true,
   photoUrl: true,
   instagram: true,
   tiktok: true,
@@ -72,6 +76,7 @@ type Stored = {
   email: string | null;
   phone: string | null;
   website: string | null;
+  shopUrl: string | null;
   photoUrl: string | null;
   instagram: string | null;
   tiktok: string | null;
@@ -101,6 +106,7 @@ function toRow(c: Stored): MarketingContactRow {
     email: c.email ?? "",
     phone: c.phone ?? "",
     website: c.website ?? "",
+    shopUrl: c.shopUrl ?? "",
     photoUrl: c.photoUrl ?? "",
     instagram: c.instagram ?? "",
     tiktok: c.tiktok ?? "",
@@ -134,6 +140,34 @@ const refs = (v: unknown, max: number) =>
     return name ? [{ id: typeof l.id === "string" && l.id ? l.id : null, name }] : [];
   });
 
+type Prices = Pick<
+  MarketingContactInput,
+  "originalsMin" | "originalsMax" | "printsMin" | "printsMax" | "priceCurrency"
+>;
+
+const tidyPrices = (input: Prices) => ({
+  originalsMin: price(input.originalsMin),
+  originalsMax: price(input.originalsMax),
+  printsMin: price(input.printsMin),
+  printsMax: price(input.printsMax),
+});
+
+// The prices' currency — needed when there are any — or what's wrong
+// with the bands.
+function checkedPrices(
+  prices: ReturnType<typeof tidyPrices>,
+  currency: unknown,
+): { error: string } | { currency: MarketingCurrency | null } {
+  for (const band of PRICE_BANDS) {
+    const [min, max] = [prices[band.min], prices[band.max]];
+    if (min !== null && max !== null && min > max)
+      return { error: `${band.label}: the lowest price is above the highest.` };
+  }
+  const known = CURRENCIES.includes(currency as MarketingCurrency) ? (currency as MarketingCurrency) : null;
+  if (Object.values(prices).some((p) => p !== null) && !known) return { error: "Choose the prices' currency." };
+  return { currency: known };
+}
+
 // What was typed, checked and tidied — or what's wrong with it.
 function checked(input: MarketingContactInput) {
   if (input.type !== "GALLERY" && input.type !== "ARTIST") return { error: "Choose Gallery or Artist." };
@@ -141,21 +175,13 @@ function checked(input: MarketingContactInput) {
   if (!name) return { error: "A name is needed." };
   const email = text(input.email)?.toLowerCase() ?? null;
   if (email && !EMAIL.test(email)) return { error: "That email doesn't look right." };
-  const prices = {
-    originalsMin: price(input.originalsMin),
-    originalsMax: price(input.originalsMax),
-    printsMin: price(input.printsMin),
-    printsMax: price(input.printsMax),
-  };
-  for (const band of PRICE_BANDS) {
-    const [min, max] = [prices[band.min], prices[band.max]];
-    if (min !== null && max !== null && min > max)
-      return { error: `${band.label}: the lowest price is above the highest.` };
-  }
+  const prices = tidyPrices(input);
   const photoUrl = text(input.photoUrl, MAX_URL);
   if (photoUrl && !WEB_ADDRESS.test(photoUrl)) return { error: "The photo needs a full web address (https://…)." };
-  const priceCurrency = CURRENCIES.includes(input.priceCurrency as MarketingCurrency) ? input.priceCurrency : null;
-  if (Object.values(prices).some((p) => p !== null) && !priceCurrency) return { error: "Choose the prices' currency." };
+  const shopUrl = text(input.shopUrl, MAX_URL);
+  if (shopUrl && !WEB_ADDRESS.test(shopUrl)) return { error: "The shop page needs a full web address (https://…)." };
+  const priceCurrency = checkedPrices(prices, input.priceCurrency);
+  if ("error" in priceCurrency) return { error: priceCurrency.error };
   const worksTypes = WORKS_TYPES.filter((w) => Array.isArray(input.worksTypes) && input.worksTypes.includes(w));
   return {
     data: {
@@ -165,6 +191,7 @@ function checked(input: MarketingContactInput) {
       email,
       phone: text(input.phone),
       website: text(input.website),
+      shopUrl,
       photoUrl,
       instagram: text(input.instagram),
       tiktok: text(input.tiktok),
@@ -172,7 +199,7 @@ function checked(input: MarketingContactInput) {
       country: text(input.country),
       notes: text(input.notes, MAX_NOTES),
       ...prices,
-      priceCurrency,
+      priceCurrency: priceCurrency.currency,
       worksTypes,
     },
     links: refs(input.links, MAX_LINKS),
@@ -294,11 +321,6 @@ const siteKey = (v: string | null) =>
     .replace(/^www\./, "")
     .split(/[/?#]/)[0] || null;
 
-type Prices = Pick<
-  MarketingContactInput,
-  "originalsMin" | "originalsMax" | "printsMin" | "printsMax" | "priceCurrency"
->;
-
 // An imported row's prices for a contact already there: all of them if
 // it has none; otherwise, in the same currency, any band it hasn't got;
 // otherwise none.
@@ -369,6 +391,7 @@ export async function importMarketingContacts(rows: MarketingImportRow[]): Promi
             email: old.email ?? data.email,
             phone: old.phone ?? data.phone,
             website: old.website ?? data.website,
+            shopUrl: old.shopUrl ?? data.shopUrl,
             photoUrl: old.photoUrl ?? data.photoUrl,
             instagram: old.instagram ?? data.instagram,
             tiktok: old.tiktok ?? data.tiktok,
@@ -398,4 +421,34 @@ export async function importMarketingContacts(rows: MarketingImportRow[]): Promi
     }
   }
   return result;
+}
+
+// Find prices (2026-11-07): what a contact's shop page (or website)
+// suggests for its price bands. Saves nothing — see saveMarketingPrices.
+export async function findMarketingPrices(id: string): Promise<MarketingPriceFind> {
+  await requireAdmin();
+  const contact = await db.marketingContact.findUnique({
+    where: { id },
+    select: { shopUrl: true, website: true, country: true, priceCurrency: true },
+  });
+  if (!contact) return { found: false, reason: "That contact has gone." };
+  return findPrices(contact);
+}
+
+// Saves a contact's price bands and their currency — what Find prices
+// suggested, as accepted. Returns the contact as it is now.
+export async function saveMarketingPrices(
+  id: string,
+  input: Prices,
+): Promise<{ contact: MarketingContactRow } | { error: string }> {
+  await requireAdmin();
+  const prices = tidyPrices(input);
+  const currency = checkedPrices(prices, input.priceCurrency);
+  if ("error" in currency) return { error: currency.error };
+  const saved = await db.marketingContact.updateMany({
+    where: { id },
+    data: { ...prices, priceCurrency: currency.currency },
+  });
+  if (saved.count === 0) return { error: "That contact has gone." };
+  return { contact: toRow(await db.marketingContact.findUniqueOrThrow({ where: { id }, select })) };
 }

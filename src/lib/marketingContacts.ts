@@ -21,6 +21,7 @@ export type MarketingContactInput = {
   email: string;
   phone: string;
   website: string;
+  shopUrl: string;
   photoUrl: string;
   instagram: string;
   tiktok: string;
@@ -65,6 +66,7 @@ export const EMPTY_CONTACT: MarketingContactInput = {
   email: "",
   phone: "",
   website: "",
+  shopUrl: "",
   photoUrl: "",
   instagram: "",
   tiktok: "",
@@ -81,6 +83,26 @@ export const EMPTY_CONTACT: MarketingContactInput = {
   tags: [],
 };
 
+// Find prices (2026-11-07): what a contact's shop page suggests for
+// one of its bands — the cheapest and dearest works it found, and how
+// many works it counted.
+export type MarketingPriceBandFind = { min: number; max: number; count: number; lowest: string; highest: string };
+export type MarketingPriceFind =
+  | {
+      found: true;
+      // Where the prices came from, e.g. "the shop's product list (Shopify)".
+      source: string;
+      // The page read.
+      url: string;
+      currency: MarketingCurrency;
+      // True when the page didn't say the currency, so the contact's own
+      // or its country's was taken.
+      currencyAssumed: boolean;
+      originals: MarketingPriceBandFind | null;
+      prints: MarketingPriceBandFind | null;
+    }
+  | { found: false; reason: string };
+
 // Import (2026-11-06): the CSV's columns, as the template has them.
 // Headings are matched ignoring capitals and spaces; Type is Gallery or
 // Artist (blank is Gallery); Works and Tags list several with ";"
@@ -92,6 +114,7 @@ export const IMPORT_COLUMNS = [
   "Email",
   "Phone",
   "Website",
+  "Shop",
   "Photo",
   "Instagram",
   "TikTok",
@@ -148,6 +171,7 @@ export function contactFromCsv(record: Record<string, string>): MarketingContact
     email: get("Email"),
     phone: get("Phone"),
     website: get("Website"),
+    shopUrl: get("Shop"),
     photoUrl: get("Photo"),
     instagram: get("Instagram"),
     tiktok: get("TikTok"),
