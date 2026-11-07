@@ -44,6 +44,18 @@ async function publicAddress(url: URL) {
   }
 }
 
+// Why a site couldn't be reached, from the network's error code.
+function whyUnreachable(err: unknown) {
+  const cause = (err as { cause?: { code?: string } } | null)?.cause;
+  const code = cause?.code ?? "";
+  if (/CERT|SSL|TLS|SELF_SIGNED|UNABLE_TO_VERIFY|LEAF_SIGNATURE/.test(code))
+    return `Couldn't reach it — its security certificate didn't check out (${code}).`;
+  if (code === "ENOTFOUND" || code === "EAI_AGAIN") return "Couldn't reach it — the address wasn't found.";
+  if (code === "ECONNRESET" || code === "ECONNREFUSED" || code === "UND_ERR_SOCKET")
+    return `Couldn't reach it — the site refused this server (${code}).`;
+  return code ? `Couldn't reach it (${code}).` : "Couldn't reach it.";
+}
+
 export type PublicPage = { url: string; status: number; contentType: string; body: string };
 
 // The page at `address` as text, or why not. Gives up at `deadline`
@@ -71,7 +83,9 @@ export async function fetchPublicPage(
         headers: { "User-Agent": USER_AGENT, Accept: accept, "Accept-Language": "en-GB,en;q=0.8" },
       });
     } catch (err) {
-      return { error: err instanceof Error && err.name === "TimeoutError" ? "Took too long." : "Couldn't reach it." };
+      if (err instanceof Error && err.name === "TimeoutError") return { error: "Took too long." };
+      console.log(`[publicFetch] ${url.host}:`, err);
+      return { error: whyUnreachable(err) };
     }
     const next = res.headers.get("location");
     if (res.status >= 300 && res.status < 400 && next) {
