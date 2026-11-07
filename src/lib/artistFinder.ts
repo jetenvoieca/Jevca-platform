@@ -72,6 +72,17 @@ function urlOf(href: string, base: string): URL | null {
 
 const anchors = (nodes: Parameters<typeof DomUtils.findAll>[1]) => DomUtils.findAll((e) => e.name === "a" && !!e.attribs.href, nodes);
 
+// Wix pages load each picture first as a tiny blurred stand-in
+// (…/v1/fill/w_147,h_191,…,blur_2,…/name.jpg) and sharpen it with
+// scripts, so ask Wix for a sharp square thumbnail instead (2026-11-07,
+// Carina Haslam).
+const THUMB_PX = 480;
+function sharpImage(url: URL): string {
+  if (url.hostname === "static.wixstatic.com")
+    url.pathname = url.pathname.replace(/\/v1\/[a-z]+\/[^/]+\//, `/v1/fill/w_${THUMB_PX},h_${THUMB_PX},al_c,q_85/`);
+  return url.toString();
+}
+
 // An image address from an <img> (or lazy-loaded one), or a background.
 function imageIn(node: Element, base: string): string | null {
   const img = DomUtils.findOne((e) => e.name === "img", [node]);
@@ -89,7 +100,7 @@ function imageIn(node: Element, base: string): string | null {
   for (const c of [...candidates, bg]) {
     if (!c || c.startsWith("data:")) continue;
     const url = urlOf(c, base);
-    if (url) return url.toString();
+    if (url) return sharpImage(url);
   }
   return null;
 }
