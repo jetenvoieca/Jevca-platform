@@ -46,7 +46,8 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // link to it on the gallery's own site — and a link to its website
 // (2026-11-06). A contact can have its shop page, and Find prices
 // suggests the price ranges of the contacts shown from what they sell
-// (MarketingPriceFinder, 2026-11-07).
+// (MarketingPriceFinder, 2026-11-07) — for one gallery from the price
+// tag on its tile.
 
 const TYPE_LABEL: Record<MarketingContactType, string> = { GALLERY: "Gallery", ARTIST: "Artist" };
 // What each type lists: a gallery its artists, an artist their galleries.
@@ -95,7 +96,10 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   // The contact being edited — "new" for Add.
   const [editing, setEditing] = useState<MarketingContactRow | "new" | null>(null);
   const [importing, setImporting] = useState(false);
-  const [findingPrices, setFindingPrices] = useState(false);
+  // The contacts Find prices is looking at, and whether it was opened
+  // from one tile (so starts straight away).
+  const [findingPrices, setFindingPrices] = useState<{ contacts: MarketingContactRow[]; one: boolean } | null>(null);
+  const canFindPrices = (c: MarketingContactRow) => !!(c.shopUrl.trim() || c.website.trim());
 
   // Every tag a contact has, by name.
   const tags = useMemo(() => {
@@ -153,7 +157,11 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
       <div className="mb-1 flex items-center gap-2">
         <h1 className="text-2xl font-semibold text-neutral-900">Contacts</h1>
         <AddIconButton label="Add a contact" onClick={() => setEditing("new")} />
-        <button type="button" onClick={() => setFindingPrices(true)} className={`${secondaryButtonCls} ml-auto`}>
+        <button
+          type="button"
+          onClick={() => setFindingPrices({ contacts: shown.filter(canFindPrices), one: false })}
+          className={`${secondaryButtonCls} ml-auto`}
+        >
           Find prices
         </button>
         <button type="button" onClick={() => setImporting(true)} className={secondaryButtonCls}>
@@ -206,34 +214,53 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
             >
               <button type="button" onClick={() => setEditing(c)} className="block w-full text-left">
                 <Photo url={c.photoUrl} className="aspect-[4/3] w-full" />
-                <div className="py-2 pl-3 pr-10">
+                <div className="py-2 pl-3 pr-20">
                   <p className="truncate text-sm font-medium text-neutral-900">{c.name}</p>
                   <p className="truncate text-xs text-neutral-500">{c.town || "\u00a0"}</p>
                 </div>
               </button>
-              {c.website && (
-                <a
-                  href={websiteLink(c.website)}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  aria-label={`${c.name} website`}
-                  title="Website"
-                  className="absolute bottom-2.5 right-2.5 rounded p-1 text-neutral-700 hover:bg-neutral-100"
-                >
-                  <svg
-                    width="18"
-                    height="18"
-                    viewBox="0 0 18 18"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="1.3"
-                    aria-hidden
+              <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1">
+                {canFindPrices(c) && (
+                  <button
+                    type="button"
+                    onClick={() => setFindingPrices({ contacts: [c], one: true })}
+                    aria-label={`Find ${c.name} prices`}
+                    title="Find prices"
+                    className="rounded p-1 text-neutral-900 hover:bg-neutral-100"
                   >
-                    <circle cx="9" cy="9" r="7.5" />
-                    <path d="M1.5 9h15M9 1.5c2 2.1 3 4.6 3 7.5s-1 5.4-3 7.5c-2-2.1-3-4.6-3-7.5s1-5.4 3-7.5z" />
-                  </svg>
-                </a>
-              )}
+                    <svg width="18" height="18" viewBox="0 0 18 18" aria-hidden>
+                      <path d="M9 1.2 12.6 4.4V16a1 1 0 0 1-1 1H6.4a1 1 0 0 1-1-1V4.4z" fill="currentColor" />
+                      <circle cx="9" cy="4.6" r="0.9" fill="white" />
+                      <text x="9" y="13.6" textAnchor="middle" fontSize="7" fontWeight="700" fill="white">
+                        $
+                      </text>
+                    </svg>
+                  </button>
+                )}
+                {c.website && (
+                  <a
+                    href={websiteLink(c.website)}
+                    target="_blank"
+                    rel="noopener noreferrer"
+                    aria-label={`${c.name} website`}
+                    title="Website"
+                    className="rounded p-1 text-neutral-700 hover:bg-neutral-100"
+                  >
+                    <svg
+                      width="18"
+                      height="18"
+                      viewBox="0 0 18 18"
+                      fill="none"
+                      stroke="currentColor"
+                      strokeWidth="1.3"
+                      aria-hidden
+                    >
+                      <circle cx="9" cy="9" r="7.5" />
+                      <path d="M1.5 9h15M9 1.5c2 2.1 3 4.6 3 7.5s-1 5.4-3 7.5c-2-2.1-3-4.6-3-7.5s1-5.4 3-7.5z" />
+                    </svg>
+                  </a>
+                )}
+              </div>
             </div>
           ))}
         </div>
@@ -305,9 +332,10 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
       )}
       {findingPrices && (
         <MarketingPriceFinder
-          contacts={shown.filter((c) => c.shopUrl.trim() || c.website.trim())}
+          contacts={findingPrices.contacts}
+          startNow={findingPrices.one}
           onSaved={(saved) => setContacts((old) => old.map((c) => (c.id === saved.id ? saved : c)))}
-          onClose={() => setFindingPrices(false)}
+          onClose={() => setFindingPrices(null)}
         />
       )}
     </div>

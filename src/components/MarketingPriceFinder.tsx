@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { findMarketingPrices, saveMarketingPrices } from "@/lib/actions/marketingContacts";
 import {
   CURRENCY_SIGN,
@@ -18,7 +18,8 @@ import { secondaryButtonCls } from "@/components/subscriberFormParts";
 // suggests their originals and prints price ranges (findMarketingPrices).
 // Each suggestion shows where it came from and the cheapest and dearest
 // works counted; a range is ticked when the contact hasn't got one yet.
-// Nothing is saved until "Save chosen".
+// Nothing is saved until "Save chosen". Opened from one gallery's tile
+// (2026-11-07) it starts looking straight away.
 
 const AT_ONCE = 4;
 
@@ -62,11 +63,15 @@ function withChosen(c: MarketingContactRow, f: MarketingPriceFind, chosen: Set<s
 
 export default function MarketingPriceFinder({
   contacts,
+  startNow = false,
   onSaved,
   onClose,
 }: {
-  // The contacts to look at — those shown with a shop page or website.
+  // The contacts to look at — those shown with a shop page or website,
+  // or the one whose tile it was opened from.
   contacts: MarketingContactRow[];
+  // Look straight away, without the Find prices step.
+  startNow?: boolean;
   onSaved: (contact: MarketingContactRow) => void;
   onClose: () => void;
 }) {
@@ -77,8 +82,11 @@ export default function MarketingPriceFinder({
   const [saveProblems, setSaveProblems] = useState<Record<string, string>>({});
   const [savedCount, setSavedCount] = useState(0);
   const busy = stage === "finding" || stage === "saving";
+  const started = useRef(false);
 
   const find = async () => {
+    if (started.current) return;
+    started.current = true;
     setStage("finding");
     const queue = [...contacts];
     const work = async () => {
@@ -100,6 +108,12 @@ export default function MarketingPriceFinder({
     await Promise.all(Array.from({ length: AT_ONCE }, work));
     setStage("found");
   };
+
+  useEffect(() => {
+    if (startNow) find();
+    // Once, when opened.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const toggle = (id: string, label: string) =>
     setChosen((old) => {
