@@ -20,7 +20,8 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // one has no email) keeps what it has — its blanks are filled and the
 // row's works and tags added; see importMarketingContacts.
 
-const BATCH = 100;
+// Rows sent per call — importMarketingContacts takes up to 10.
+const BATCH = 10;
 const PREVIEW = 8;
 
 const plural = (n: number, word: string) => `${n} ${word}${n === 1 ? "" : "s"}`;
@@ -75,6 +76,8 @@ export default function MarketingContactsImport({
   const [tagAll, setTagAll] = useState("");
   const [done, setDone] = useState<number | null>(null);
   const [result, setResult] = useState<MarketingImportResult | null>(null);
+  // Why an import stopped part way, if it did.
+  const [stopped, setStopped] = useState("");
   const importing = done !== null && !result;
 
   const read = async (file: File) => {
@@ -100,12 +103,20 @@ export default function MarketingContactsImport({
     );
     const total: MarketingImportResult = { created: 0, merged: 0, skipped: [] };
     setDone(0);
+    setStopped("");
     for (let i = 0; i < withTag.length; i += BATCH) {
-      const batch = await importMarketingContacts(withTag.slice(i, i + BATCH));
-      total.created += batch.created;
-      total.merged += batch.merged;
-      total.skipped.push(...batch.skipped);
-      setDone(Math.min(i + BATCH, withTag.length));
+      try {
+        const batch = await importMarketingContacts(withTag.slice(i, i + BATCH));
+        total.created += batch.created;
+        total.merged += batch.merged;
+        total.skipped.push(...batch.skipped);
+        setDone(Math.min(i + BATCH, withTag.length));
+      } catch {
+        setStopped(
+          `The import stopped at line ${withTag[i].line} — the rows before it were saved. Importing the file again is safe: rows already here are matched, not added twice.`,
+        );
+        break;
+      }
     }
     setResult(total);
     onImported();
@@ -119,6 +130,7 @@ export default function MarketingContactsImport({
             {plural(result.created, "contact")} added, {plural(result.merged, "contact")} already there updated
             {result.skipped.length > 0 && `, ${plural(result.skipped.length, "row")} skipped`}.
           </p>
+          {stopped && <p className="rounded-md bg-red-50 p-2 text-xs text-red-700">{stopped}</p>}
           {result.skipped.length > 0 && (
             <div className="max-h-48 overflow-y-auto rounded-md bg-amber-50 p-2 text-xs text-amber-800">
               {result.skipped.map((s) => (

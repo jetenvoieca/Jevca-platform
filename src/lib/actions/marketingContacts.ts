@@ -37,7 +37,10 @@ const WEB_ADDRESS = /^https?:\/\/\S+$/i;
 const MAX_LINKS = 500;
 const MAX_TAGS = 50;
 const MAX_PRICE = 100_000_000;
-const MAX_IMPORT_BATCH = 100;
+// Each row takes about half a second to save, so a call stays well
+// inside the server's 30-second limit (2026-11-07: 80 rows at once
+// timed out).
+const MAX_IMPORT_BATCH = 10;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const otherType = (t: MarketingContactType): MarketingContactType => (t === "GALLERY" ? "ARTIST" : "GALLERY");
