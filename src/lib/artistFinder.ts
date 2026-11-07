@@ -38,8 +38,10 @@ const MIN_ARTISTS = 2;
 const MAX_ARTISTS = 200;
 const MAX_LINKS = 400;
 const MAX_TEXT = 80;
-// How far up from a link to look for its card's picture.
-const CARD_DEPTH = 5;
+// How far up from a link to look for its card's picture — the search
+// stops sooner at a wrapper holding links elsewhere. Squarespace image
+// cards put the picture 6 levels above the button (2026-11-07, Cameron).
+const CARD_DEPTH = 10;
 const SHOPIFY_PAGES = 2;
 const SHOPIFY_PAGE_SIZE = 250;
 
