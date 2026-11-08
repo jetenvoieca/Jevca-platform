@@ -161,14 +161,17 @@ export default function ArtistPagesView({
 }
 
 // Live or Hidden: its heading and its pages; dropping a page on its
-// empty space puts it at the end. Each list takes half the panel, or
-// more when its pages need it (the panel then scrolls).
+// empty space puts it at the end. Hidden sits straight under Live
+// (Craig, 8 Nov) and takes the rest of the panel; Live keeps a little
+// space below its pages to drop onto.
 function PageList({ visible, children }: { visible: boolean; children: React.ReactNode }) {
   const drop = useDroppable({ id: `list:${visible}`, data: { kind: "list", visible } satisfies PageDropData });
   return (
     <div
       ref={drop.setNodeRef}
-      className={`flex min-h-48 flex-[1_0_auto] flex-col gap-1.5 rounded-sm pt-5 ${drop.isOver ? "bg-neutral-50" : ""}`}
+      className={`flex flex-col gap-1.5 rounded-sm pt-5 ${visible ? "flex-none pb-8" : "min-h-48 flex-[1_0_auto]"} ${
+        drop.isOver ? "bg-neutral-50" : ""
+      }`}
     >
       <h3 className="mb-2 text-center text-lg text-neutral-800">{visible ? "Live Pages" : "Hidden Pages"}</h3>
       {children}
