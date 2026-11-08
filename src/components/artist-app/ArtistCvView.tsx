@@ -6,7 +6,12 @@ import { reorderProfileStories, type ProfileStoryRow } from "@/lib/actions/profi
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
 import ArtistProfileModal, { type ArtistProfile } from "@/components/artist-app/ArtistProfileModal";
 import { MainPanel, PanelHeading } from "@/components/artist-app/ArtistAppPanels";
-import { DragThumb, useArtistAppSensors } from "@/components/artist-app/artistAppDrag";
+import {
+  DragThumb,
+  TOUCH_DRAG_CLASS,
+  ignoreClickAfterDrag,
+  useArtistAppSensors,
+} from "@/components/artist-app/artistAppDrag";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import { PlayMark } from "@/components/SectionMediaView";
 
@@ -63,8 +68,14 @@ export default function ArtistCvView({
       <DndContext
         sensors={sensors}
         onDragStart={(e: DragStartEvent) => setDragging((e.active.data.current as ItemDragData | undefined) ?? null)}
-        onDragEnd={() => setDragging(null)}
-        onDragCancel={() => setDragging(null)}
+        onDragEnd={() => {
+          setDragging(null);
+          ignoreClickAfterDrag();
+        }}
+        onDragCancel={() => {
+          setDragging(null);
+          ignoreClickAfterDrag();
+        }}
       >
         <div className="mx-auto max-w-4xl">
           {error && <p className="mb-4 text-center text-sm text-red-600">{error}</p>}
@@ -202,7 +213,7 @@ function StoryTile({
       ref={drag.setNodeRef}
       {...drag.attributes}
       {...drag.listeners}
-      className={`cursor-grab [touch-action:manipulation] ${drag.isDragging ? "opacity-30" : ""} ${
+      className={`cursor-grab ${TOUCH_DRAG_CLASS} ${drag.isDragging ? "opacity-30" : ""} ${
         drag.target ? "outline outline-4 outline-neutral-400" : ""
       }`}
     >

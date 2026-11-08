@@ -22,7 +22,12 @@ import { movePage, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import { MainPanel, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
-import { DragThumb, useArtistAppSensors } from "@/components/artist-app/artistAppDrag";
+import {
+  DragThumb,
+  TOUCH_DRAG_CLASS,
+  ignoreClickAfterDrag,
+  useArtistAppSensors,
+} from "@/components/artist-app/artistAppDrag";
 import type { SiteWork } from "@/lib/siteWorks";
 
 // Arrange Pages (2026-11-08, Craig's mockup): the site's Live and Hidden
@@ -112,6 +117,7 @@ export default function ArtistPagesView({
 
   const onDragEnd = (e: DragEndEvent) => {
     setDragging(null);
+    ignoreClickAfterDrag();
     const from = e.active.data.current as DragData | undefined;
     const to = e.over?.data.current as PageDropData | undefined;
     if (from?.type !== "page" || !to) return;
@@ -129,7 +135,10 @@ export default function ArtistPagesView({
         collisionDetection={collisions}
         onDragStart={(e: DragStartEvent) => setDragging((e.active.data.current as DragData | undefined) ?? null)}
         onDragEnd={onDragEnd}
-        onDragCancel={() => setDragging(null)}
+        onDragCancel={() => {
+          setDragging(null);
+          ignoreClickAfterDrag();
+        }}
       >
         <MainPanel heading={selected?.title ?? "Pages"}>
           {loadingWorks ? (
@@ -239,7 +248,7 @@ function PageRow({
       {...drag.attributes}
       {...drag.listeners}
       onClick={onSelect}
-      className={`flex items-baseline justify-between gap-2 rounded-sm border bg-white px-4 py-2 text-left text-sm text-neutral-800 [touch-action:manipulation] ${
+      className={`flex items-baseline justify-between gap-2 rounded-sm border bg-white px-4 py-2 text-left text-sm text-neutral-800 ${TOUCH_DRAG_CLASS} ${
         page.parentId ? "ml-6" : ""
       } ${selected ? "border-neutral-600" : "border-neutral-200 hover:bg-neutral-50"} ${
         drag.isDragging ? "opacity-30" : ""
@@ -340,7 +349,7 @@ function DraggableWork({
       {...drag.listeners}
       onClick={onClick}
       work={work}
-      className={`cursor-grab [touch-action:manipulation] ${drag.isDragging ? "opacity-30" : ""} ${
+      className={`cursor-grab ${TOUCH_DRAG_CLASS} ${drag.isDragging ? "opacity-30" : ""} ${
         drag.target ? "outline outline-4 outline-neutral-400" : ""
       }`}
     />
