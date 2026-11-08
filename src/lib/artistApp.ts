@@ -22,3 +22,11 @@ export const ARTIST_APP_SHOWS_PRESENTATION_MEDIUM = false;
 export function artistAppHref(siteId: string, screen: "" | "pages" | "cv" = ""): string {
   return `/artist-app/${siteId}${screen ? `/${screen}` : ""}`;
 }
+
+// Arrange Pages with a page chosen (its `page`), and that page's preview.
+export function artistAppPageHref(siteId: string, pageId: string): string {
+  return `${artistAppHref(siteId, "pages")}?page=${encodeURIComponent(pageId)}`;
+}
+export function artistAppPreviewHref(siteId: string, pageId: string): string {
+  return `/artist-app/${siteId}/preview/${encodeURIComponent(pageId)}`;
+}

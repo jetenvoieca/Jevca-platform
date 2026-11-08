@@ -21,7 +21,7 @@ import { setPageComponentItems } from "@/lib/actions/pageComponents";
 import { movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
-import { ARTIST_APP_SHOWS_PRESENTATION_MEDIUM } from "@/lib/artistApp";
+import { ARTIST_APP_SHOWS_PRESENTATION_MEDIUM, artistAppPageHref } from "@/lib/artistApp";
 import { MainPanel, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
 import {
   DragThumb,
@@ -96,6 +96,8 @@ export default function ArtistPagesView({
     const pageId = pageToOpen(pages, chosenId);
     if (pageId === selectedId) return;
     setSelectedId(pageId);
+    // Into the address without reloading (see the page's route).
+    window.history.replaceState(null, "", artistAppPageHref(siteId, pageId));
     loadWorks(pageId);
   };
 

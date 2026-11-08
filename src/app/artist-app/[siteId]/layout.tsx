@@ -2,7 +2,6 @@ import type { Metadata, Viewport } from "next";
 import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/currentUser";
-import ArtistAppFrame from "@/components/artist-app/ArtistAppFrame";
 import ClientWordsProvider from "@/components/ClientWordsProvider";
 
 export const dynamic = "force-dynamic";
@@ -21,6 +20,8 @@ export const viewport: Viewport = {
 };
 
 // The Artist App (lib/artistApp.ts) — full screen, admin only for now.
+// Its screens are framed by (screens)/layout.tsx; a page's preview
+// (preview/[pageId]) takes the whole screen.
 export default async function ArtistAppLayout({
   children,
   params,
@@ -38,9 +39,5 @@ export default async function ArtistAppLayout({
 
   // Shared pieces (e.g. the media picker) word themselves for the
   // client's type, as in the admin — see ClientWordsProvider.
-  return (
-    <ClientWordsProvider kind={site.artist.kind}>
-      <ArtistAppFrame siteId={siteId}>{children}</ArtistAppFrame>
-    </ClientWordsProvider>
-  );
+  return <ClientWordsProvider kind={site.artist.kind}>{children}</ClientWordsProvider>;
 }

@@ -1,21 +1,43 @@
 "use client";
 
 import Link from "next/link";
-import { usePathname } from "next/navigation";
-import { ARTIST_APP_FONT, ARTIST_APP_SHOWS_MANAGE_WORKS, artistAppHref } from "@/lib/artistApp";
+import { usePathname, useSearchParams } from "next/navigation";
+import {
+  ARTIST_APP_FONT,
+  ARTIST_APP_SHOWS_MANAGE_WORKS,
+  artistAppHref,
+  artistAppPreviewHref,
+} from "@/lib/artistApp";
 import { siteNavHref } from "@/lib/siteMenuAccess";
+import { publishedHomePath } from "@/lib/siteSnapshot";
+import EyeIcon from "@/components/EyeIcon";
+import PublishButton from "@/components/PublishButton";
+import PublishedSiteLink from "@/components/PublishedSiteLink";
 
 // The Artist App's frame (Craig's mockups): one grey rounded frame
 // holding the screen's two panels and, on the right, the app's buttons —
 // its navigation. Buttons without a screen yet are placeholders. Above
-// them, "← Admin" back to the site in the admin (2026-11-08 — admin only
-// for now, like the app).
+// them (2026-11-08): "← Admin" back to the site in the admin (admin only
+// for now, like the app), and the admin's icons — the eye (the chosen
+// page's preview, on Arrange Pages), publish and the published site.
 
 const BUTTON_COLOR = "#FBF7EE";
 const CONCIERGE_COLOR = "#FAE8C3";
 
-export default function ArtistAppFrame({ siteId, children }: { siteId: string; children: React.ReactNode }) {
+export default function ArtistAppFrame({
+  siteId,
+  lastPublishedAt,
+  children,
+}: {
+  siteId: string;
+  // ISO date, or null if never published.
+  lastPublishedAt: string | null;
+  children: React.ReactNode;
+}) {
   const pathname = usePathname();
+  const searchParams = useSearchParams();
+  // Arrange Pages keeps its chosen page in the address (`page`).
+  const chosenPage = pathname === artistAppHref(siteId, "pages") ? searchParams.get("page") : null;
   const screens = [
     ...(ARTIST_APP_SHOWS_MANAGE_WORKS ? [{ label: "Manage Works", href: artistAppHref(siteId) }] : []),
     { label: "Arrange Pages", href: artistAppHref(siteId, "pages") },
@@ -28,13 +50,28 @@ export default function ArtistAppFrame({ siteId, children }: { siteId: string; c
         {children}
         {/* Scrolls on its own when taller than the screen (the iPad). */}
         <nav className="flex shrink-0 flex-col gap-3 lg:w-[200px] lg:overflow-y-auto">
-          <Link
-            href={siteNavHref(siteId, "artworks")}
-            prefetch={false}
-            className="self-start px-1 text-sm text-neutral-500 hover:text-neutral-800"
-          >
-            ← Admin
-          </Link>
+          <div className="flex shrink-0 items-center gap-1">
+            <Link
+              href={siteNavHref(siteId, "artworks")}
+              prefetch={false}
+              className="mr-auto px-1 text-sm text-neutral-500 hover:text-neutral-800"
+            >
+              ← Admin
+            </Link>
+            {chosenPage && (
+              <Link
+                href={artistAppPreviewHref(siteId, chosenPage)}
+                prefetch={false}
+                title="Preview this page"
+                aria-label="Preview this page"
+                className="inline-flex shrink-0 rounded-full p-0.5 hover:bg-white"
+              >
+                <EyeIcon />
+              </Link>
+            )}
+            <PublishButton siteId={siteId} lastPublishedAt={lastPublishedAt} />
+            <PublishedSiteLink href={publishedHomePath(siteId)} />
+          </div>
           {screens.map((s) => (
             <AppButton key={s.label} href={s.href} active={pathname === s.href}>
               {s.label}
