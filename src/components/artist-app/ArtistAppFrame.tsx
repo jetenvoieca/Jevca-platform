@@ -16,6 +16,7 @@ export default function ArtistAppFrame({ siteId, children }: { siteId: string; c
   const screens = [
     { label: "Manage Works", href: artistAppHref(siteId) },
     { label: "Arrange Pages", href: artistAppHref(siteId, "pages") },
+    { label: "Update CV", href: artistAppHref(siteId, "cv") },
   ];
 
   return (
@@ -28,7 +29,7 @@ export default function ArtistAppFrame({ siteId, children }: { siteId: string; c
               {s.label}
             </AppButton>
           ))}
-          {["Update CV", "Exhibition", "Consignment"].map((label) => (
+          {["Exhibition", "Consignment"].map((label) => (
             <AppButton key={label}>{label}</AppButton>
           ))}
           <div className="mt-auto flex flex-col gap-3 pt-8">

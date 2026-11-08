@@ -290,6 +290,25 @@ export async function updateArtistProfileText(
   revalidatePath("/");
 }
 
+// One of the client's contact details on its own (2026-11-08, the Artist
+// App's Profile window), saved when its box is left — unlike
+// updateArtist, which resubmits the whole Owner record. The name can't be
+// emptied.
+export type ArtistContactField = "name" | "email" | "phone" | "addressLine1" | "city" | "postcode" | "country";
+
+export async function updateArtistContact(
+  artistId: string,
+  field: ArtistContactField,
+  value: string,
+): Promise<{ ok: true } | { error: string }> {
+  await requireArtistAccess(artistId);
+  const text = value.trim();
+  if (field === "name" && !text) return { error: "The name can't be empty." };
+  await db.artist.update({ where: { id: artistId }, data: { [field]: text || null } });
+  revalidatePath("/");
+  return { ok: true };
+}
+
 // An Instagram username is kept bare: "@louisedear" or a link to the
 // profile both become "louisedear". A Facebook link (2026-10-23) gets
 // https:// if typed without it.

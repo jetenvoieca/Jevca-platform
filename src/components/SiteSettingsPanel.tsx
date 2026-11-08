@@ -3,13 +3,12 @@
 import { useEffect, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import MediaPicker from "@/components/MediaPicker";
-import { seeThroughPicture } from "@/lib/seeThroughPicture";
+import { uploadArtistLogo } from "@/lib/artistLogoUpload";
 import {
   updateSite,
   updateArtist,
   updateArtistStripeMode,
   updateSalesEnabled,
-  saveArtistLogo,
   saveArtistSignature,
   saveInvoiceOverdueDays,
   setArtistProfileImage,
@@ -276,37 +275,13 @@ export default function SiteSettingsPanel({
     }
   };
 
-  // The Logo is made see-through first (2026-10-22): a white background
-  // taken out and empty edges trimmed (lib/seeThroughPicture.ts); a
-  // drawing (SVG) already see-through goes up as it is.
+  // See lib/artistLogoUpload.ts.
   const handleLogoUpload = async (file: File) => {
     setLogoUploading(true);
     try {
-      let picture: Blob;
-      try {
-        picture = await seeThroughPicture(file, { svgScale: 3 });
-      } catch (err) {
-        alert(`That logo ${err instanceof Error ? err.message : "couldn't be read."}`);
-        return;
-      }
-      const type = picture.type || file.type;
-      const name = picture === file ? file.name : file.name.replace(/\.[^.]+$/, "") + ".png";
-      const result = await requestUploadUrl(artist.id, name, type);
-      if ("error" in result) {
-        alert(result.error);
-        return;
-      }
-      const putRes = await fetch(result.uploadUrl, {
-        method: "PUT",
-        headers: { "Content-Type": type },
-        body: picture,
-      });
-      if (!putRes.ok) {
-        alert("Upload failed — please try again.");
-        return;
-      }
-      await saveArtistLogo(artist.id, result.key);
-      router.refresh();
+      const problem = await uploadArtistLogo(artist.id, file);
+      if (problem) alert(problem);
+      else router.refresh();
     } finally {
       setLogoUploading(false);
     }

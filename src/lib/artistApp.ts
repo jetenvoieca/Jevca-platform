@@ -11,7 +11,7 @@ export const ARTIST_APP_FONT = '"Gill Sans", "Gill Sans MT", Calibri, sans-serif
 export const ARTIST_APP_MENU_COLOR = "#CED8F2";
 export const ARTIST_APP_MENU_TEXT = "#4A4A4A";
 
-// Its screens: Manage Works (the start) and Arrange Pages.
-export function artistAppHref(siteId: string, screen: "" | "pages" = ""): string {
+// Its screens: Manage Works (the start), Arrange Pages and Update CV.
+export function artistAppHref(siteId: string, screen: "" | "pages" | "cv" = ""): string {
   return `/artist-app/${siteId}${screen ? `/${screen}` : ""}`;
 }

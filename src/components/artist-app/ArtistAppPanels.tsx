@@ -2,16 +2,25 @@ import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
 import BaseStar from "@/components/BaseStar";
 
 // The Artist App's shared pieces (Craig's mockups): the large white panel
-// with its heading box, the narrower panel beside it, and a work's tile.
+// with its heading box(es), the narrower panel beside it, and a work's
+// tile.
 
-export function MainPanel({ heading, children }: { heading: string; children: ReactNode }) {
+// With `heading`, opens with that heading; otherwise the screen places
+// its own PanelHeadings.
+export function MainPanel({ heading, children }: { heading?: string; children: ReactNode }) {
   return (
     <section className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-8 py-8 lg:overflow-y-auto">
-      <h2 className="mx-auto mb-8 w-fit min-w-[50%] border border-neutral-200 px-6 py-1.5 text-center text-2xl text-neutral-800">
-        {heading}
-      </h2>
+      {heading !== undefined && <PanelHeading>{heading}</PanelHeading>}
       {children}
     </section>
+  );
+}
+
+export function PanelHeading({ children }: { children: ReactNode }) {
+  return (
+    <h2 className="mx-auto mb-8 w-fit min-w-72 border border-neutral-200 px-6 py-1.5 text-center text-2xl text-neutral-800">
+      {children}
+    </h2>
   );
 }
 

@@ -4,13 +4,9 @@ import { useState } from "react";
 import {
   DndContext,
   DragOverlay,
-  MouseSensor,
-  TouchSensor,
   pointerWithin,
   useDraggable,
   useDroppable,
-  useSensor,
-  useSensors,
   type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
@@ -25,6 +21,7 @@ import { setPageComponentItems } from "@/lib/actions/pageComponents";
 import { movePage, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import { MainPanel, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
+import { DragThumb, useArtistAppSensors } from "@/components/artist-app/artistAppDrag";
 import type { SiteWork } from "@/lib/siteWorks";
 
 // Arrange Pages (2026-11-08, Craig's mockup): the site's Live and Hidden
@@ -33,7 +30,7 @@ import type { SiteWork } from "@/lib/siteWorks";
 // Hidden (rules in lib/artistAppPageOrder.ts); drag a work onto another
 // to reorder the page's works — on this page only, where the page allows
 // it (see getArtistAppPageWorks). On a touch screen, press and hold
-// before dragging, so a swipe still scrolls.
+// before dragging (useArtistAppSensors).
 
 type PageDragData = { type: "page"; pageId: string };
 type PageDropData = { kind: "page"; pageId: string } | { kind: "list"; visible: boolean };
@@ -65,10 +62,7 @@ export default function ArtistPagesView({
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragData | null>(null);
 
-  const sensors = useSensors(
-    useSensor(MouseSensor, { activationConstraint: { distance: 5 } }),
-    useSensor(TouchSensor, { activationConstraint: { delay: 250, tolerance: 8 } }),
-  );
+  const sensors = useArtistAppSensors();
 
   const selectPage = async (pageId: string) => {
     if (pageId === selectedId) return;
@@ -159,14 +153,7 @@ export default function ArtistPagesView({
             {draggedPage.title}
           </div>
         ) : dragging?.type === "item" ? (
-          <div className="h-24 w-24 overflow-hidden rounded-sm shadow-md">
-            {dragging.url ? (
-              // eslint-disable-next-line @next/next/no-img-element
-              <img src={dragging.url} alt="" className="h-full w-full object-cover" />
-            ) : (
-              <div className="h-full w-full bg-neutral-200" />
-            )}
-          </div>
+          <DragThumb url={dragging.url} />
         ) : null}
       </DragOverlay>
     </DndContext>
