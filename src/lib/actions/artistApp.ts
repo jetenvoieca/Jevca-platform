@@ -36,10 +36,13 @@ export async function listArtistAppPages(siteId: string): Promise<ArtistAppPage[
 // - a Block Build page whose works are in one component: its works as
 //   arranged on this page, reordered for this page only (Craig, 8 Nov) —
 //   `arrange` is that component, with the works it leaves out;
+// - the same with a component showing one picture (a Single Image or
+//   Picture & words, e.g. Home): "single" — the first is the one shown,
+//   and another can be chosen in its place;
 // - any other page: its works as shown, in an order set up elsewhere.
 export type ArtistAppPageWorks = {
   works: SiteWork[];
-  kind: "showcase" | "arrange" | "fixed";
+  kind: "showcase" | "arrange" | "single" | "fixed";
   arrange: { blockId: string; hiddenIds: string[] } | null;
 };
 
@@ -75,13 +78,15 @@ export async function getArtistAppPageWorks(siteId: string, pageId: string): Pro
   const curation = curationId ? curations[curationId] : undefined;
   if (curation && worksComponents.length === 1) {
     // All the component's works, even where the page shows only the
-    // first (a Single Image), so any can be put first.
+    // first, so another can be put first.
     const content = worksComponents[0];
+    const type = blockTypes.get(content.blockId);
+    const kind = type === "image" || type === "picturewords" ? "single" : "arrange";
     const works = arrangeItems(pageWorks(curation.works, content), (w) => w.artworkId, content).map((w) => ({
       ...w,
       curationId: curation.id,
     }));
-    return { works, kind: "arrange", arrange: { blockId: content.blockId, hiddenIds: content.hiddenIds } };
+    return { works, kind, arrange: { blockId: content.blockId, hiddenIds: content.hiddenIds } };
   }
   return { works: pageShownWorks({ curationId, style, components, canvas }, curations), kind: "fixed", arrange: null };
 }

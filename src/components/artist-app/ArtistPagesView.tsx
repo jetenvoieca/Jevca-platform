@@ -261,7 +261,8 @@ function PageRow({
 }
 
 // The chosen page's works; dragged into a new order where the page
-// allows it, saved for this page only.
+// allows it (or, with one picture, another chosen in its place), saved
+// for this page only.
 function PageWorks({
   siteId,
   pageId,
@@ -281,10 +282,9 @@ function PageWorks({
   const [works, setWorks] = useState(data.works);
   const arrange = data.arrange;
 
-  useArrangeReorder(arrange?.blockId ?? "", async (fromId, toId) => {
+  // Saves the works' new order for this page.
+  const saveOrder = async (next: SiteWork[]) => {
     if (!arrange) return;
-    const next = moveItem(works, (w) => w.artworkId, fromId, toId);
-    if (!next) return;
     const before = works;
     setWorks(next);
     onError(null);
@@ -296,7 +296,46 @@ function PageWorks({
       setWorks(before);
       onError("The works' new order wasn't saved.");
     }
-  });
+  };
+  const move = (fromId: string, toId: string) => {
+    const next = moveItem(works, (w) => w.artworkId, fromId, toId);
+    if (next) saveOrder(next);
+  };
+
+  useArrangeReorder(data.kind === "arrange" && arrange ? arrange.blockId : "", move);
+
+  if (works.length === 0) return <p className="text-center text-neutral-400">No works on this page</p>;
+
+  // One picture on the page (Craig, 8 Nov): the work shown, then the
+  // curation's others — tapping one shows it instead.
+  if (data.kind === "single") {
+    const [shown, ...others] = works;
+    return (
+      <>
+        <WorkGrid>
+          <WorkTile work={shown} onClick={() => onOpen(shown)} className="cursor-pointer" />
+        </WorkGrid>
+        <p className="mt-2 text-sm text-neutral-400">On the page</p>
+        {others.length > 0 && (
+          <>
+            <p className="mb-6 mt-10 text-center text-sm text-neutral-400">
+              The curation&rsquo;s other works — tap one to show it instead
+            </p>
+            <WorkGrid>
+              {others.map((w) => (
+                <WorkTile
+                  key={w.artworkId}
+                  work={w}
+                  onClick={() => move(w.artworkId, shown.artworkId)}
+                  className="cursor-pointer opacity-80 hover:opacity-100"
+                />
+              ))}
+            </WorkGrid>
+          </>
+        )}
+      </>
+    );
+  }
 
   return (
     <>
@@ -307,25 +346,21 @@ function PageWorks({
             : "The order of this page's works can't be changed here."}
         </p>
       )}
-      {works.length === 0 ? (
-        <p className="text-center text-neutral-400">No works on this page</p>
-      ) : (
-        <WorkGrid>
-          {works.map((w, i) =>
-            arrange ? (
-              <DraggableWork
-                key={w.artworkId}
-                blockId={arrange.blockId}
-                work={w}
-                dragging={dragging}
-                onClick={() => onOpen(w)}
-              />
-            ) : (
-              <WorkTile key={`${w.artworkId}:${i}`} work={w} onClick={() => onOpen(w)} className="cursor-pointer" />
-            ),
-          )}
-        </WorkGrid>
-      )}
+      <WorkGrid>
+        {works.map((w, i) =>
+          data.kind === "arrange" && arrange ? (
+            <DraggableWork
+              key={w.artworkId}
+              blockId={arrange.blockId}
+              work={w}
+              dragging={dragging}
+              onClick={() => onOpen(w)}
+            />
+          ) : (
+            <WorkTile key={`${w.artworkId}:${i}`} work={w} onClick={() => onOpen(w)} className="cursor-pointer" />
+          ),
+        )}
+      </WorkGrid>
     </>
   );
 }
