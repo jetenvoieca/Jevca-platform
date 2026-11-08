@@ -1,4 +1,6 @@
+import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
+import { ARTIST_APP_SHOWS_MANAGE_WORKS, artistAppHref } from "@/lib/artistApp";
 import { listArtworks } from "@/lib/actions/artworks";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import ArtistWorksView from "@/components/artist-app/ArtistWorksView";
@@ -18,6 +20,8 @@ export default async function ArtistWorksPage({
   searchParams: Promise<{ base?: string; type?: string }>;
 }) {
   const { siteId } = await params;
+  // Hidden for now (lib/artistApp.ts): the app starts on Arrange Pages.
+  if (!ARTIST_APP_SHOWS_MANAGE_WORKS) redirect(artistAppHref(siteId, "pages"));
   const { base = "", type = "" } = await searchParams;
 
   const site = await db.site.findUnique({ where: { id: siteId }, select: { artistId: true } });

@@ -15,6 +15,7 @@ export default function CurationWorkPresentationModal({
   siteId,
   onClose,
   onArtworkChanged,
+  showMedium = true,
 }: {
   curationId: string;
   artworkId: string;
@@ -24,6 +25,7 @@ export default function CurationWorkPresentationModal({
   onClose: () => void;
   // See CurationWorkPresentation.
   onArtworkChanged: () => void;
+  showMedium?: boolean;
 }) {
   const close = () => {
     (document.activeElement as HTMLElement | null)?.blur();
@@ -66,6 +68,7 @@ export default function CurationWorkPresentationModal({
             artistId={artistId}
             siteId={siteId}
             onArtworkChanged={onArtworkChanged}
+            showMedium={showMedium}
           />
         </div>
       </div>

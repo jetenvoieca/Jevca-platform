@@ -67,6 +67,7 @@ export default function CurationWorkPresentation({
   artistId,
   siteId,
   onArtworkChanged,
+  showMedium = true,
 }: {
   curationId: string;
   artworkId: string;
@@ -75,6 +76,8 @@ export default function CurationWorkPresentation({
   // Called after anything that changes how the work's tile looks (its
   // name, main image or price), so the parent can refresh the tiles.
   onArtworkChanged: () => void;
+  // The Presentation medium box (off in the Artist App for now).
+  showMedium?: boolean;
 }) {
   const [data, setData] = useState<Presentation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -240,17 +243,19 @@ export default function CurationWorkPresentation({
             />
           </div>
 
-          <div className={PANEL}>
-            <h3 className={PANEL_TITLE}>Presentation medium</h3>
-            <textarea
-              value={mediumDraft}
-              onChange={(e) => setMediumDraft(e.target.value)}
-              onBlur={saveMedium}
-              rows={2}
-              placeholder="e.g. Original work on aluminium. Mixed media…"
-              className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
-            />
-          </div>
+          {showMedium && (
+            <div className={PANEL}>
+              <h3 className={PANEL_TITLE}>Presentation medium</h3>
+              <textarea
+                value={mediumDraft}
+                onChange={(e) => setMediumDraft(e.target.value)}
+                onBlur={saveMedium}
+                rows={2}
+                placeholder="e.g. Original work on aluminium. Mixed media…"
+                className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
+              />
+            </div>
+          )}
 
           <div className={PANEL}>
             <h3 className={PANEL_TITLE}>Description</h3>

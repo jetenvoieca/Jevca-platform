@@ -21,6 +21,7 @@ import { setPageComponentItems } from "@/lib/actions/pageComponents";
 import { movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
+import { ARTIST_APP_SHOWS_PRESENTATION_MEDIUM } from "@/lib/artistApp";
 import { MainPanel, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
 import {
   DragThumb,
@@ -200,6 +201,7 @@ export default function ArtistPagesView({
           onClose={() => setPresenting(null)}
           // Its name, main picture or price may have changed.
           onArtworkChanged={() => loadWorks(selected.id)}
+          showMedium={ARTIST_APP_SHOWS_PRESENTATION_MEDIUM}
         />
       )}
     </>

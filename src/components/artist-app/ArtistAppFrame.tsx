@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { ARTIST_APP_FONT, artistAppHref } from "@/lib/artistApp";
+import { ARTIST_APP_FONT, ARTIST_APP_SHOWS_MANAGE_WORKS, artistAppHref } from "@/lib/artistApp";
 import { siteNavHref } from "@/lib/siteMenuAccess";
 
 // The Artist App's frame (Craig's mockups): one grey rounded frame
@@ -17,7 +17,7 @@ const CONCIERGE_COLOR = "#FAE8C3";
 export default function ArtistAppFrame({ siteId, children }: { siteId: string; children: React.ReactNode }) {
   const pathname = usePathname();
   const screens = [
-    { label: "Manage Works", href: artistAppHref(siteId) },
+    ...(ARTIST_APP_SHOWS_MANAGE_WORKS ? [{ label: "Manage Works", href: artistAppHref(siteId) }] : []),
     { label: "Arrange Pages", href: artistAppHref(siteId, "pages") },
     { label: "Update CV", href: artistAppHref(siteId, "cv") },
   ];
