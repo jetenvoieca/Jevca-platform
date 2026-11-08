@@ -1,6 +1,6 @@
 import { db } from "@/lib/db";
 import { getArtistAppPageWorks, listArtistAppPages } from "@/lib/actions/artistApp";
-import { arrangePages } from "@/lib/artistAppPageOrder";
+import { arrangePages, pageToOpen } from "@/lib/artistAppPageOrder";
 import ArtistPagesView from "@/components/artist-app/ArtistPagesView";
 
 export const dynamic = "force-dynamic";
@@ -11,15 +11,15 @@ export default async function ArtistPagesPage({ params }: { params: Promise<{ si
   const { siteId } = await params;
   const site = await db.site.findUnique({ where: { id: siteId }, select: { artistId: true } });
   const pages = arrangePages(await listArtistAppPages(siteId));
-  const first = pages[0] ?? null;
-  const works = first ? await getArtistAppPageWorks(siteId, first.id) : null;
+  const firstId = pages[0] ? pageToOpen(pages, pages[0].id) : null;
+  const works = firstId ? await getArtistAppPageWorks(siteId, firstId) : null;
 
   return (
     <ArtistPagesView
       siteId={siteId}
       artistId={site!.artistId}
       pages={pages}
-      firstPageId={first?.id ?? null}
+      firstPageId={firstId}
       firstWorks={works}
     />
   );

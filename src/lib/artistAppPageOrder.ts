@@ -79,3 +79,10 @@ export function movePage<T extends OrderPage>(pages: T[], fromId: string, drop: 
 function movingDown<T extends OrderPage>(arranged: T[], moving: T, target: T): boolean {
   return moving.visible === target.visible && arranged.indexOf(moving) < arranged.indexOf(target);
 }
+
+// The page whose works show when a page is chosen (Craig, 8 Nov): a page
+// with pages under it is a group title with no works of its own, so its
+// first page (in the lists' order) opens instead.
+export function pageToOpen<T extends OrderPage>(arranged: T[], id: string): string {
+  return arranged.find((p) => p.parentId === id)?.id ?? id;
+}

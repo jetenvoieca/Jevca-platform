@@ -18,7 +18,7 @@ import {
 } from "@/lib/actions/artistApp";
 import { reorderPages } from "@/lib/actions/pages";
 import { setPageComponentItems } from "@/lib/actions/pageComponents";
-import { movePage, type PageDrop } from "@/lib/artistAppPageOrder";
+import { movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import { MainPanel, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
@@ -91,7 +91,8 @@ export default function ArtistPagesView({
     }
   };
 
-  const selectPage = (pageId: string) => {
+  const selectPage = (chosenId: string) => {
+    const pageId = pageToOpen(pages, chosenId);
     if (pageId === selectedId) return;
     setSelectedId(pageId);
     loadWorks(pageId);
