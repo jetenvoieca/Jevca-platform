@@ -343,6 +343,7 @@ function StoryModal({
 
         {story.kind === "GALLERIES" && (
           <GalleriesList
+            siteId={siteId}
             chosen={story.galleries.map((g) => ({ id: g.locationId, name: g.name }))}
             options={galleries}
             onChange={async (ids) => {
@@ -383,10 +384,12 @@ function StoryModal({
 // — drag one onto another to move it, ✕ to take it off — and a list of
 // the artist's other galleries to add one. Each change saves at once.
 function GalleriesList({
+  siteId,
   chosen,
   options,
   onChange,
 }: {
+  siteId: string;
   chosen: GalleryOption[];
   options: GalleryOption[];
   onChange: (ids: string[]) => void;
@@ -472,7 +475,13 @@ function GalleriesList({
         )
       )}
       <p className="mt-1 text-xs text-neutral-400">
-        Each shows its name, town and website — set those on the gallery&apos;s contact card.
+        {/* Where those are set, linked (2026-11-08 — "contact card" didn't
+            say where). */}
+        Each shows its name, town and website — set those in{" "}
+        <a href={`/sites/${siteId}/galleries`} target="_blank" rel="noopener noreferrer" className="underline">
+          Locations
+        </a>{" "}
+        (click the gallery).
       </p>
     </div>
   );
