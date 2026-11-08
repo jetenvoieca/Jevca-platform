@@ -28,30 +28,32 @@ export type SiteWorksPage = {
 
 export function siteWorks(pages: SiteWorksPage[], curations: Record<string, CurationDetail>): SiteWork[] {
   const out = new Map<string, SiteWork>();
-  const add = (curationId: string, works: CurationWork[]) => {
-    for (const w of works) {
-      if (!out.has(w.artworkId) && (w.displayUrl || w.imageUrl)) out.set(w.artworkId, { ...w, curationId });
-    }
-  };
-
   for (const page of pages) {
-    if (page.style?.type === "CANVAS") {
-      for (const c of page.canvas) add(c.curationId, curations[c.curationId]?.works ?? []);
-      continue;
-    }
-    const curation = page.curationId ? curations[page.curationId] : undefined;
-    if (!curation) continue;
-    if (page.style?.type !== "BLOCK_BUILD") {
-      add(curation.id, curation.works);
-      continue;
-    }
-    const blocks = new Map(page.style.layout.blocks.map((b) => [b.id, b.type]));
-    for (const content of page.components) {
-      const type = blocks.get(content.blockId);
-      if (!type || content.source !== "WORKS" || !contentFits(type, "WORKS")) continue;
-      const shown = arrangeItems(pageWorks(curation.works, content), (w) => w.artworkId, content);
-      add(curation.id, type === "image" || type === "picturewords" ? shown.slice(0, 1) : shown);
+    for (const w of pageShownWorks(page, curations)) {
+      if (!out.has(w.artworkId) && (w.displayUrl || w.imageUrl)) out.set(w.artworkId, w);
     }
   }
   return [...out.values()];
+}
+
+// The works one page shows, in its order (see the rules above; a work
+// can appear more than once, and works without a picture are kept). Also
+// the Artist App's page grid (2026-11-08).
+export function pageShownWorks(page: SiteWorksPage, curations: Record<string, CurationDetail>): SiteWork[] {
+  const tag = (curationId: string, works: CurationWork[]) => works.map((w) => ({ ...w, curationId }));
+
+  if (page.style?.type === "CANVAS") {
+    return page.canvas.flatMap((c) => tag(c.curationId, curations[c.curationId]?.works ?? []));
+  }
+  const curation = page.curationId ? curations[page.curationId] : undefined;
+  if (!curation) return [];
+  if (page.style?.type !== "BLOCK_BUILD") return tag(curation.id, curation.works);
+
+  const blocks = new Map(page.style.layout.blocks.map((b) => [b.id, b.type]));
+  return page.components.flatMap((content) => {
+    const type = blocks.get(content.blockId);
+    if (!type || content.source !== "WORKS" || !contentFits(type, "WORKS")) return [];
+    const shown = arrangeItems(pageWorks(curation.works, content), (w) => w.artworkId, content);
+    return tag(curation.id, type === "image" || type === "picturewords" ? shown.slice(0, 1) : shown);
+  });
 }
