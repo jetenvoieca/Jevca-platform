@@ -2,8 +2,8 @@ import type { AppShellNavEntry, AppShellNavItem } from "@/components/SidebarNav"
 import { buildAccountsSection, buildSitesSection, buildTemplatesSection } from "@/lib/topNav";
 import type { RecentSite } from "@/lib/recentSites";
 import type { ClientWords } from "@/lib/clientKind";
-import { siteLandingHref, siteNavHref, siteNavKeyForPath } from "@/lib/siteMenuAccess";
-import { ARTIST_APP_FONT, ARTIST_APP_MENU_COLOR, ARTIST_APP_MENU_TEXT } from "@/lib/artistApp";
+import { siteLandingHref, siteNavKeyForPath } from "@/lib/siteMenuAccess";
+import { ARTIST_APP_FONT, ARTIST_APP_MENU_COLOR, ARTIST_APP_MENU_TEXT, artistAppHref } from "@/lib/artistApp";
 
 // Colour for every section that's specific to the site you're currently
 // inside (Artworks, Website, Financial, Marketing) — distinct from the
@@ -40,8 +40,7 @@ export type SiteNavKey =
   | "subscribers"
   | "mailCampaigns"
   | "socialMedia"
-  | "pr"
-  | "artistApp";
+  | "pr";
 
 const ARTWORK_KEYS: SiteNavKey[] = [
   "artworks",
@@ -211,12 +210,12 @@ export function buildSiteNavEntries({
       children: marketingChildren,
     },
     // The Artist App (2026-11-08, Craig's mockup) — last, in its own
-    // colours. Admin only for now: it isn't in SITE_MENU, so it's never
-    // among an artist login's ticked items.
+    // colours; opens full screen on its own address (lib/artistApp.ts).
+    // Admin only for now: its address isn't one of the site's menu items,
+    // so an artist login never sees it.
     {
       label: "Artist App",
-      href: siteNavHref(siteId, "artistApp"),
-      active: active === "artistApp",
+      href: artistAppHref(siteId),
       color: ARTIST_APP_MENU_COLOR,
       textColor: ARTIST_APP_MENU_TEXT,
       fontFamily: ARTIST_APP_FONT,
