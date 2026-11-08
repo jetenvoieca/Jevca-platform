@@ -3,6 +3,7 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/currentUser";
 import ArtistAppFrame from "@/components/artist-app/ArtistAppFrame";
+import ClientWordsProvider from "@/components/ClientWordsProvider";
 
 export const dynamic = "force-dynamic";
 
@@ -32,8 +33,14 @@ export default async function ArtistAppLayout({
   if (!user) redirect("/login");
   if (user.role !== "ADMIN") redirect("/");
 
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true } });
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { artist: { select: { kind: true } } } });
   if (!site) notFound();
 
-  return <ArtistAppFrame siteId={siteId}>{children}</ArtistAppFrame>;
+  // Shared pieces (e.g. the media picker) word themselves for the
+  // client's type, as in the admin — see ClientWordsProvider.
+  return (
+    <ClientWordsProvider kind={site.artist.kind}>
+      <ArtistAppFrame siteId={siteId}>{children}</ArtistAppFrame>
+    </ClientWordsProvider>
+  );
 }
