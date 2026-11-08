@@ -3,10 +3,13 @@
 import Link from "next/link";
 import { usePathname } from "next/navigation";
 import { ARTIST_APP_FONT, artistAppHref } from "@/lib/artistApp";
+import { siteNavHref } from "@/lib/siteMenuAccess";
 
 // The Artist App's frame (Craig's mockups): one grey rounded frame
 // holding the screen's two panels and, on the right, the app's buttons —
-// its navigation. Buttons without a screen yet are placeholders.
+// its navigation. Buttons without a screen yet are placeholders. Above
+// them, "← Admin" back to the site in the admin (2026-11-08 — admin only
+// for now, like the app).
 
 const BUTTON_COLOR = "#FBF7EE";
 const CONCIERGE_COLOR = "#FAE8C3";
@@ -24,6 +27,13 @@ export default function ArtistAppFrame({ siteId, children }: { siteId: string; c
       <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[28px] bg-[#F2F2F2] p-4 lg:flex-row lg:overflow-hidden">
         {children}
         <nav className="flex shrink-0 flex-col gap-3 lg:w-[200px]">
+          <Link
+            href={siteNavHref(siteId, "artworks")}
+            prefetch={false}
+            className="self-start px-1 text-sm text-neutral-500 hover:text-neutral-800"
+          >
+            ← Admin
+          </Link>
           {screens.map((s) => (
             <AppButton key={s.label} href={s.href} active={pathname === s.href}>
               {s.label}
