@@ -26,7 +26,8 @@ export default function ArtistAppFrame({ siteId, children }: { siteId: string; c
     <div className="h-dvh bg-white p-4 lg:p-6" style={{ fontFamily: ARTIST_APP_FONT }}>
       <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[28px] bg-[#F2F2F2] p-4 lg:flex-row lg:overflow-hidden">
         {children}
-        <nav className="flex shrink-0 flex-col gap-3 lg:w-[200px]">
+        {/* Scrolls on its own when taller than the screen (the iPad). */}
+        <nav className="flex shrink-0 flex-col gap-3 lg:w-[200px] lg:overflow-y-auto">
           <Link
             href={siteNavHref(siteId, "artworks")}
             prefetch={false}
@@ -42,10 +43,8 @@ export default function ArtistAppFrame({ siteId, children }: { siteId: string; c
           {["Exhibition", "Consignment"].map((label) => (
             <AppButton key={label}>{label}</AppButton>
           ))}
-          <div className="mt-auto flex flex-col gap-3 pt-8">
-            <AppButton color={CONCIERGE_COLOR}>Concierge</AppButton>
-            <AppButton>Upgrade</AppButton>
-          </div>
+          <AppButton color={CONCIERGE_COLOR}>Concierge</AppButton>
+          <AppButton>Upgrade</AppButton>
         </nav>
       </div>
     </div>
