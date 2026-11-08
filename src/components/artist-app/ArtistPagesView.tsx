@@ -20,6 +20,7 @@ import { reorderPages } from "@/lib/actions/pages";
 import { setPageComponentItems } from "@/lib/actions/pageComponents";
 import { movePage, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
+import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import { MainPanel, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
 import { DragThumb, useArtistAppSensors } from "@/components/artist-app/artistAppDrag";
 import type { SiteWork } from "@/lib/siteWorks";
@@ -30,7 +31,8 @@ import type { SiteWork } from "@/lib/siteWorks";
 // Hidden (rules in lib/artistAppPageOrder.ts); drag a work onto another
 // to reorder the page's works — on this page only, where the page allows
 // it (see getArtistAppPageWorks). On a touch screen, press and hold
-// before dragging (useArtistAppSensors).
+// before dragging (useArtistAppSensors). Tapping a work opens its
+// Presentation in the curation the page shows it from (Craig, 8 Nov).
 
 type PageDragData = { type: "page"; pageId: string };
 type PageDropData = { kind: "page"; pageId: string } | { kind: "list"; visible: boolean };
@@ -45,11 +47,13 @@ const collisions: CollisionDetection = (args) => {
 
 export default function ArtistPagesView({
   siteId,
+  artistId,
   pages: initialPages,
   firstPageId,
   firstWorks,
 }: {
   siteId: string;
+  artistId: string;
   // Arranged (arrangePages).
   pages: ArtistAppPage[];
   firstPageId: string | null;
@@ -58,15 +62,17 @@ export default function ArtistPagesView({
   const [pages, setPages] = useState(initialPages);
   const [selectedId, setSelectedId] = useState(firstPageId);
   const [works, setWorks] = useState(firstWorks);
+  // Counts loads, so the grid starts afresh with each.
+  const [worksLoad, setWorksLoad] = useState(0);
   const [loadingWorks, setLoadingWorks] = useState(false);
+  // The work whose Presentation is open.
+  const [presenting, setPresenting] = useState<SiteWork | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragData | null>(null);
 
   const sensors = useArtistAppSensors();
 
-  const selectPage = async (pageId: string) => {
-    if (pageId === selectedId) return;
-    setSelectedId(pageId);
+  const loadWorks = async (pageId: string) => {
     setLoadingWorks(true);
     setError(null);
     try {
@@ -75,8 +81,15 @@ export default function ArtistPagesView({
       setWorks(null);
       setError("That page's works couldn't be loaded.");
     } finally {
+      setWorksLoad((n) => n + 1);
       setLoadingWorks(false);
     }
+  };
+
+  const selectPage = (pageId: string) => {
+    if (pageId === selectedId) return;
+    setSelectedId(pageId);
+    loadWorks(pageId);
   };
 
   const dropPage = async (fromId: string, drop: PageDrop) => {
@@ -110,53 +123,76 @@ export default function ArtistPagesView({
   const draggedPage = dragging?.type === "page" ? pages.find((p) => p.id === dragging.pageId) : null;
 
   return (
-    <DndContext
-      sensors={sensors}
-      collisionDetection={collisions}
-      onDragStart={(e: DragStartEvent) => setDragging((e.active.data.current as DragData | undefined) ?? null)}
-      onDragEnd={onDragEnd}
-      onDragCancel={() => setDragging(null)}
-    >
-      <MainPanel heading={selected?.title ?? "Pages"}>
-        {loadingWorks ? (
-          <p className="text-center text-neutral-400">Loading…</p>
-        ) : selected && works ? (
-          <PageWorks key={selected.id} siteId={siteId} pageId={selected.id} data={works} dragging={dragging} onError={setError} />
-        ) : null}
-      </MainPanel>
+    <>
+      <DndContext
+        sensors={sensors}
+        collisionDetection={collisions}
+        onDragStart={(e: DragStartEvent) => setDragging((e.active.data.current as DragData | undefined) ?? null)}
+        onDragEnd={onDragEnd}
+        onDragCancel={() => setDragging(null)}
+      >
+        <MainPanel heading={selected?.title ?? "Pages"}>
+          {loadingWorks ? (
+            <p className="text-center text-neutral-400">Loading…</p>
+          ) : selected && works ? (
+            <PageWorks
+              key={`${selected.id}:${worksLoad}`}
+              siteId={siteId}
+              pageId={selected.id}
+              data={works}
+              dragging={dragging}
+              onError={setError}
+              onOpen={setPresenting}
+            />
+          ) : null}
+        </MainPanel>
 
-      <SidePanel>
-        {error && <p className="px-1 text-sm text-red-600">{error}</p>}
-        {[true, false].map((visible) => (
-          <PageList key={String(visible)} visible={visible}>
-            {pages
-              .filter((p) => p.visible === visible)
-              .map((p) => {
-                const parentHere = !!p.parentId && pages.some((q) => q.id === p.parentId && q.visible === visible);
-                return (
-                  <PageRow
-                    key={p.id}
-                    page={p}
-                    selected={p.id === selectedId}
-                    under={p.parentId && !parentHere ? titleOf(p.parentId) : null}
-                    onSelect={() => selectPage(p.id)}
-                  />
-                );
-              })}
-          </PageList>
-        ))}
-      </SidePanel>
+        <SidePanel>
+          {error && <p className="px-1 text-sm text-red-600">{error}</p>}
+          {[true, false].map((visible) => (
+            <PageList key={String(visible)} visible={visible}>
+              {pages
+                .filter((p) => p.visible === visible)
+                .map((p) => {
+                  const parentHere = !!p.parentId && pages.some((q) => q.id === p.parentId && q.visible === visible);
+                  return (
+                    <PageRow
+                      key={p.id}
+                      page={p}
+                      selected={p.id === selectedId}
+                      under={p.parentId && !parentHere ? titleOf(p.parentId) : null}
+                      onSelect={() => selectPage(p.id)}
+                    />
+                  );
+                })}
+            </PageList>
+          ))}
+        </SidePanel>
 
-      <DragOverlay dropAnimation={null}>
-        {draggedPage ? (
-          <div className="w-72 rounded-sm border border-neutral-500 bg-white px-4 py-2 text-sm text-neutral-800 shadow-md">
-            {draggedPage.title}
-          </div>
-        ) : dragging?.type === "item" ? (
-          <DragThumb url={dragging.url} />
-        ) : null}
-      </DragOverlay>
-    </DndContext>
+        <DragOverlay dropAnimation={null}>
+          {draggedPage ? (
+            <div className="w-72 rounded-sm border border-neutral-500 bg-white px-4 py-2 text-sm text-neutral-800 shadow-md">
+              {draggedPage.title}
+            </div>
+          ) : dragging?.type === "item" ? (
+            <DragThumb url={dragging.url} />
+          ) : null}
+        </DragOverlay>
+      </DndContext>
+
+      {presenting && selected && (
+        <CurationWorkPresentationModal
+          curationId={presenting.curationId}
+          artworkId={presenting.artworkId}
+          workName={presenting.catalogueName}
+          artistId={artistId}
+          siteId={siteId}
+          onClose={() => setPresenting(null)}
+          // Its name, main picture or price may have changed.
+          onArtworkChanged={() => loadWorks(selected.id)}
+        />
+      )}
+    </>
   );
 }
 
@@ -223,12 +259,15 @@ function PageWorks({
   data,
   dragging,
   onError,
+  onOpen,
 }: {
   siteId: string;
   pageId: string;
   data: ArtistAppPageWorks;
   dragging: DragData | null;
   onError: (message: string | null) => void;
+  // A work tapped: its Presentation, in the curation it's shown from.
+  onOpen: (work: SiteWork) => void;
 }) {
   const [works, setWorks] = useState(data.works);
   const arrange = data.arrange;
@@ -265,9 +304,15 @@ function PageWorks({
         <WorkGrid>
           {works.map((w, i) =>
             arrange ? (
-              <DraggableWork key={w.artworkId} blockId={arrange.blockId} work={w} dragging={dragging} />
+              <DraggableWork
+                key={w.artworkId}
+                blockId={arrange.blockId}
+                work={w}
+                dragging={dragging}
+                onClick={() => onOpen(w)}
+              />
             ) : (
-              <WorkTile key={`${w.artworkId}:${i}`} work={w} />
+              <WorkTile key={`${w.artworkId}:${i}`} work={w} onClick={() => onOpen(w)} className="cursor-pointer" />
             ),
           )}
         </WorkGrid>
@@ -276,13 +321,24 @@ function PageWorks({
   );
 }
 
-function DraggableWork({ blockId, work, dragging }: { blockId: string; work: SiteWork; dragging: DragData | null }) {
+function DraggableWork({
+  blockId,
+  work,
+  dragging,
+  onClick,
+}: {
+  blockId: string;
+  work: SiteWork;
+  dragging: DragData | null;
+  onClick: () => void;
+}) {
   const drag = useArrangeItem(blockId, work.artworkId, work.imageUrl, dragging);
   return (
     <WorkTile
       ref={drag.setNodeRef}
       {...drag.attributes}
       {...drag.listeners}
+      onClick={onClick}
       work={work}
       className={`cursor-grab [touch-action:manipulation] ${drag.isDragging ? "opacity-30" : ""} ${
         drag.target ? "outline outline-4 outline-neutral-400" : ""

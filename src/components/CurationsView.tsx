@@ -3,7 +3,7 @@
 import { useEffect, useRef, useState, useTransition } from "react";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import AddIconButton from "@/components/AddIconButton";
-import CurationWorkPresentation from "@/components/CurationWorkPresentation";
+import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import SoldFlag from "@/components/SoldFlag";
 import { isSold } from "@/lib/artworkFilters";
 import CurationSectionsEditor from "@/components/CurationSectionsEditor";
@@ -270,13 +270,6 @@ export default function CurationsView({
   // curation is opened.
   const presentingWork = selected?.works.find((w) => w.artworkId === presentingId) ?? null;
 
-  // Leaving the field being edited first, so its change is saved (every
-  // presentation field saves when it loses focus).
-  const closePresentation = () => {
-    (document.activeElement as HTMLElement | null)?.blur();
-    setPresentingId(null);
-  };
-
   // Same for About: the field being edited saves as it loses focus.
   const closeAbout = () => {
     (document.activeElement as HTMLElement | null)?.blur();
@@ -348,18 +341,17 @@ export default function CurationsView({
     });
   };
 
-  const modalOpen = !!presentingWork || (aboutOpen && !!selected);
+  // Escape closes About (the Presentation window handles its own).
+  const aboutShown = aboutOpen && !!selected;
   useEffect(() => {
-    if (!modalOpen) return;
+    if (!aboutShown) return;
     const onKey = (e: KeyboardEvent) => {
-      if (e.key !== "Escape") return;
-      closePresentation();
-      closeAbout();
+      if (e.key === "Escape") closeAbout();
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [modalOpen]);
+  }, [aboutShown]);
 
   // The curation's name, typed in place at the top: saves when the box is
   // left, Escape puts the saved name back.
@@ -551,38 +543,15 @@ export default function CurationsView({
       </section>
 
       {selected && presentingWork && (
-        <div
-          className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-6"
-          onClick={(e) => {
-            if (e.target === e.currentTarget) closePresentation();
-          }}
-        >
-          <div className="flex max-h-full w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl">
-            {/* Frozen: which work this is, and Close. */}
-            <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-2.5">
-              <h2 className="min-w-0 flex-1 truncate text-lg text-neutral-900">
-                Presentation — {presentingWork.catalogueName}
-              </h2>
-              <button
-                type="button"
-                onClick={closePresentation}
-                className="shrink-0 rounded-md border border-neutral-300 px-3 py-1 text-sm hover:bg-neutral-50"
-              >
-                Close
-              </button>
-            </div>
-            <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
-              <CurationWorkPresentation
-                key={`${selected.id}:${presentingWork.artworkId}`}
-                curationId={selected.id}
-                artworkId={presentingWork.artworkId}
-                artistId={artistId}
-                siteId={siteId}
-                onArtworkChanged={() => reload(selected.id)}
-              />
-            </div>
-          </div>
-        </div>
+        <CurationWorkPresentationModal
+          curationId={selected.id}
+          artworkId={presentingWork.artworkId}
+          workName={presentingWork.catalogueName}
+          artistId={artistId}
+          siteId={siteId}
+          onClose={() => setPresentingId(null)}
+          onArtworkChanged={() => reload(selected.id)}
+        />
       )}
 
       {selected && dynamicOpen && (
