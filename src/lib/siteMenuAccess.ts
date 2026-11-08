@@ -7,7 +7,8 @@ import type { SiteNavKey } from "@/lib/siteNav";
 // they're admin only. Plain module, shared by the Client page, the menu
 // and the site's layout (which refuses the rest).
 
-// The site's menu, as the Client page lists it to tick: each section's
+// The site's menu, as the Client page lists it to tick (the Artist App
+// isn't offered yet — admin only, 2026-11-08): each section's
 // items, in menu order. `artworks` is relabelled by the client's words
 // where it's shown.
 export const SITE_MENU: {
@@ -100,6 +101,7 @@ export function siteNavKeyForPath(
   if (pathname.startsWith(`${base}/marketing/pr`)) return "pr";
   if (pathname.startsWith(`${base}/marketing/settings`))
     return "marketingSettings";
+  if (pathname.startsWith(`${base}/artist-app`)) return "artistApp";
   return null;
 }
 
@@ -127,6 +129,7 @@ const PATHS: Record<SiteNavKey, string> = {
   socialMedia: "/marketing/social",
   pr: "/marketing/pr",
   marketingSettings: "/marketing/settings",
+  artistApp: "/artist-app",
 };
 
 export function siteNavHref(siteId: string, key: SiteNavKey): string {

@@ -25,6 +25,10 @@ export type AppShellNavItem = {
   // A top-level link's button colour (as a section header's), e.g. the
   // site's Website link (2026-10-19). Defaults to grey.
   color?: string;
+  // A top-level link's own words colour and font (2026-11-08 — the
+  // Artist App's). Default to white and the app's font.
+  textColor?: string;
+  fontFamily?: string;
 };
 
 // A top-level entry can either be a plain link or a section — a header
@@ -157,8 +161,12 @@ function TopLevelLink({ item }: { item: AppShellNavItem }) {
     <Link
       href={item.href}
       prefetch={false}
-      style={{ backgroundColor: item.color ?? DEFAULT_SECTION_COLOR }}
-      className="flex w-full items-center justify-between rounded-md px-3 py-1 text-sm font-medium text-white hover:brightness-90"
+      style={{
+        backgroundColor: item.color ?? DEFAULT_SECTION_COLOR,
+        color: item.textColor ?? "#FFFFFF",
+        fontFamily: item.fontFamily,
+      }}
+      className="flex w-full items-center justify-between rounded-md px-3 py-1 text-sm font-medium hover:brightness-90"
     >
       {item.label}
       {!!item.badge && (
