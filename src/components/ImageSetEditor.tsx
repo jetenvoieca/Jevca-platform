@@ -123,19 +123,27 @@ function ImageGrid({
   const add = (added: { id: string }[]) =>
     save([...ids, ...added.map((a) => a.id).filter((id) => !ids.includes(id))].slice(0, 4));
 
-  const addFile = async (file: File) => {
+  // The square a chosen file is going into, while it uploads and is
+  // saved — it says so there (Craig, 9 Nov: there's a short wait).
+  const [fetching, setFetching] = useState<string | null>(null);
+  const addFile = async (tile: string, file: File) => {
+    setFetching(tile);
     setBusy(true);
     const result = await uploadPicture(artistId, file).catch(() => ({ error: "Upload failed — please try again." }));
     setBusy(false);
-    if ("error" in result) return onError(result.error);
-    add([{ id: result.imageId }]);
+    if ("error" in result) {
+      setFetching(null);
+      return onError(result.error);
+    }
+    await add([{ id: result.imageId }]);
+    setFetching(null);
   };
 
   const addTile = (key: string, label: string, className = "aspect-square") => (
     <div key={key} className={className}>
       {addFrom === "file" ? (
         <label className="flex h-full w-full cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600">
-          + {label}
+          {fetching === key ? <span className="text-neutral-500">Fetching image…</span> : `+ ${label}`}
           <input
             type="file"
             accept="image/*"
@@ -143,7 +151,7 @@ function ImageGrid({
             onChange={(e) => {
               const file = e.target.files?.[0];
               e.target.value = "";
-              if (file) addFile(file);
+              if (file) addFile(key, file);
             }}
           />
         </label>
