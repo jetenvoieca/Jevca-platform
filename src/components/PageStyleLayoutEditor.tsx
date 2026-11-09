@@ -609,6 +609,15 @@ function ExhibitionsPanel({
         wide
       />
       <NumberField
+        label="Space between exhibitions"
+        unit="pixels"
+        step={1}
+        value={settings.rowGap}
+        limits={EXHIBITIONS_LIMITS.rowGap}
+        onCommit={(rowGap) => set({ rowGap })}
+        wide
+      />
+      <NumberField
         label="Space either side of the line"
         unit="pixels"
         step={1}

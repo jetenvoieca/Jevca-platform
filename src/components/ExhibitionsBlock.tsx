@@ -106,7 +106,7 @@ export default function ExhibitionsBlock({
         } as CSSProperties
       }
     >
-      <ul className="flex min-w-0 flex-col gap-1">
+      <ul className="flex min-w-0 flex-col" style={{ gap: settings.rowGap }}>
         {list.map((e) => {
           const year = yearOf(e);
           return (

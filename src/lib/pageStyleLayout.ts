@@ -546,7 +546,8 @@ export function cleanViewer(raw: unknown): ViewerSettings {
 // artist's Exhibitions catalogue (archived ones left out), newest first
 // unless `newestFirst` is off — a list taking `listShare` % of the width,
 // each its main picture (`thumbSize` pixels square), name, venue and
-// year, the chosen one shaded `highlight`; then the `line` (null = none)
+// year, `rowGap` pixels apart (2026-11-09, Craig's request), the chosen
+// one shaded `highlight`; then the `line` (null = none)
 // with `gap` pixels either side; then the chosen exhibition — its
 // picture, its name and venue as a heading (`titleSize` pixels), its
 // dates, opening times, the venue's address, website, phone and email
@@ -561,6 +562,7 @@ export type ExhibitionsSettings = {
   stickyDetail: boolean;
   listShare: number;
   thumbSize: number;
+  rowGap: number;
   gap: number;
   line: LineLook | null;
   highlight: string;
@@ -571,6 +573,7 @@ export type ExhibitionsSettings = {
 export const EXHIBITIONS_LIMITS = {
   listShare: { min: 25, max: 70 },
   thumbSize: { min: 40, max: 200 },
+  rowGap: { min: 0, max: 60 },
   gap: { min: 0, max: 120 },
   titleSize: { min: 12, max: 48 },
 } as const;
@@ -580,6 +583,7 @@ export const DEFAULT_EXHIBITIONS: ExhibitionsSettings = {
   stickyDetail: false,
   listShare: 50,
   thumbSize: 78,
+  rowGap: 8,
   gap: 15,
   line: { colour: "#cccccc", thickness: 1 },
   highlight: "#aaaaaa",
@@ -596,6 +600,7 @@ export function cleanExhibitions(raw: unknown): ExhibitionsSettings {
     stickyDetail: value.stickyDetail === true,
     listShare: cleanNumber(value.listShare, l.listShare, d.listShare, 0),
     thumbSize: cleanNumber(value.thumbSize, l.thumbSize, d.thumbSize, 0),
+    rowGap: cleanNumber(value.rowGap, l.rowGap, d.rowGap, 0),
     gap: cleanNumber(value.gap, l.gap, d.gap, 0),
     line: value.line === null ? null : value.line ? cleanLine(value.line) : d.line,
     highlight: cleanColour(value.highlight) ?? d.highlight,
