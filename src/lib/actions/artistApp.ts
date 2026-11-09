@@ -314,12 +314,14 @@ export async function createArtistAppWork(
 }
 
 // A work dragged from a page onto another page in the lists (2026-11-09,
-// Craig). Onto a page showing one picture (e.g. Home): copied — added to
-// that page's curation if it isn't in it, and made the picture the page
-// shows (first in its order there); the work stays where it was. Onto any
-// other page: moved from `fromCurationId` to the end of that page's
-// curation (left where it is there if it's already in it). The work
-// itself is untouched.
+// Craig). Onto a page showing one picture (e.g. Home): copied — made the
+// picture the page shows (first in its order there) and kept in that
+// page's curation; the work stays where it was. Such a page that shares
+// its curation with another page (or has none) is first given its own,
+// named after it (Craig, 9 Nov), so the other page is never changed.
+// Onto any other page: moved from `fromCurationId` to the end of that
+// page's curation (left where it is there if it's already in it). The
+// work itself is untouched.
 export async function dropArtistAppWork(
   siteId: string,
   fromCurationId: string,
@@ -332,12 +334,13 @@ export async function dropArtistAppWork(
       where: { curationId: fromCurationId, artworkId, curation: { artistId } },
       select: { id: true },
     }),
-    db.page.findFirst({ where: { id: toPageId, siteId }, select: { curationId: true, pageStyleId: true } }),
+    db.page.findFirst({
+      where: { id: toPageId, siteId },
+      select: { title: true, curationId: true, pageStyleId: true },
+    }),
   ]);
   if (!from) return { error: "That work is no longer on this page." };
-  const toCurationId = toPage?.curationId;
-  if (!toPage || !toCurationId) return { error: "That page doesn't show works that can be put there." };
-  if (toCurationId === fromCurationId) return { ok: true, copied: false };
+  if (!toPage) return { error: "That page wasn't found." };
 
   // The target's one works component, if it shows a single picture.
   const style = (await listPageStyles()).find((st) => st.id === toPage.pageStyleId);
@@ -349,21 +352,35 @@ export async function dropArtistAppWork(
   const onlyType = worksComponents.length === 1 ? blockTypes.get(worksComponents[0].blockId) : undefined;
   const single = onlyType === "image" || onlyType === "picturewords" ? worksComponents[0] : null;
 
-  const [already, last] = await Promise.all([
-    db.curationItem.findFirst({ where: { curationId: toCurationId, artworkId }, select: { id: true } }),
-    db.curationItem.findFirst({
-      where: { curationId: toCurationId },
-      orderBy: { position: "desc" },
-      select: { position: true },
-    }),
-  ]);
-  const addThere = already
-    ? []
-    : [db.curationItem.create({ data: { curationId: toCurationId, artworkId, position: (last?.position ?? -1) + 1 } })];
-
   if (single) {
+    const shared =
+      !toPage.curationId ||
+      (await db.page.count({ where: { curationId: toPage.curationId, id: { not: toPageId } } })) > 0;
+    if (shared) {
+      const name = await freeCurationName(artistId, toPage.title);
+      await db.$transaction(async (tx) => {
+        const curation = await tx.curation.create({
+          data: {
+            artistId,
+            name,
+            sections: { create: CURATION_SECTION_TYPES.map((t) => ({ type: t.value })) },
+            items: { create: [{ artworkId, position: 0 }] },
+          },
+          select: { id: true },
+        });
+        // What belonged to the old curation goes, as a change of curation
+        // in Pages does.
+        await tx.pageComponentContent.deleteMany({ where: { pageId: toPageId, source: "SECTION" } });
+        await tx.pageComponentContent.updateMany({
+          where: { pageId: toPageId, source: "WORKS" },
+          data: { hiddenIds: [], orderIds: [artworkId] },
+        });
+        await tx.page.update({ where: { id: toPageId }, data: { curationId: curation.id } });
+      });
+      return { ok: true, copied: true };
+    }
     await db.$transaction([
-      ...addThere,
+      ...(await addToCurationEnd(toPage.curationId!, artworkId)),
       db.pageComponentContent.updateMany({
         where: { pageId: toPageId, blockId: single.blockId, source: "WORKS" },
         data: {
@@ -374,6 +391,38 @@ export async function dropArtistAppWork(
     ]);
     return { ok: true, copied: true };
   }
-  await db.$transaction([...addThere, db.curationItem.delete({ where: { id: from.id } })]);
+
+  const toCurationId = toPage.curationId;
+  if (!toCurationId) return { error: "That page doesn't show works that can be put there." };
+  if (toCurationId === fromCurationId) return { ok: true, copied: false };
+  await db.$transaction([
+    ...(await addToCurationEnd(toCurationId, artworkId)),
+    db.curationItem.delete({ where: { id: from.id } }),
+  ]);
   return { ok: true, copied: false };
+}
+
+// Adding a work to the end of a curation — nothing if it's already in it.
+async function addToCurationEnd(curationId: string, artworkId: string) {
+  const [already, last] = await Promise.all([
+    db.curationItem.findFirst({ where: { curationId, artworkId }, select: { id: true } }),
+    db.curationItem.findFirst({ where: { curationId }, orderBy: { position: "desc" }, select: { position: true } }),
+  ]);
+  return already
+    ? []
+    : [db.curationItem.create({ data: { curationId, artworkId, position: (last?.position ?? -1) + 1 } })];
+}
+
+// A curation name not yet used by the client: `wanted`, else "wanted 2"…
+async function freeCurationName(artistId: string, wanted: string): Promise<string> {
+  const base = wanted.trim() || "Page";
+  const taken = new Set(
+    (await db.curation.findMany({ where: { artistId, name: { startsWith: base } }, select: { name: true } })).map(
+      (c) => c.name,
+    ),
+  );
+  if (!taken.has(base)) return base;
+  let n = 2;
+  while (taken.has(`${base} ${n}`)) n++;
+  return `${base} ${n}`;
 }
