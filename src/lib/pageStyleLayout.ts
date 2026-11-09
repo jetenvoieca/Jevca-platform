@@ -497,8 +497,12 @@ export function cleanPictureWords(raw: unknown): PictureWordsSettings {
 // then the chosen work, shown with the page's Presentation Template —
 // before one is chosen, the curation's Description. On a phone the
 // thumbnails fill the width, `phonePerRow` across, with the chosen work
-// (or the Description) above them.
+// (or the Description) above them. `stickyDetail` (2026-11-09, Craig's
+// request — as Exhibitions): on a desktop the chosen work stays in view
+// (under a sticky Page heading) while the thumbnails scroll, scrolling on
+// its own if it's taller than the window.
 export type ViewerSettings = {
+  stickyDetail: boolean;
   perRow: number;
   phonePerRow: number;
   shape: PictureShape;
@@ -514,6 +518,7 @@ export const VIEWER_LIMITS = {
 } as const;
 
 export const DEFAULT_VIEWER: ViewerSettings = {
+  stickyDetail: false,
   perRow: 3,
   phonePerRow: 3,
   shape: "portrait",
@@ -527,6 +532,7 @@ export function cleanViewer(raw: unknown): ViewerSettings {
   const d = DEFAULT_VIEWER;
   const l = VIEWER_LIMITS;
   return {
+    stickyDetail: value.stickyDetail === true,
     perRow: cleanNumber(value.perRow, l.perRow, d.perRow, 0),
     phonePerRow: cleanNumber(value.phonePerRow, l.perRow, d.phonePerRow, 0),
     shape: cleanPictureShape(value.shape, d.shape),

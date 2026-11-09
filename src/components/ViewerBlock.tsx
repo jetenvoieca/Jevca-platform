@@ -135,7 +135,18 @@ export default function ViewerBlock({
       {/* A phone: the Description above the thumbnails. */}
       {descriptionText && <div className="order-1 site:hidden">{descriptionText}</div>}
 
-      <div className="hidden min-w-0 site:block">{work}</div>
+      {/* Kept in view on a desktop (`stickyDetail`), under a sticky Page
+          heading (--sticky-top, set by the page), scrolling on its own if
+          taller than the window — as Exhibitions. */}
+      <div
+        className={`hidden min-w-0 site:block ${
+          settings.stickyDetail
+            ? "site:sticky site:top-[calc(var(--sticky-top,0px)+16px)] site:max-h-[calc(100dvh-var(--sticky-top,0px)-32px)] site:self-start site:overflow-y-auto"
+            : ""
+        }`}
+      >
+        {work}
+      </div>
 
       {phoneOpen &&
         createPortal(

@@ -766,6 +766,14 @@ function ViewerPanel({ settings, onChange }: { settings: ViewerSettings; onChang
   const set = (patch: Partial<ViewerSettings>) => onChange(cleanViewer({ ...settings, ...patch }));
   return (
     <>
+      <label className="flex items-center gap-2 text-sm text-neutral-700">
+        <input
+          type="checkbox"
+          checked={settings.stickyDetail}
+          onChange={(e) => set({ stickyDetail: e.target.checked })}
+        />
+        Chosen work stays in view while the thumbnails scroll (desktop)
+      </label>
       <NumberField
         label="Thumbnails across"
         unit=""
