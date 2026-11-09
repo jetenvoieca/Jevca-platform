@@ -79,7 +79,8 @@ type ListKey = "live" | "hidden";
 //
 // Theme (2026-11-03, admin only — the site header's Theme icon,
 // PageThemeButton): choose a Site Theme (Templates → Site Themes) to make
-// all its pages on this site at once — see applySiteTheme.
+// all its pages on this site at once — see applySiteTheme. With a Plan
+// (2026-11-09) only the themes it allows are offered.
 export default function PagesManager({
   siteId,
   artistId,
@@ -105,7 +106,8 @@ export default function PagesManager({
   // Display Style, shared by every site) is offered — admin only
   // (2026-10-26).
   canEditStyles: boolean;
-  // The Site Themes, for the Theme button (admin only).
+  // The Site Themes the Theme button offers (admin only; the site's
+  // plan's, if it has one).
   themes: { id: string; name: string }[];
 }) {
   const router = useRouter();

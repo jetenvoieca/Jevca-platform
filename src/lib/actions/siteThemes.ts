@@ -59,6 +59,20 @@ export async function updateSiteTheme(
   return { ok: true };
 }
 
+// The themes a site's Theme icon offers (2026-11-09): with a Plan, those
+// it allows (in its order); without one, every theme.
+export async function listSiteThemesForSite(siteId: string): Promise<{ id: string; name: string }[]> {
+  await requireAdmin();
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: {
+      plan: { select: { themes: { orderBy: { position: "asc" }, select: { siteTheme: { select: { id: true, name: true } } } } } },
+    },
+  });
+  if (site?.plan) return site.plan.themes.map((t) => t.siteTheme);
+  return db.siteTheme.findMany({ orderBy: { name: "asc" }, select: { id: true, name: true } });
+}
+
 export async function deleteSiteTheme(id: string): Promise<void> {
   await requireAdmin();
   await db.siteTheme.deleteMany({ where: { id } });
@@ -71,19 +85,30 @@ export async function deleteSiteTheme(id: string): Promise<void> {
 // page is filled where it can be: a curation's page with its works (in
 // its first component that takes them), a Profile stories component with
 // the Artist Statement, Biography / CV and Galleries. Sets the theme's
-// menu as the site's if it has none. Says how many pages were made and
-// left out.
+// menu as the site's if it has none. A site with a Plan (2026-11-09) may
+// only use a theme the Plan allows, and the one applied becomes its
+// theme (Site.siteThemeId). Says how many pages were made and left out.
 export async function applySiteTheme(
   siteId: string,
   themeId: string,
 ): Promise<{ created: number; skipped: number } | { error: string }> {
   await requireAdmin();
   const [site, theme] = await Promise.all([
-    db.site.findUnique({ where: { id: siteId }, select: { artistId: true, menuStyleId: true } }),
+    db.site.findUnique({
+      where: { id: siteId },
+      select: {
+        artistId: true,
+        menuStyleId: true,
+        plan: { select: { themes: { select: { siteThemeId: true } } } },
+      },
+    }),
     db.siteTheme.findUnique({ where: { id: themeId }, select: SELECT }),
   ]);
   if (!site) return { error: "Site not found." };
   if (!theme) return { error: "Theme not found." };
+  if (site.plan && !site.plan.themes.some((t) => t.siteThemeId === themeId)) {
+    return { error: "This site's plan doesn't allow that theme." };
+  }
   const entries = cleanThemeEntries(theme.entries);
 
   const [pages, curations, styles, menus] = await Promise.all([
@@ -182,8 +207,10 @@ export async function applySiteTheme(
     }
   }
 
-  if (!site.menuStyleId && theme.siteMenuStyleId) {
-    await db.site.update({ where: { id: siteId }, data: { menuStyleId: theme.siteMenuStyleId } });
+  const menuStyleId = !site.menuStyleId && theme.siteMenuStyleId ? theme.siteMenuStyleId : undefined;
+  const siteThemeId = site.plan ? themeId : undefined;
+  if (menuStyleId || siteThemeId) {
+    await db.site.update({ where: { id: siteId }, data: { menuStyleId, siteThemeId } });
   }
   return { created, skipped };
 }
