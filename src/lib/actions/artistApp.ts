@@ -15,6 +15,10 @@ import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel"
 import { pageShownWorks, type SiteWork } from "@/lib/siteWorks";
 import { CURATION_SECTION_TYPES } from "@/lib/curationSections";
 import { uniquePageSlug } from "@/lib/pageSlugs";
+import { createArtworkWithRetry } from "@/lib/actions/artworks";
+import { ARTWORK_IMAGE_SELECT, toArtworkImage, type ArtworkImage } from "@/lib/artworkImages";
+import { isCurrency } from "@/lib/currencies";
+import { getArtistDefaultCurrency } from "@/lib/primarySite";
 
 // The Artist App's Arrange Pages (2026-11-08, Craig's mockup).
 
@@ -211,4 +215,100 @@ export async function getArtistAppPageContent(siteId: string, pageId: string): P
     return { kind: "exhibitions", exhibitions: newestFirst ? [...shown].reverse() : shown };
   }
   return NO_WORKS;
+}
+
+// "Add new work" in the Artist App's artwork picker (2026-11-09, Craig's
+// mockup): a new work, filled in like a curation's Presentation, made
+// only when the form's Add is pressed.
+
+const MAX_NEW_WORK_IMAGES = 4;
+
+// The pictures chosen for it so far, as the picture editor shows them
+// (nothing is saved).
+export async function describeArtistAppImages(
+  siteId: string,
+  imageIds: string[],
+): Promise<{ images: ArtworkImage[] } | { error: string }> {
+  const { artistId } = await requireSiteAccess(siteId);
+  const ids = [...new Set(imageIds)];
+  if (ids.length > MAX_NEW_WORK_IMAGES) return { error: `A work can have at most ${MAX_NEW_WORK_IMAGES} pictures.` };
+  const rows = await db.image.findMany({ where: { id: { in: ids }, artistId }, select: ARTWORK_IMAGE_SELECT });
+  if (rows.length !== ids.length) return { error: "One of those pictures couldn't be found." };
+  const byId = new Map(rows.map((r) => [r.id, r]));
+  return { images: ids.map((id) => toArtworkImage(byId.get(id)!)) };
+}
+
+// The currency a new work's price starts in: the client's default.
+export async function artistAppDefaultCurrency(siteId: string): Promise<string> {
+  const { artistId } = await requireSiteAccess(siteId);
+  return getArtistDefaultCurrency(artistId);
+}
+
+// Makes the work: a new Catalogue entry (name, description, full price;
+// its first picture as the Catalogue's main picture, where it can be),
+// added to the end of `curationId` with this curation's own description
+// and — when it has more than that one picture — its pictures.
+export async function createArtistAppWork(
+  siteId: string,
+  curationId: string,
+  input: { name: string; description: string; price: string; currency: string; imageIds: string[] },
+): Promise<{ ok: true } | { error: string }> {
+  const { artistId } = await requireSiteAccess(siteId);
+  const name = input.name.trim();
+  if (!name) return { error: "Give the work a name." };
+  const priceText = input.price.replace(/,/g, "").trim();
+  const amount = priceText ? Number(priceText) : null;
+  if (amount != null && (!Number.isFinite(amount) || amount < 0)) return { error: "Enter a valid price." };
+  if (!isCurrency(input.currency)) return { error: "That currency isn't supported." };
+  const description = input.description.trim();
+
+  const curation = await db.curation.findFirst({ where: { id: curationId, artistId }, select: { id: true } });
+  if (!curation) return { error: "This page's curation wasn't found." };
+  const imageIds = [...new Set(input.imageIds)];
+  if (imageIds.length > MAX_NEW_WORK_IMAGES) return { error: `A work can have at most ${MAX_NEW_WORK_IMAGES} pictures.` };
+  const images = await db.image.findMany({
+    where: { id: { in: imageIds }, artistId },
+    select: { id: true, kind: true, mainImageOfArtwork: { select: { id: true } } },
+  });
+  if (images.length !== imageIds.length) return { error: "One of those pictures couldn't be found." };
+
+  // The Catalogue's main picture: the first, if it's a photo no other work
+  // has as its main picture.
+  const first = images.find((i) => i.id === imageIds[0]);
+  const mainImageId = first && first.kind === "PHOTO" && !first.mainImageOfArtwork ? first.id : null;
+  const offeredPrice = amount != null ? amount.toFixed(2) : null;
+
+  const artwork = await createArtworkWithRetry(artistId, {
+    catalogueName: name,
+    description: description || null,
+    offeredPrice,
+    presentationPrice: offeredPrice != null ? Number(offeredPrice) : null,
+    priceCurrency: input.currency,
+  });
+  // Its own pictures in this curation unless they're just the Catalogue's.
+  const ownImages = imageIds.length > 0 && !(imageIds.length === 1 && mainImageId);
+  const last = await db.curationItem.findFirst({
+    where: { curationId },
+    orderBy: { position: "desc" },
+    select: { position: true },
+  });
+  await db.$transaction([
+    ...(mainImageId
+      ? [
+          db.artwork.update({ where: { id: artwork.id }, data: { mainImageId } }),
+          db.image.update({ where: { id: mainImageId }, data: { status: "SORTED" } }),
+        ]
+      : []),
+    db.curationItem.create({
+      data: {
+        curationId,
+        artworkId: artwork.id,
+        position: (last?.position ?? -1) + 1,
+        description: description || null,
+        ownImages,
+        images: ownImages ? { create: imageIds.map((imageId, position) => ({ imageId, position })) } : undefined,
+      },
+    }),
+  ]);
+  return { ok: true };
 }

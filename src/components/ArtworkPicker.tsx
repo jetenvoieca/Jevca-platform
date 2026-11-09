@@ -21,6 +21,7 @@ export default function ArtworkPicker({
   triggerClassName,
   allowCreate = true,
   showFilters = true,
+  headerAction,
   excludeIds = [],
   availableOnly = false,
   onSelect,
@@ -46,6 +47,10 @@ export default function ArtworkPicker({
   // The Location and Type filters (off in the Artist App's Portfolio
   // level, 2026-11-09).
   showFilters?: boolean;
+  // Something more in the picker's header, after the search and filters
+  // (2026-11-09 — the Artist App's "Add new work"); given a way to close
+  // the picker.
+  headerAction?: (close: () => void) => ReactNode;
   // Artworks to leave out of the list (2026-09-24) — e.g. works already
   // in the curation being added to, so they can't be picked twice.
   excludeIds?: string[];
@@ -284,6 +289,7 @@ export default function ArtworkPicker({
               </select>
             </>
           )}
+          {headerAction?.(() => setOpen(false))}
           <div className="flex-1" />
           {allowCreate && (
             <>

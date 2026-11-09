@@ -28,10 +28,12 @@ import CurationWorkPresentationModal from "@/components/CurationWorkPresentation
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
 import ContactPanel from "@/components/ContactPanel";
 import ArtworkPicker from "@/components/ArtworkPicker";
+import ArtistNewWorkModal from "@/components/artist-app/ArtistNewWorkModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { addWorksToCuration } from "@/lib/actions/curations";
 import { LiveSiteData } from "@/lib/siteData";
 import {
+  ARTIST_APP_FONT,
   ARTIST_APP_PICKER_FILTERS,
   ARTIST_APP_SHOWS_PRESENTATION_MEDIUM,
   artistAppPageHref,
@@ -172,6 +174,7 @@ export default function ArtistPagesView({
           aside={
             selected && !loading && content?.kind === "arrange" && content.arrange ? (
               <AddWorks
+                siteId={siteId}
                 artistId={artistId}
                 curationId={content.arrange.curationId}
                 excludeIds={[...content.works.map((w) => w.artworkId), ...content.arrange.hiddenIds]}
@@ -548,14 +551,17 @@ function PageWorks({
 
 // "+ Works" beside the heading of a page whose works can be arranged
 // (Craig, 9 Nov): the artwork picker; the works chosen join the page's
-// curation, at its end.
+// curation, at its end. Its "Add new work" makes a new one there
+// (ArtistNewWorkModal), then closes the picker.
 function AddWorks({
+  siteId,
   artistId,
   curationId,
   excludeIds,
   onAdded,
   onError,
 }: {
+  siteId: string;
   artistId: string;
   curationId: string;
   // Already in the curation.
@@ -564,28 +570,55 @@ function AddWorks({
   onError: (message: string | null) => void;
 }) {
   const words = useClientWords();
+  // "Add new work" open, with the way to close the picker under it.
+  const [newWork, setNewWork] = useState<{ closePicker: () => void } | null>(null);
   return (
-    <ArtworkPicker
-      artistId={artistId}
-      mode="multi"
-      variant="button"
-      label={`+ ${words.items}`}
-      triggerClassName="border border-neutral-300 px-3 text-2xl font-light text-neutral-800 hover:bg-neutral-50"
-      allowCreate={false}
-      showFilters={ARTIST_APP_PICKER_FILTERS}
-      excludeIds={excludeIds}
-      onSelect={async (picked) => {
-        if (picked.length === 0) return;
-        onError(null);
-        const result = await addWorksToCuration(
-          curationId,
-          artistId,
-          picked.map((a) => a.id),
-        ).catch(() => ({ error: "" }));
-        if ("error" in result) onError(`The ${words.items.toLowerCase()} weren't added — please try again.`);
-        else onAdded();
-      }}
-    />
+    <>
+      <ArtworkPicker
+        artistId={artistId}
+        mode="multi"
+        variant="button"
+        label={`+ ${words.items}`}
+        triggerClassName="border border-neutral-300 px-3 text-2xl font-light text-neutral-800 hover:bg-neutral-50"
+        allowCreate={false}
+        showFilters={ARTIST_APP_PICKER_FILTERS}
+        headerAction={(closePicker) => (
+          <button
+            type="button"
+            onClick={() => setNewWork({ closePicker })}
+            className="rounded-md border border-neutral-300 px-6 py-2 text-base text-neutral-900 hover:bg-neutral-50"
+            style={{ fontFamily: ARTIST_APP_FONT }}
+          >
+            Add new {words.item.toLowerCase()}
+          </button>
+        )}
+        excludeIds={excludeIds}
+        onSelect={async (picked) => {
+          if (picked.length === 0) return;
+          onError(null);
+          const result = await addWorksToCuration(
+            curationId,
+            artistId,
+            picked.map((a) => a.id),
+          ).catch(() => ({ error: "" }));
+          if ("error" in result) onError(`The ${words.items.toLowerCase()} weren't added — please try again.`);
+          else onAdded();
+        }}
+      />
+      {newWork && (
+        <ArtistNewWorkModal
+          siteId={siteId}
+          artistId={artistId}
+          curationId={curationId}
+          onClose={() => setNewWork(null)}
+          onAdded={() => {
+            newWork.closePicker();
+            setNewWork(null);
+            onAdded();
+          }}
+        />
+      )}
+    </>
   );
 }
 
