@@ -16,6 +16,7 @@ import {
 // to be shared by the Profile Catalogue and the Artist App's Update CV):
 // its picture (click for full size) or video (plays in place), Caption
 // and Story, each saved when the box is left; Delete for a story. The
+// picture is optional — Remove picture leaves it text only. The
 // Artist Statement, Biography / CV and Galleries have no Caption box and
 // can't be deleted; Galleries also lists its galleries.
 
@@ -84,8 +85,9 @@ export default function ProfileStoryModal({
   // The Artist Statement or Biography / CV.
   const fixed = story.kind !== "STORY";
 
-  // Choose (or change) its picture or video (2026-10-27).
-  const pickMedia = async (imageId: string) => {
+  // Choose, change (2026-10-27) or remove (2026-11-09) its picture or
+  // video — any entry can be text only.
+  const pickMedia = async (imageId: string | null) => {
     setError(null);
     const result = await setProfileStoryImage(story.id, artistId, imageId);
     if ("error" in result) setError(result.error);
@@ -134,13 +136,8 @@ export default function ProfileStoryModal({
 
         {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 
-        {!media && fixed ? (
-          <div className="mb-4">{picker(story.kind === "STATEMENT" ? "Add a picture" : "Add a picture (optional)")}</div>
-        ) : !media ? (
-          <div className="mb-4 flex aspect-[4/3] w-1/2 flex-col items-center justify-center gap-3 rounded-md bg-neutral-100 p-3 text-center text-sm text-neutral-400">
-            <span>Its picture or video was deleted from the Media Catalogue.</span>
-            {picker("Choose a picture or video")}
-          </div>
+        {!media ? (
+          <div className="mb-4">{picker("Add a picture or video (optional)")}</div>
         ) : media.kind === "VIDEO" ? (
           <>
             <div className="w-1/2 overflow-hidden rounded-md">
@@ -160,7 +157,18 @@ export default function ProfileStoryModal({
           </>
         )}
 
-        {media && <div className="mb-4">{picker("Change picture or video")}</div>}
+        {media && (
+          <div className="mb-4 flex flex-wrap items-center gap-2">
+            {picker("Change picture or video")}
+            <button
+              type="button"
+              onClick={() => pickMedia(null)}
+              className="rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
+            >
+              Remove picture
+            </button>
+          </div>
+        )}
 
         {!fixed && (
           <>

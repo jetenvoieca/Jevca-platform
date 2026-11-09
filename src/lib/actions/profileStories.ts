@@ -23,8 +23,8 @@ export type ProfileStoryRow = {
   kind: ProfileStoryKind;
   caption: string;
   story: string;
-  // Its picture or video — null if it has none (deleted from the Media
-  // Catalogue). thumbUrl: a small picture for the grid (a video's still);
+  // Its picture or video — null if it has none (removed, or deleted from
+  // the Media Catalogue). thumbUrl: a small picture for the grid (a video's still);
   // fullUrl: the picture or video itself.
   media: { imageId: string; kind: "PHOTO" | "VIDEO"; thumbUrl: string | null; displayUrl: string | null; fullUrl: string } | null;
   // A Galleries entry's galleries, in order — none for any other entry.
@@ -175,16 +175,19 @@ export async function updateProfileStory(
   return toRow(row);
 }
 
-// Gives a story another picture or video from the Media Catalogue
-// (2026-10-27) — e.g. once its own was deleted there.
+// Gives an entry another picture or video from the Media Catalogue
+// (2026-10-27) — e.g. once its own was deleted there — or, with null,
+// none (2026-11-09): text only. The picture stays in the Media Catalogue.
 export async function setProfileStoryImage(
   id: string,
   artistId: string,
-  imageId: string
+  imageId: string | null
 ): Promise<Result<ProfileStoryRow>> {
   await requireArtistAccess(artistId);
-  const image = await db.image.findFirst({ where: { id: imageId, artistId }, select: { id: true } });
-  if (!image) return { error: "That picture or video wasn't found." };
+  if (imageId) {
+    const image = await db.image.findFirst({ where: { id: imageId, artistId }, select: { id: true } });
+    if (!image) return { error: "That picture or video wasn't found." };
+  }
   const { count } = await db.profileStory.updateMany({ where: { id, artistId }, data: { imageId } });
   if (count === 0) return { error: "Story not found." };
   const row = await db.profileStory.findUniqueOrThrow({ where: { id }, select: STORY_SELECT });

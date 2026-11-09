@@ -133,12 +133,12 @@ export default function ProfileCatalogueView({
                       draggable={false}
                       className="aspect-square w-full rounded-md object-cover"
                     />
-                  ) : !s.media && s.kind !== "STORY" ? (
-                    <div className="aspect-square w-full rounded-md border border-neutral-300" />
-                  ) : (
+                  ) : s.media ? (
                     <div className="flex aspect-square w-full items-center justify-center rounded-md bg-neutral-100 text-xs text-neutral-400">
-                      {s.media ? "Video" : "No picture"}
+                      Video
                     </div>
+                  ) : (
+                    <div className="aspect-square w-full rounded-md border border-neutral-300" />
                   )}
                   {s.media?.kind === "VIDEO" && <PlayMark />}
                 </div>
