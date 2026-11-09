@@ -4,7 +4,6 @@ import { useState } from "react";
 import { DndContext, DragOverlay, type DragStartEvent } from "@dnd-kit/core";
 import { reorderProfileStories, type ProfileStoryRow } from "@/lib/actions/profileStories";
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
-import ProfileClearAllButton from "@/components/ProfileClearAllButton";
 import ArtistProfileModal, { type ArtistProfile } from "@/components/artist-app/ArtistProfileModal";
 import { MainPanel, PanelHeading } from "@/components/artist-app/ArtistAppPanels";
 import {
@@ -21,8 +20,7 @@ import { PlayMark } from "@/components/SectionMediaView";
 // and the client's Profile (its logo); under Stories: the stories, dragged
 // to reorder. Tapping one opens its window — the Profile Catalogue's
 // (ProfileStoryModal) or the Profile's (ArtistProfileModal). New stories
-// are added in the admin for now. Clear all, beside Biography
-// (2026-11-09), empties the ticked fixed entries and deletes the stories.
+// are added in the admin for now.
 
 const STORIES = "stories";
 
@@ -82,20 +80,7 @@ export default function ArtistCvView({
         <div className="mx-auto max-w-4xl">
           {error && <p className="mb-4 text-center text-sm text-red-600">{error}</p>}
 
-          <PanelHeading
-            aside={
-              <ProfileClearAllButton
-                artistId={artist.id}
-                className="border border-neutral-300 px-4 text-base text-neutral-800 hover:bg-neutral-50"
-                onCleared={(next) => {
-                  setEntries(next);
-                  setOpenId(null);
-                }}
-              />
-            }
-          >
-            Biography
-          </PanelHeading>
+          <PanelHeading>Biography</PanelHeading>
           <EntryGrid>
             {fixed.map((e) => (
               <Tile key={e.id} label={e.caption} onClick={() => setOpenId(e.id)}>

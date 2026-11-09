@@ -5,8 +5,6 @@ import { db } from "@/lib/db";
 import { deleteLocationByCustomer } from "@/lib/actions/locations";
 import { deleteArtworksByIds } from "@/lib/actions/artworkImport";
 import { deleteImagesPermanently } from "@/lib/actions/imageDelete";
-import { clearProfileEntries } from "@/lib/profileCatalogue";
-import { FIXED_ENTRIES } from "@/lib/profileEntries";
 
 // Delete all (2026-11-03, Craig's request — for testing the set-up of the
 // ISYT sites end to end): an admin-only clear-out of a site, from the
@@ -64,10 +62,12 @@ export async function resetSite(siteId: string, parts: ResetParts): Promise<Rese
 
   if (parts.exhibitionsProfile) {
     result.exhibitions = (await db.exhibition.deleteMany({ where: { artistId } })).count;
-    result.stories = await clearProfileEntries(artistId, {
-      fixed: FIXED_ENTRIES.map((f) => f.kind),
-      stories: true,
-    });
+    const [stories] = await db.$transaction([
+      db.profileStory.deleteMany({ where: { artistId, kind: "STORY" } }),
+      db.profileGallery.deleteMany({ where: { story: { artistId } } }),
+      db.profileStory.updateMany({ where: { artistId, kind: { not: "STORY" } }, data: { story: "", imageId: null } }),
+    ]);
+    result.stories = stories.count;
   }
 
   if (parts.locations) {

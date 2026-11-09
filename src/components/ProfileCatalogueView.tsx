@@ -4,7 +4,6 @@ import { useState } from "react";
 import MediaPicker from "@/components/MediaPicker";
 import { PlayMark } from "@/components/SectionMediaView";
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
-import ProfileClearAllButton from "@/components/ProfileClearAllButton";
 import { createProfileStory, reorderProfileStories, type ProfileStoryRow } from "@/lib/actions/profileStories";
 
 // The Profile Catalogue (2026-10-26, Craig's mockup — a first, basic
@@ -20,8 +19,7 @@ import { createProfileStory, reorderProfileStories, type ProfileStoryRow } from 
 // dragged or deleted; a picture is chosen in their window (an empty box
 // until then). Galleries (2026-11-03) also lists galleries — chosen from
 // the artist's Locations of type Gallery and put in order in its window
-// (ProfileStoryModal, shared with the Artist App's Update CV). Clear all
-// (2026-11-09) empties the ticked fixed entries and deletes the stories.
+// (ProfileStoryModal, shared with the Artist App's Update CV).
 
 export default function ProfileCatalogueView({
   artistId,
@@ -97,14 +95,6 @@ export default function ProfileCatalogueView({
             onSelect={(images) => handleAdd(images)}
           />
           {adding && <span className="text-sm text-neutral-400">Adding…</span>}
-          <ProfileClearAllButton
-            artistId={artistId}
-            className="ml-auto rounded-md border border-neutral-300 px-3 py-1.5 text-sm text-neutral-700 hover:bg-neutral-50"
-            onCleared={(entries) => {
-              setStories(entries);
-              setOpenId(null);
-            }}
-          />
         </div>
         {error && <p className="mb-3 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
       </div>

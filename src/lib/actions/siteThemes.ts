@@ -8,8 +8,7 @@ import { DEFAULT_CONTACT_PANEL } from "@/lib/contactPanel";
 import { normalizeLayout, type LayoutBlock } from "@/lib/pageStyleLayout";
 import { contentFits } from "@/lib/pageComponents";
 import { writePageStories } from "@/lib/pageStories";
-import { ensureFixedEntries } from "@/lib/profileCatalogue";
-import { FIXED_ENTRIES } from "@/lib/profileEntries";
+import { ensureFixedEntries, FIXED_ENTRIES } from "@/lib/profileCatalogue";
 import { uniquePageSlug } from "@/lib/pageSlugs";
 
 // Site Themes (2026-11-03) — see lib/siteThemes.ts. Managed by admins
