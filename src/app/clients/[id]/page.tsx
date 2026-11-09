@@ -3,6 +3,8 @@ import { cookies } from "next/headers";
 import { db } from "@/lib/db";
 import AppShell from "@/components/AppShell";
 import ClientOwnerPanel from "@/components/ClientOwnerPanel";
+import { getSiteSubscription, listPlans } from "@/lib/actions/plans";
+import { listSiteThemes } from "@/lib/actions/siteThemes";
 import SitesListColumn from "@/components/SitesListColumn";
 import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
@@ -50,9 +52,12 @@ export default async function ClientAdminPage({
     getRecentSites(),
   ]);
   if (!data) notFound();
-  const [login, menuAccess] = await Promise.all([
+  const [login, menuAccess, plans, themes, subscription] = await Promise.all([
     getArtistLogin(data.artist.id),
     getArtistMenuAccess(data.artist.id),
+    listPlans(),
+    listSiteThemes(),
+    getSiteSubscription(id),
   ]);
 
   return (
@@ -84,6 +89,9 @@ export default async function ClientAdminPage({
           subscriptionPayments={data.subscriptionPayments}
           login={login}
           menuAccess={menuAccess}
+          plans={plans}
+          themes={themes.map((t) => ({ id: t.id, name: t.name }))}
+          subscription={subscription}
         />
       }
     />

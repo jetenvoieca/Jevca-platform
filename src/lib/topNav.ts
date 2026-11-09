@@ -8,6 +8,7 @@ export type TopNavKey =
   | "pageStyles"
   | "menuStyles"
   | "siteThemes"
+  | "plans"
   | "presentationTemplates"
   | "mailTemplates"
   | "dashboard"
@@ -107,6 +108,8 @@ export function buildTemplatesSection(active: TopNavKey | null): AppShellNavEntr
       { label: "Menus", href: "/templates/menus", active: active === "menuStyles" },
       // The pages a site of each theme has (2026-11-03).
       { label: "Site Themes", href: "/templates/site-themes", active: active === "siteThemes" },
+      // Subscriber options (2026-11-09).
+      { label: "Plans", href: "/templates/plans", active: active === "plans" },
       {
         label: "Presentations",
         href: "/templates/presentations",

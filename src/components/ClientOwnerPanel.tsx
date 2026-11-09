@@ -4,6 +4,8 @@ import SubscriptionCard from "@/components/SubscriptionCard";
 import HopperTokenCard from "@/components/HopperTokenCard";
 import ArtistLoginCard from "@/components/ArtistLoginCard";
 import MenuAccessCard from "@/components/MenuAccessCard";
+import PlanCard from "@/components/PlanCard";
+import type { PlanSummary, SiteSubscription } from "@/lib/plans";
 import type { ArtistLogin } from "@/lib/actions/users";
 import type { SiteNavKey } from "@/lib/siteNav";
 import type { ArtistRecord, SiteRecord } from "@/lib/clientPanelTypes";
@@ -31,6 +33,9 @@ export default function ClientOwnerPanel({
   subscriptionPayments,
   login,
   menuAccess,
+  plans,
+  themes,
+  subscription,
 }: {
   site: SiteRecord;
   artist: ArtistRecord;
@@ -39,6 +44,10 @@ export default function ClientOwnerPanel({
   login: ArtistLogin | null;
   // The site menu items that login may reach (2026-10-26).
   menuAccess: SiteNavKey[];
+  // The site's Plan (2026-11-09) — see PlanCard.
+  plans: PlanSummary[];
+  themes: { id: string; name: string }[];
+  subscription: SiteSubscription;
 }) {
   return (
     <div className="mx-auto max-w-6xl px-6 py-6">
@@ -47,6 +56,7 @@ export default function ClientOwnerPanel({
         <OwnerCard artist={artist} className="lg:flex-1" />
         <DomainCard site={site} className="lg:flex-1" />
         <div className="flex flex-col gap-4 lg:flex-1">
+          <PlanCard key={`plan-${site.id}`} siteId={site.id} plans={plans} themes={themes} initial={subscription} />
           <SubscriptionCard
             artist={artist}
             siteId={site.id}

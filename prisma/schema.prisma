@@ -1405,9 +1405,20 @@ model Site {
   // Marketing → Mail Campaigns (2026-10-08). See Campaign below.
   campaigns Campaign[]
 
+  // What the site's subscription is (2026-11-09) — see Plan below: its
+  // Plan, the Site Theme it uses (one the Plan allows) and its add-ons.
+  // A plan in use can't be deleted; a theme deleted leaves none.
+  planId      String?
+  plan        Plan?      @relation(fields: [planId], references: [id], onDelete: Restrict)
+  siteThemeId String?
+  siteTheme   SiteTheme? @relation(fields: [siteThemeId], references: [id], onDelete: SetNull)
+  addOns      SiteAddOn[]
+
   @@index([artistId])
   @@index([menuStyleId])
   @@index([lastVisitedAt])
+  @@index([planId])
+  @@index([siteThemeId])
 }
 
 // A site as last published (2026-10-06) — a snapshot of everything its
@@ -1702,11 +1713,84 @@ model SiteTheme {
   siteMenuStyleId String?
   siteMenuStyle   MenuStyle? @relation(fields: [siteMenuStyleId], references: [id], onDelete: SetNull)
   entries         Json       @default("[]")
+  // The Plans that allow it, and the sites using it (2026-11-09).
+  plans PlanTheme[]
+  sites Site[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
 
   @@index([siteMenuStyleId])
+}
+
+// Subscriber options (2026-11-09, Craig's request): a Plan — e.g.
+// "Portfolio" — is what a site's owner pays us monthly (`monthlyPrice`
+// in `currency`), the Site Themes it may use (PlanTheme, first the
+// default), how many groups of pages it includes (`groupsIncluded`, e.g.
+// Portfolio) and how many pages each group may have (`pagesPerGroup`),
+// and the add-ons it offers, each at its price (PlanAddOn). A site has a
+// Plan and its add-ons (Site.planId, SiteAddOn); the monthly total is
+// shown only for now — Stripe is still set by hand. Managed under
+// Templates → Plans; chosen per site under Administration → Clients.
+// See lib/plans.ts.
+model Plan {
+  id             String  @id @default(cuid())
+  name           String  @unique
+  monthlyPrice   Decimal @db.Decimal(10, 2)
+  currency       String  @default("GBP")
+  groupsIncluded Int     @default(1)
+  pagesPerGroup  Int     @default(10)
+
+  themes PlanTheme[]
+  addOns PlanAddOn[]
+  sites  Site[]
+
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+}
+
+// A Site Theme a Plan allows, in order (the first is the default).
+model PlanTheme {
+  planId      String
+  plan        Plan      @relation(fields: [planId], references: [id], onDelete: Cascade)
+  siteThemeId String
+  siteTheme   SiteTheme @relation(fields: [siteThemeId], references: [id], onDelete: Cascade)
+  position    Int
+
+  @@id([planId, siteThemeId])
+  @@index([siteThemeId])
+}
+
+// The add-ons there are (2026-11-09) — each a feature a Plan can offer
+// at a monthly price. EXTRA_PAGE_GROUP is charged for each one: another
+// group of pages beside the Plan's own (e.g. "Drawings" beside
+// "Portfolio"), each up to the Plan's pagesPerGroup. See lib/plans.ts.
+enum AddOn {
+  LOCATIONS
+  ECOMMERCE
+  MAILINGS
+  EXTRA_PAGE_GROUP
+}
+
+// An add-on a Plan offers, at its monthly price.
+model PlanAddOn {
+  planId       String
+  plan         Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  addOn        AddOn
+  monthlyPrice Decimal @db.Decimal(10, 2)
+
+  @@id([planId, addOn])
+}
+
+// An add-on a site has (`quantity` for EXTRA_PAGE_GROUP; 1 otherwise).
+// Only those its Plan offers — the rest are removed when the Plan changes.
+model SiteAddOn {
+  siteId   String
+  site     Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  addOn    AddOn
+  quantity Int    @default(1)
+
+  @@id([siteId, addOn])
 }
 
 model Artwork {
