@@ -36,6 +36,7 @@ import { LiveSiteData } from "@/lib/siteData";
 import {
   ARTIST_APP_FONT,
   ARTIST_APP_PICKER_FILTERS,
+  ARTIST_APP_PICTURES_FROM_FILE,
   ARTIST_APP_SHOWS_PRESENTATION_MEDIUM,
   artistAppPageHref,
 } from "@/lib/artistApp";
@@ -300,6 +301,7 @@ export default function ArtistPagesView({
           // Its name, main picture or price may have changed.
           onArtworkChanged={() => loadContent(selected.id)}
           showMedium={ARTIST_APP_SHOWS_PRESENTATION_MEDIUM}
+          addPicturesFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
         />
       )}
       {openStory && selected && (

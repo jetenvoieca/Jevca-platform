@@ -22,8 +22,9 @@ export const ARTIST_APP_SHOWS_PRESENTATION_MEDIUM = false;
 // come, each more sophisticated): the artwork picker without its Location
 // and Type filters. To become a setting of the client's level.
 export const ARTIST_APP_PICKER_FILTERS = false;
-// …and a new work's pictures chosen as files from the device, uploaded
-// straight in (not through the Hopper or the Media Catalogue).
+// …and a work's pictures (a new work's, and those added in a work's
+// Presentation) chosen as files from the device, uploaded straight in
+// (not through the Hopper or the Media Catalogue).
 export const ARTIST_APP_PICTURES_FROM_FILE = true;
 
 // Its screens: Manage Works (the start), Arrange Pages and Update CV.

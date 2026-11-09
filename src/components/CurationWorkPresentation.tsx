@@ -68,6 +68,7 @@ export default function CurationWorkPresentation({
   siteId,
   onArtworkChanged,
   showMedium = true,
+  addPicturesFrom = "catalogue",
 }: {
   curationId: string;
   artworkId: string;
@@ -78,6 +79,9 @@ export default function CurationWorkPresentation({
   onArtworkChanged: () => void;
   // The Presentation medium box (off in the Artist App for now).
   showMedium?: boolean;
+  // Where added pictures come from (ImageSetEditor's addFrom — files in
+  // the Artist App's Portfolio level).
+  addPicturesFrom?: "catalogue" | "file";
 }) {
   const [data, setData] = useState<Presentation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -226,6 +230,7 @@ export default function CurationWorkPresentation({
             onArtworkChanged();
           }}
           onError={setError}
+          addFrom={addPicturesFrom}
         />
 
         <div className="flex flex-col gap-2.5">
