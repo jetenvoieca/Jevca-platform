@@ -721,7 +721,7 @@ function DraggableWork({
             e.stopPropagation();
             onRemove();
           }}
-          className="shrink-0 border border-neutral-300 px-3 py-1 text-sm text-neutral-800 hover:bg-neutral-50"
+          className="shrink-0 text-sm text-neutral-400 hover:text-neutral-700"
         >
           Remove work
         </button>
