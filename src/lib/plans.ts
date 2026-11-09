@@ -42,8 +42,8 @@ export type PlanSummary = {
 export type SiteAddOnChoice = { addOn: AddOnKey; quantity: number };
 
 // A site's subscription: its Plan, Site Theme and add-ons, and its own
-// monthly price if it has one (a decimal, e.g. "15.00"; replaces the
-// total).
+// price for the plan if it has one (a decimal, e.g. "15.00"; replaces the
+// plan's price — add-ons are still added).
 export type SiteSubscription = {
   planId: string | null;
   siteThemeId: string | null;
@@ -59,13 +59,18 @@ export function toPence(value: string): number | null {
   return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
 }
 
-// What a site pays a month on `plan` with `addOns`, in pence — add-ons
-// the plan doesn't offer count for nothing.
-export function monthlyTotalPence(plan: PlanSummary, addOns: SiteAddOnChoice[]): number {
+// What a site pays a month on `plan` with `addOns`, in pence: the plan's
+// price, or the site's own price for it (`monthlyOverride`), plus its
+// add-ons — those the plan doesn't offer count for nothing.
+export function monthlyTotalPence(
+  plan: PlanSummary,
+  addOns: SiteAddOnChoice[],
+  monthlyOverride: string | null,
+): number {
   const prices = new Map(plan.addOns.map((a) => [a.addOn, toPence(a.monthlyPrice) ?? 0]));
   return addOns.reduce(
     (sum, a) => sum + (prices.get(a.addOn) ?? 0) * a.quantity,
-    toPence(plan.monthlyPrice) ?? 0,
+    toPence(monthlyOverride ?? plan.monthlyPrice) ?? 0,
   );
 }
 
