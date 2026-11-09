@@ -40,11 +40,14 @@ export type PlanSummary = {
 
 export type SiteAddOnChoice = { addOn: AddOnKey; quantity: number };
 
-// A site's subscription: its Plan, Site Theme and add-ons.
+// A site's subscription: its Plan, Site Theme and add-ons, and its own
+// monthly price if it has one (a decimal, e.g. "15.00"; replaces the
+// total).
 export type SiteSubscription = {
   planId: string | null;
   siteThemeId: string | null;
   addOns: SiteAddOnChoice[];
+  monthlyOverride: string | null;
 };
 
 // A decimal amount ("19.00", "5") in pence, or null if it isn't one.

@@ -1408,7 +1408,11 @@ model Site {
   // What the site's subscription is (2026-11-09) — see Plan below: its
   // Plan, the Site Theme it uses (one the Plan allows) and its add-ons.
   // A plan in use can't be deleted; a theme deleted leaves none.
-  planId      String?
+  // `monthlyOverride`: what the site pays a month instead of the plan and
+  // add-ons' total (existing customers' own prices), in the plan's
+  // currency; null = the total.
+  planId          String?
+  monthlyOverride Decimal?   @db.Decimal(10, 2)
   plan        Plan?      @relation(fields: [planId], references: [id], onDelete: Restrict)
   siteThemeId String?
   siteTheme   SiteTheme? @relation(fields: [siteThemeId], references: [id], onDelete: SetNull)
@@ -1729,8 +1733,8 @@ model SiteTheme {
 // default), how many groups of pages it includes (`groupsIncluded`, e.g.
 // Portfolio) and how many pages each group may have (`pagesPerGroup`),
 // and the add-ons it offers, each at its price (PlanAddOn). A site has a
-// Plan and its add-ons (Site.planId, SiteAddOn); the monthly total is
-// shown only for now — Stripe is still set by hand. Managed under
+// Plan and its add-ons (Site.planId, SiteAddOn) and may have its own
+// price (Site.monthlyOverride); the monthly total is shown only for now — Stripe is still set by hand. Managed under
 // Templates → Plans; chosen per site under Administration → Clients.
 // See lib/plans.ts.
 model Plan {

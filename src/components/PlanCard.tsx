@@ -16,8 +16,10 @@ import { formatMoney } from "@/lib/currencies";
 // lib/plans.ts), on Administration → Clients: its Plan, the Site Theme it
 // uses (one the Plan allows) and the add-ons the Plan offers, ticked, an
 // additional group of pages with how many — and what that comes to a
-// month. Shown only: Stripe is still set by hand (Subscription). Each
-// change saves at once.
+// month, unless the site has its own price (existing customers'; ticked
+// "Own price", saved when its box is left, kept if the plan changes).
+// Shown only: Stripe is still set by hand (Subscription). Each change
+// saves at once.
 export default function PlanCard({
   siteId,
   plans,
@@ -32,6 +34,8 @@ export default function PlanCard({
   className?: string;
 }) {
   const [value, setValue] = useState(initial);
+  // The own price as typed, saved when its box is left.
+  const [override, setOverride] = useState(initial.monthlyOverride ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const plan = plans.find((p) => p.id === value.planId) ?? null;
@@ -46,13 +50,20 @@ export default function PlanCard({
       if ("error" in result) {
         setError(result.error);
         setValue(before);
+        setOverride(before.monthlyOverride ?? "");
       }
     });
   };
 
   const choosePlan = (planId: string) => {
     const chosen = plans.find((p) => p.id === planId) ?? null;
-    save({ planId: chosen?.id ?? null, siteThemeId: chosen?.themeIds[0] ?? null, addOns: [] });
+    save({
+      planId: chosen?.id ?? null,
+      siteThemeId: chosen?.themeIds[0] ?? null,
+      addOns: [],
+      monthlyOverride: chosen ? value.monthlyOverride : null,
+    });
+    if (!chosen) setOverride("");
   };
 
   const quantityOf = (key: AddOnKey) => value.addOns.find((a) => a.addOn === key)?.quantity ?? 0;
@@ -145,10 +156,56 @@ export default function PlanCard({
               </div>
             )}
 
-            <p className="flex justify-between border-t border-neutral-200 pt-2 font-medium">
-              <span>A month</span>
-              <span>{formatMoney(monthlyTotalPence(plan, value.addOns) / 100, plan.currency)}</span>
-            </p>
+            <div className="flex flex-col gap-1.5 border-t border-neutral-200 pt-2">
+              <div className="flex items-center gap-2">
+                <label className="flex flex-1 items-center gap-2">
+                  <input
+                    type="checkbox"
+                    checked={value.monthlyOverride !== null}
+                    disabled={isPending}
+                    onChange={(e) => {
+                      const next = e.target.checked ? (monthlyTotalPence(plan, value.addOns) / 100).toFixed(2) : null;
+                      setOverride(next ?? "");
+                      save({ ...value, monthlyOverride: next });
+                    }}
+                  />
+                  Own price
+                </label>
+                {value.monthlyOverride !== null && (
+                  <span className="flex items-center gap-1 text-neutral-500">
+                    {plan.currency}
+                    <input
+                      inputMode="decimal"
+                      value={override}
+                      disabled={isPending}
+                      onChange={(e) => setOverride(e.target.value)}
+                      onBlur={() => {
+                        if (override.trim() !== value.monthlyOverride) save({ ...value, monthlyOverride: override.trim() });
+                      }}
+                      onKeyDown={(e) => {
+                        if (e.key === "Enter") e.currentTarget.blur();
+                      }}
+                      aria-label="Own monthly price"
+                      className={`${field} w-20 text-right`}
+                    />
+                  </span>
+                )}
+              </div>
+              <p className="flex justify-between font-medium">
+                <span>A month</span>
+                <span>
+                  {formatMoney(
+                    value.monthlyOverride ?? monthlyTotalPence(plan, value.addOns) / 100,
+                    plan.currency,
+                  )}
+                </span>
+              </p>
+              {value.monthlyOverride !== null && (
+                <p className="text-right text-xs text-neutral-400">
+                  Plan and add-ons: {formatMoney(monthlyTotalPence(plan, value.addOns) / 100, plan.currency)}
+                </p>
+              )}
+            </div>
           </>
         )}
         {error && <p className="text-xs text-red-600">{error}</p>}

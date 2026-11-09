@@ -159,25 +159,36 @@ export async function getSiteSubscription(siteId: string): Promise<SiteSubscript
   await requireAdmin();
   const site = await db.site.findUniqueOrThrow({
     where: { id: siteId },
-    select: { planId: true, siteThemeId: true, addOns: { select: { addOn: true, quantity: true } } },
+    select: {
+      planId: true,
+      siteThemeId: true,
+      monthlyOverride: true,
+      addOns: { select: { addOn: true, quantity: true } },
+    },
   });
   return {
     planId: site.planId,
     siteThemeId: site.siteThemeId,
     addOns: site.addOns.sort((a, b) => ADD_ON_ORDER.get(a.addOn)! - ADD_ON_ORDER.get(b.addOn)!),
+    monthlyOverride: site.monthlyOverride?.toFixed(2) ?? null,
   };
 }
 
-// Sets a site's Plan, Site Theme (one the Plan allows) and add-ons (those
-// it offers). No plan: no theme or add-ons either.
+// Sets a site's Plan, Site Theme (one the Plan allows), add-ons (those it
+// offers) and own monthly price. No plan: none of those either.
 export async function setSiteSubscription(siteId: string, input: SiteSubscription): Promise<Result> {
   await requireAdmin();
   const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true } });
   if (!site) return { error: "Site not found." };
 
   let siteThemeId: string | null = null;
+  let overridePence: number | null = null;
   const addOns: SiteAddOnChoice[] = [];
   if (input.planId) {
+    if (input.monthlyOverride !== null) {
+      overridePence = toPence(input.monthlyOverride);
+      if (overridePence === null) return { error: "The site's own price couldn't be read." };
+    }
     const plan = await db.plan.findUnique({ where: { id: input.planId }, select: PLAN_SELECT });
     if (!plan) return { error: "That plan wasn't found." };
     const summary = toSummary(plan);
@@ -198,7 +209,14 @@ export async function setSiteSubscription(siteId: string, input: SiteSubscriptio
   }
 
   await db.$transaction([
-    db.site.update({ where: { id: siteId }, data: { planId: input.planId, siteThemeId } }),
+    db.site.update({
+      where: { id: siteId },
+      data: {
+        planId: input.planId,
+        siteThemeId,
+        monthlyOverride: overridePence === null ? null : overridePence / 100,
+      },
+    }),
     db.siteAddOn.deleteMany({ where: { siteId } }),
     db.siteAddOn.createMany({ data: addOns.map((a) => ({ siteId, ...a })) }),
   ]);
