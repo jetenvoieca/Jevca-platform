@@ -6,7 +6,10 @@ import { useBackdropClose } from "@/lib/useBackdropClose";
 import { createLocation } from "@/lib/actions/locations";
 import type { LocationSummary } from "@/lib/artworkSettingsData";
 import {
+  createExhibition,
   deleteExhibition,
+  describeExhibitionImages,
+  readExhibitionVenue,
   setExhibitionArchived,
   setExhibitionImages,
   updateExhibition,
@@ -23,14 +26,28 @@ import {
 // Time and Description, each saved when left. Archive keeps it but
 // lists it apart in the catalogue (Restore brings it back); Delete
 // removes it for good (2026-11-09: always offered).
+// With no exhibition it's "Add new exhibition" (2026-11-09, as "Add new
+// work"): nothing is saved until Add exhibition, then it closes.
 
 const PANEL = "rounded-xl border border-neutral-300 px-3.5 py-2.5";
 const PANEL_TITLE = "mb-1 text-center text-base text-neutral-900";
 const FIELD = "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800";
 const NEW_VENUE = "__new__";
 
+const BLANK: ExhibitionRow = {
+  id: "",
+  name: "",
+  venue: null,
+  startDate: null,
+  endDate: null,
+  openingTimes: "",
+  description: "",
+  archived: false,
+  images: [],
+};
+
 export default function ExhibitionModal({
-  exhibition: e,
+  exhibition,
   artistId,
   siteId,
   locations,
@@ -40,17 +57,23 @@ export default function ExhibitionModal({
   onClose,
   addPicturesFrom = "catalogue",
 }: {
-  exhibition: ExhibitionRow;
+  // Null: a new one.
+  exhibition: ExhibitionRow | null;
   artistId: string;
   siteId: string;
   locations: LocationSummary[];
   onLocationAdded: (location: LocationSummary) => void;
+  // Changed, or added.
   onSaved: (row: ExhibitionRow) => void;
   onDeleted: () => void;
   onClose: () => void;
   // Where pictures are added from (ImageSetEditor's addFrom).
   addPicturesFrom?: "catalogue" | "file";
 }) {
+  // A new one is kept here until it's added.
+  const [draft, setDraft] = useState(BLANK);
+  const e = exhibition ?? draft;
+  const isNew = exhibition === null;
   const [name, setName] = useState(e.name);
   const [openingTimes, setOpeningTimes] = useState(e.openingTimes);
   const [description, setDescription] = useState(e.description);
@@ -75,11 +98,51 @@ export default function ExhibitionModal({
 
   const save = async (fields: ExhibitionFields) => {
     setError(null);
+    if (isNew) return saveDraft(fields);
     setSaving(true);
     const result = await updateExhibition(e.id, artistId, fields);
     setSaving(false);
     if ("error" in result) setError(result.error);
     else onSaved(result);
+  };
+
+  // A new one's fields, kept until it's added; its venue is read to show
+  // its contact details.
+  const saveDraft = async ({ locationId, ...rest }: ExhibitionFields) => {
+    if (locationId === undefined) {
+      setDraft((d) => ({ ...d, ...rest }));
+      return;
+    }
+    if (locationId === null) {
+      setDraft((d) => ({ ...d, venue: null }));
+      return;
+    }
+    const venue = await readExhibitionVenue(artistId, locationId);
+    if ("error" in venue) setError(venue.error);
+    else setDraft((d) => ({ ...d, venue }));
+  };
+
+  const add = async () => {
+    if (saving) return;
+    if (!name.trim() && !e.venue) return setError("Give the exhibition a name or a venue.");
+    setError(null);
+    setSaving(true);
+    const result = await createExhibition(
+      artistId,
+      {
+        name,
+        locationId: e.venue?.locationId ?? null,
+        startDate: e.startDate,
+        endDate: e.endDate,
+        openingTimes,
+        description,
+      },
+      e.images.map((i) => i.id),
+    ).catch(() => ({ error: "The exhibition wasn't added — please try again." }));
+    setSaving(false);
+    if ("error" in result) return setError(result.error);
+    onSaved(result);
+    onClose();
   };
 
   // Saved only when changed.
@@ -129,39 +192,46 @@ export default function ExhibitionModal({
       <div className="flex max-h-full w-full max-w-4xl flex-col rounded-lg bg-white shadow-xl">
         <div className="flex shrink-0 items-center gap-3 border-b border-neutral-200 px-4 py-2.5">
           <h2 className="min-w-0 flex-1 truncate text-lg text-neutral-900">
-            Exhibition — {name.trim() || "New exhibition"}
+            {isNew ? "Add new exhibition" : `Exhibition — ${name.trim() || "Untitled"}`}
           </h2>
-          <button
-            type="button"
-            onClick={remove}
-            className={`${headerButton} border-red-200 text-red-600 hover:bg-red-50`}
-          >
-            Delete
-          </button>
-          <button
-            type="button"
-            onClick={() => archive(!e.archived)}
-            className={`${headerButton} border-neutral-300 hover:bg-neutral-50`}
-          >
-            {e.archived ? "Restore" : "Archive"}
-          </button>
+          {!isNew && (
+            <>
+              <button
+                type="button"
+                onClick={remove}
+                className={`${headerButton} border-red-200 text-red-600 hover:bg-red-50`}
+              >
+                Delete
+              </button>
+              <button
+                type="button"
+                onClick={() => archive(!e.archived)}
+                className={`${headerButton} border-neutral-300 hover:bg-neutral-50`}
+              >
+                {e.archived ? "Restore" : "Archive"}
+              </button>
+            </>
+          )}
           <button type="button" onClick={close} className={`${headerButton} border-neutral-300 hover:bg-neutral-50`}>
             Close
           </button>
         </div>
 
         <div className="min-h-0 flex-1 overflow-y-auto p-3.5">
-          {error && <p className="mb-2.5 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
+          {error && !isNew && <p className="mb-2.5 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
           <div className="grid items-start gap-4 md:grid-cols-[4fr_5fr]">
             <ImageSetEditor
               artistId={artistId}
               siteId={siteId}
               images={e.images}
               addFrom={addPicturesFrom}
-              save={(imageIds) => setExhibitionImages(e.id, artistId, imageIds)}
+              save={(imageIds) =>
+                isNew ? describeExhibitionImages(artistId, imageIds) : setExhibitionImages(e.id, artistId, imageIds)
+              }
               onSaved={(images) => {
                 setError(null);
-                onSaved({ ...e, images });
+                if (isNew) setDraft((d) => ({ ...d, images }));
+                else onSaved({ ...e, images });
               }}
               onError={setError}
             />
@@ -261,10 +331,24 @@ export default function ExhibitionModal({
                 />
               </div>
 
-              {saving && <p className="text-xs text-neutral-400">Saving…</p>}
+              {saving && !isNew && <p className="text-xs text-neutral-400">Saving…</p>}
             </div>
           </div>
         </div>
+
+        {isNew && (
+          <div className="flex shrink-0 items-center gap-3 border-t border-neutral-200 px-4 py-3">
+            <p className="min-w-0 flex-1 text-sm text-red-600">{error}</p>
+            <button
+              type="button"
+              onClick={add}
+              disabled={saving}
+              className="shrink-0 rounded-md bg-neutral-900 px-5 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-40"
+            >
+              {saving ? "Adding…" : "Add exhibition"}
+            </button>
+          </div>
+        )}
       </div>
     </div>
   );

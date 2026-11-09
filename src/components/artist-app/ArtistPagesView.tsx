@@ -1,6 +1,6 @@
 "use client";
 
-import { Fragment, useState } from "react";
+import { Fragment, useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -100,12 +100,13 @@ export default function ArtistPagesView({
   const [contentLoad, setContentLoad] = useState(0);
   const [loading, setLoading] = useState(false);
   // The work whose Presentation is open, or the Profile entry or
-  // exhibition whose window is (and whether that exhibition changed, so
-  // the page is read again on closing — its order or listing may differ).
+  // exhibition ("new" for Add new Exhibition) whose window is — and
+  // whether that exhibition changed, so the page is read again on closing
+  // (its order or listing may differ).
   const [presenting, setPresenting] = useState<SiteWork | null>(null);
   const [openStory, setOpenStory] = useState<ProfileStoryRow | null>(null);
   const [openExhibitionId, setOpenExhibitionId] = useState<string | null>(null);
-  const [exhibitionChanged, setExhibitionChanged] = useState(false);
+  const exhibitionChanged = useRef(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragData | null>(null);
 
@@ -203,7 +204,15 @@ export default function ArtistPagesView({
         <MainPanel
           heading={selected?.title ?? "Pages"}
           aside={
-            selected && !loading && content?.kind === "arrange" && content.arrange ? (
+            selected && !loading && content?.kind === "exhibitions" ? (
+              <button
+                type="button"
+                onClick={() => setOpenExhibitionId("new")}
+                className="border border-neutral-300 px-6 text-xl text-neutral-800 hover:bg-neutral-50"
+              >
+                Add new Exhibition
+              </button>
+            ) : selected && !loading && content?.kind === "arrange" && content.arrange ? (
               <AddWorks
                 siteId={siteId}
                 artistId={artistId}
@@ -332,9 +341,9 @@ export default function ArtistPagesView({
           }}
         />
       )}
-      {openExhibition && selected && content?.kind === "exhibitions" && (
+      {openExhibitionId && selected && content?.kind === "exhibitions" && (
         <ExhibitionModal
-          key={openExhibition.id}
+          key={openExhibitionId}
           exhibition={openExhibition}
           artistId={artistId}
           siteId={siteId}
@@ -348,7 +357,7 @@ export default function ArtistPagesView({
             )
           }
           onSaved={(row) => {
-            setExhibitionChanged(true);
+            exhibitionChanged.current = true;
             setContent((c) =>
               c?.kind === "exhibitions"
                 ? { ...c, exhibitions: c.exhibitions.map((e) => (e.id === row.id ? row : e)) }
@@ -357,13 +366,13 @@ export default function ArtistPagesView({
           }}
           onDeleted={() => {
             setOpenExhibitionId(null);
-            setExhibitionChanged(false);
+            exhibitionChanged.current = false;
             loadContent(selected.id);
           }}
           onClose={() => {
             setOpenExhibitionId(null);
-            if (exhibitionChanged) loadContent(selected.id);
-            setExhibitionChanged(false);
+            if (exhibitionChanged.current) loadContent(selected.id);
+            exhibitionChanged.current = false;
           }}
         />
       )}

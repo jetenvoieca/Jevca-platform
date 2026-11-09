@@ -93,22 +93,23 @@ function parseDay(value: string | null): Date | null | undefined {
   return Number.isNaN(date.getTime()) ? undefined : date;
 }
 
+function toVenue(l: NonNullable<ExhibitionRecord["location"]>): ExhibitionVenue {
+  return {
+    locationId: l.id,
+    name: l.name,
+    address: l.customer.address,
+    phone: l.customer.phone,
+    email: l.customer.email,
+    websiteName: l.customer.websiteName,
+    websiteUrl: l.customer.websiteUrl,
+  };
+}
+
 function toRow(e: ExhibitionRecord): ExhibitionRow {
-  const l = e.location;
   return {
     id: e.id,
     name: e.name,
-    venue: l
-      ? {
-          locationId: l.id,
-          name: l.name,
-          address: l.customer.address,
-          phone: l.customer.phone,
-          email: l.customer.email,
-          websiteName: l.customer.websiteName,
-          websiteUrl: l.customer.websiteUrl,
-        }
-      : null,
+    venue: e.location ? toVenue(e.location) : null,
     startDate: dayOf(e.startDate),
     endDate: dayOf(e.endDate),
     openingTimes: e.openingTimes,
@@ -140,13 +141,6 @@ export async function listShownExhibitions(artistId: string): Promise<Exhibition
   return (await listExhibitions(artistId)).filter((e) => !e.archived);
 }
 
-// A new, blank exhibition, to fill in.
-export async function createExhibition(artistId: string): Promise<ExhibitionRow> {
-  await requireArtistAccess(artistId);
-  const created = await db.exhibition.create({ data: { artistId }, select: { id: true } });
-  return readRow(created.id);
-}
-
 export type ExhibitionFields = {
   name?: string;
   // A Location of this artist's, or null for none.
@@ -158,12 +152,18 @@ export type ExhibitionFields = {
   description?: string;
 };
 
-export async function updateExhibition(
-  id: string,
-  artistId: string,
-  fields: ExhibitionFields,
-): Promise<Result<ExhibitionRow>> {
-  await requireArtistAccess(artistId);
+// The columns an exhibition's fields write.
+type ExhibitionData = {
+  name?: string;
+  locationId?: string | null;
+  startDate?: Date | null;
+  endDate?: Date | null;
+  openingTimes?: string;
+  description?: string;
+};
+
+// The fields given, checked, as the columns to write.
+async function exhibitionData(artistId: string, fields: ExhibitionFields): Promise<Result<{ data: ExhibitionData }>> {
   const startDate = fields.startDate !== undefined ? parseDay(fields.startDate) : undefined;
   const endDate = fields.endDate !== undefined ? parseDay(fields.endDate) : undefined;
   if ((fields.startDate !== undefined && startDate === undefined) || (fields.endDate !== undefined && endDate === undefined)) {
@@ -173,8 +173,7 @@ export async function updateExhibition(
     const location = await db.location.findFirst({ where: { id: fields.locationId, artistId }, select: { id: true } });
     if (!location) return { error: "That venue wasn't found." };
   }
-  const { count } = await db.exhibition.updateMany({
-    where: { id, artistId },
+  return {
     data: {
       ...(fields.name !== undefined ? { name: fields.name.trim() } : {}),
       ...(fields.locationId !== undefined ? { locationId: fields.locationId } : {}),
@@ -183,34 +182,96 @@ export async function updateExhibition(
       ...(fields.openingTimes !== undefined ? { openingTimes: fields.openingTimes.trim() } : {}),
       ...(fields.description !== undefined ? { description: fields.description.trim() } : {}),
     },
+  };
+}
+
+// Pictures for an exhibition, main first, checked: at most
+// MAX_EXHIBITION_IMAGES, all from the artist's Media Catalogue.
+async function exhibitionImages(artistId: string, imageIds: string[]): Promise<Result<{ images: ArtworkImage[] }>> {
+  const ids = [...new Set(imageIds)];
+  if (ids.length > MAX_EXHIBITION_IMAGES) {
+    return { error: `An exhibition can have at most ${MAX_EXHIBITION_IMAGES} pictures.` };
+  }
+  const rows = await db.image.findMany({ where: { id: { in: ids }, artistId }, select: ARTWORK_IMAGE_SELECT });
+  if (rows.length !== ids.length) return { error: "One of those pictures couldn't be found." };
+  const byId = new Map(rows.map((img) => [img.id, img]));
+  return { images: ids.map((imageId) => toArtworkImage(byId.get(imageId)!)) };
+}
+
+// A new exhibition (2026-11-09, as "Add new work": nothing is saved until
+// the window's Add exhibition) — its fields and pictures, main first.
+export async function createExhibition(
+  artistId: string,
+  fields: ExhibitionFields,
+  imageIds: string[],
+): Promise<Result<ExhibitionRow>> {
+  await requireArtistAccess(artistId);
+  const checked = await exhibitionData(artistId, fields);
+  if ("error" in checked) return checked;
+  const pictures = await exhibitionImages(artistId, imageIds);
+  if ("error" in pictures) return pictures;
+  const created = await db.exhibition.create({
+    data: {
+      artistId,
+      ...checked.data,
+      images: { create: pictures.images.map((img, position) => ({ imageId: img.id, position })) },
+    },
+    select: { id: true },
   });
+  return readRow(created.id);
+}
+
+// The pictures chosen for a new exhibition so far, as the picture editor
+// shows them (nothing is saved).
+export async function describeExhibitionImages(
+  artistId: string,
+  imageIds: string[],
+): Promise<Result<{ images: ArtworkImage[] }>> {
+  await requireArtistAccess(artistId);
+  return exhibitionImages(artistId, imageIds);
+}
+
+// A venue as an exhibition shows it — for a new exhibition's window.
+export async function readExhibitionVenue(artistId: string, locationId: string): Promise<Result<ExhibitionVenue>> {
+  await requireArtistAccess(artistId);
+  const location = await db.location.findFirst({
+    where: { id: locationId, artistId },
+    select: EXHIBITION_SELECT.location.select,
+  });
+  return location ? toVenue(location) : { error: "That venue wasn't found." };
+}
+
+export async function updateExhibition(
+  id: string,
+  artistId: string,
+  fields: ExhibitionFields,
+): Promise<Result<ExhibitionRow>> {
+  await requireArtistAccess(artistId);
+  const checked = await exhibitionData(artistId, fields);
+  if ("error" in checked) return checked;
+  const { count } = await db.exhibition.updateMany({ where: { id, artistId }, data: checked.data });
   if (count === 0) return { error: "Exhibition not found." };
   return readRow(id);
 }
 
-// Its pictures, main first — at most MAX_EXHIBITION_IMAGES, from the
-// artist's Media Catalogue.
+// Its pictures, main first (see exhibitionImages).
 export async function setExhibitionImages(
   id: string,
   artistId: string,
   imageIds: string[],
 ): Promise<Result<{ images: ArtworkImage[] }>> {
   await requireArtistAccess(artistId);
-  const ids = [...new Set(imageIds)];
-  if (ids.length > MAX_EXHIBITION_IMAGES) {
-    return { error: `An exhibition can have at most ${MAX_EXHIBITION_IMAGES} pictures.` };
-  }
   const exhibition = await db.exhibition.findFirst({ where: { id, artistId }, select: { id: true } });
   if (!exhibition) return { error: "Exhibition not found." };
-  const images = await db.image.findMany({ where: { id: { in: ids }, artistId }, select: ARTWORK_IMAGE_SELECT });
-  if (images.length !== ids.length) return { error: "One of those pictures couldn't be found." };
-
+  const pictures = await exhibitionImages(artistId, imageIds);
+  if ("error" in pictures) return pictures;
   await db.$transaction([
     db.exhibitionImage.deleteMany({ where: { exhibitionId: id } }),
-    db.exhibitionImage.createMany({ data: ids.map((imageId, position) => ({ exhibitionId: id, imageId, position })) }),
+    db.exhibitionImage.createMany({
+      data: pictures.images.map((img, position) => ({ exhibitionId: id, imageId: img.id, position })),
+    }),
   ]);
-  const byId = new Map(images.map((img) => [img.id, img]));
-  return { images: ids.map((imageId) => toArtworkImage(byId.get(imageId)!)) };
+  return pictures;
 }
 
 // Archives it (kept, listed apart), or brings it back.
@@ -228,9 +289,8 @@ export async function setExhibitionArchived(
   return readRow(id);
 }
 
-// Deletes it for good (offered for archived ones only) — its pictures
-// stay in the Media Catalogue.
+// Deletes it for good — its pictures stay in the Media Catalogue.
 export async function deleteExhibition(id: string, artistId: string): Promise<void> {
   await requireArtistAccess(artistId);
-  await db.exhibition.deleteMany({ where: { id, artistId, archivedAt: { not: null } } });
+  await db.exhibition.deleteMany({ where: { id, artistId } });
 }

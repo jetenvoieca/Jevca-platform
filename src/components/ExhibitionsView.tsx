@@ -6,12 +6,12 @@ import ExhibitionModal from "@/components/ExhibitionModal";
 import ImageFill from "@/components/ImageFill";
 import { exhibitionDates } from "@/lib/exhibitionDates";
 import type { LocationSummary } from "@/lib/artworkSettingsData";
-import { createExhibition, type ExhibitionRow } from "@/lib/actions/exhibitions";
+import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 
 // The Exhibitions catalogue (2026-11-02, Craig's mockup): the exhibitions
-// as tiles — main picture, venue and dates — ⊞ to add one, and the
-// archived ones apart (Archived). Clicking a tile opens its window
-// (ExhibitionModal).
+// as tiles — main picture, venue and dates — ⊞ to add one (the window,
+// empty: nothing saved until Add exhibition), and the archived ones apart
+// (Archived). Clicking a tile opens its window (ExhibitionModal).
 
 export default function ExhibitionsView({
   artistId,
@@ -27,22 +27,16 @@ export default function ExhibitionsView({
   const [exhibitions, setExhibitions] = useState(initialExhibitions);
   const [locations, setLocations] = useState(initialLocations);
   const [showArchived, setShowArchived] = useState(false);
+  // The exhibition whose window is open, or "new" for Add.
   const [openId, setOpenId] = useState<string | null>(null);
-  const [adding, setAdding] = useState(false);
 
   const shown = exhibitions.filter((e) => e.archived === showArchived);
   const archivedCount = exhibitions.filter((e) => e.archived).length;
   const open = exhibitions.find((e) => e.id === openId) ?? null;
-  const replace = (row: ExhibitionRow) => setExhibitions((prev) => prev.map((e) => (e.id === row.id ? row : e)));
-
-  const add = async () => {
-    setAdding(true);
-    const row = await createExhibition(artistId);
-    setAdding(false);
-    setExhibitions((prev) => [...prev, row]);
-    setShowArchived(false);
-    setOpenId(row.id);
-  };
+  const saved = (row: ExhibitionRow) =>
+    setExhibitions((prev) =>
+      prev.some((e) => e.id === row.id) ? prev.map((e) => (e.id === row.id ? row : e)) : [...prev, row],
+    );
 
   return (
     <div className="flex h-full flex-col">
@@ -51,7 +45,7 @@ export default function ExhibitionsView({
           <h1 className="text-2xl font-semibold text-neutral-900">
             {showArchived ? "Archived exhibitions" : "Exhibitions"}
           </h1>
-          {!showArchived && <AddIconButton label="Add an exhibition" onClick={add} disabled={adding} />}
+          {!showArchived && <AddIconButton label="Add an exhibition" onClick={() => setOpenId("new")} />}
           <span className="flex-1" />
           {(archivedCount > 0 || showArchived) && (
             <button
@@ -91,17 +85,17 @@ export default function ExhibitionsView({
         )}
       </div>
 
-      {open && (
+      {(open || openId === "new") && (
         <ExhibitionModal
-          key={open.id}
+          key={open?.id ?? "new"}
           exhibition={open}
           artistId={artistId}
           siteId={siteId}
           locations={locations}
           onLocationAdded={(l) => setLocations((prev) => [...prev, l].sort((a, b) => a.name.localeCompare(b.name)))}
-          onSaved={replace}
+          onSaved={saved}
           onDeleted={() => {
-            setExhibitions((prev) => prev.filter((e) => e.id !== open.id));
+            setExhibitions((prev) => prev.filter((e) => e.id !== openId));
             setOpenId(null);
           }}
           onClose={() => setOpenId(null)}
