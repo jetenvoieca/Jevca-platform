@@ -13,6 +13,7 @@ import MediaPicker from "@/components/MediaPicker";
 import ImageFill from "@/components/ImageFill";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import type { ArtworkImage } from "@/lib/artworkImages";
+import { uploadPicture } from "@/lib/pictureUpload";
 
 // A main picture and up to 3 more (2026-10-03, a work's images within a
 // curation; shared 2026-11-02 with an Exhibition's pictures): the main
@@ -28,7 +29,9 @@ import type { ArtworkImage } from "@/lib/artworkImages";
 //   (2026-10-04, direct request) — it's only ever changed by making
 //   another image main, so once there is one there always is.
 // - "+ Add" picks a picture or video from the Media Catalogue (Marketing
-//   or Videos).
+//   or Videos) — or, with `addFrom="file"` (2026-11-09, the Artist App's
+//   Portfolio level), chooses a picture file from the device, uploaded
+//   straight in (lib/pictureUpload.ts).
 
 // The drag list's name, as a page's component id is in Arrange.
 const LIST_ID = "image-set";
@@ -47,6 +50,7 @@ export default function ImageSetEditor(props: {
   save: SaveImages;
   onSaved: (images: ArtworkImage[]) => void;
   onError: (message: string) => void;
+  addFrom?: "catalogue" | "file";
 }) {
   const [dragging, setDragging] = useState<ItemDragData | null>(null);
   // Moving the pointer a little first, so a click on ✕ isn't a drag.
@@ -83,6 +87,7 @@ function ImageGrid({
   save: store,
   onSaved,
   onError,
+  addFrom = "catalogue",
   dragging,
 }: {
   artistId: string;
@@ -91,6 +96,7 @@ function ImageGrid({
   save: SaveImages;
   onSaved: (images: ArtworkImage[]) => void;
   onError: (message: string) => void;
+  addFrom?: "catalogue" | "file";
   dragging: ItemDragData | null;
 }) {
   const [busy, setBusy] = useState(false);
@@ -117,18 +123,42 @@ function ImageGrid({
   const add = (added: { id: string }[]) =>
     save([...ids, ...added.map((a) => a.id).filter((id) => !ids.includes(id))].slice(0, 4));
 
+  const addFile = async (file: File) => {
+    setBusy(true);
+    const result = await uploadPicture(artistId, file).catch(() => ({ error: "Upload failed — please try again." }));
+    setBusy(false);
+    if ("error" in result) return onError(result.error);
+    add([{ id: result.imageId }]);
+  };
+
   const addTile = (key: string, label: string, className = "aspect-square") => (
     <div key={key} className={className}>
-      <MediaPicker
-        artistId={artistId}
-        siteId={siteId}
-        mode="single"
-        label={label}
-        mediaKinds={["PHOTO", "VIDEO"]}
-        catalogueViews
-        previewClassName="aspect-square h-full w-full"
-        onSelect={add}
-      />
+      {addFrom === "file" ? (
+        <label className="flex h-full w-full cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600">
+          + {label}
+          <input
+            type="file"
+            accept="image/*"
+            className="hidden"
+            onChange={(e) => {
+              const file = e.target.files?.[0];
+              e.target.value = "";
+              if (file) addFile(file);
+            }}
+          />
+        </label>
+      ) : (
+        <MediaPicker
+          artistId={artistId}
+          siteId={siteId}
+          mode="single"
+          label={label}
+          mediaKinds={["PHOTO", "VIDEO"]}
+          catalogueViews
+          previewClassName="aspect-square h-full w-full"
+          onSelect={add}
+        />
+      )}
     </div>
   );
 

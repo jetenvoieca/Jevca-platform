@@ -11,6 +11,7 @@ import {
 } from "@/lib/actions/artistApp";
 import type { ArtworkImage } from "@/lib/artworkImages";
 import { CURRENCIES } from "@/lib/currencies";
+import { ARTIST_APP_PICTURES_FROM_FILE } from "@/lib/artistApp";
 
 // "Add new work" (2026-11-09, Craig's mockup): a curation's Presentation
 // for a work that doesn't exist yet — pictures, Name, Description (larger)
@@ -108,6 +109,7 @@ export default function ArtistNewWorkModal({
                 setImages(next);
               }}
               onError={setError}
+              addFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
             />
 
             <div className="flex flex-col gap-2.5">
