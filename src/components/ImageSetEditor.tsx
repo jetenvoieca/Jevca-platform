@@ -33,9 +33,10 @@ import { uploadPicture } from "@/lib/pictureUpload";
 //   Portfolio level), chooses a picture file from the device, uploaded
 //   straight in (lib/pictureUpload.ts).
 // - `fullControls` (2026-11-09, the Artist App — a touch screen, no
-//   hover): "Replace" (a file, with addFrom="file") and "Remove" under the
-//   main image (the next becomes main), and ✕ always showing on the
-//   others. Its `save` must then accept a new or no main image.
+//   hover): "Replace" under the main image (a file, with addFrom="file"),
+//   and ✕ always showing on the others. Its `save` must then accept a new
+//   main image. The main image is never simply removed (Craig, 9 Nov —
+//   allowing it was a mistake).
 
 // The drag list's name, as a page's component id is in Arrange.
 const LIST_ID = "image-set";
@@ -214,9 +215,6 @@ function ImageGrid({
               />
             </label>
           )}
-          <button type="button" onClick={() => remove(main.id)} className="hover:text-neutral-700">
-            Remove
-          </button>
         </div>
       )}
 

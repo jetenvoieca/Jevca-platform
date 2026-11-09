@@ -69,7 +69,7 @@ export default function CurationWorkPresentation({
   onArtworkChanged,
   showMedium = true,
   addPicturesFrom = "catalogue",
-  mainRemovable = false,
+  mainReplaceable = false,
   basic = false,
 }: {
   curationId: string;
@@ -84,9 +84,9 @@ export default function CurationWorkPresentation({
   // Where added pictures come from (ImageSetEditor's addFrom — files in
   // the Artist App's Portfolio level).
   addPicturesFrom?: "catalogue" | "file";
-  // The main picture can be replaced or removed, with the controls always
-  // showing (ImageSetEditor's fullControls — the Artist App).
-  mainRemovable?: boolean;
+  // The main picture can be replaced, with the controls always showing
+  // (ImageSetEditor's fullControls — the Artist App).
+  mainReplaceable?: boolean;
   // Laid out as the Artist App's Add new work form (2026-11-09, Craig —
   // the Portfolio level): a larger Description, and Full price only (no
   // Purchase Options heading or instalments; online sales come later).
@@ -232,7 +232,7 @@ export default function CurationWorkPresentation({
           artistId={artistId}
           siteId={siteId}
           images={data.images}
-          save={(imageIds) => setCurationWorkImages(curationId, artistId, artworkId, imageIds, { mainRemovable })}
+          save={(imageIds) => setCurationWorkImages(curationId, artistId, artworkId, imageIds, { mainReplaceable })}
           onSaved={(images) => {
             setError(null);
             setData({ ...data, images });
@@ -240,7 +240,7 @@ export default function CurationWorkPresentation({
           }}
           onError={setError}
           addFrom={addPicturesFrom}
-          fullControls={mainRemovable}
+          fullControls={mainReplaceable}
         />
 
         <div className="flex flex-col gap-2.5">

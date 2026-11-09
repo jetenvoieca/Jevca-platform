@@ -302,7 +302,7 @@ export default function ArtistPagesView({
           onArtworkChanged={() => loadContent(selected.id)}
           showMedium={ARTIST_APP_SHOWS_PRESENTATION_MEDIUM}
           addPicturesFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
-          mainRemovable
+          mainReplaceable
           basic
         />
       )}
