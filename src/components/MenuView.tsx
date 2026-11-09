@@ -149,7 +149,8 @@ export default function MenuView({
                 className={`flex flex-col ${ALIGN_ITEMS[align]}`}
                 style={{
                   gap: Math.max(sub.gap, fullScreen ? FULL_SCREEN_SUB_GAP : 0),
-                  marginTop: Math.max(sub.gap, fullScreen ? FULL_SCREEN_SUB_GAP : 0),
+                  // As far from the pages above and below as from each other.
+                  marginBlock: Math.max(sub.gap, fullScreen ? FULL_SCREEN_SUB_GAP : 0),
                   paddingLeft: align === "left" ? sub.indent : 0,
                 }}
               >
