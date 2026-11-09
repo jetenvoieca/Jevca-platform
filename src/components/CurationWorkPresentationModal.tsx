@@ -17,6 +17,7 @@ export default function CurationWorkPresentationModal({
   onArtworkChanged,
   showMedium = true,
   addPicturesFrom = "catalogue",
+  mainRemovable = false,
 }: {
   curationId: string;
   artworkId: string;
@@ -28,6 +29,7 @@ export default function CurationWorkPresentationModal({
   onArtworkChanged: () => void;
   showMedium?: boolean;
   addPicturesFrom?: "catalogue" | "file";
+  mainRemovable?: boolean;
 }) {
   const close = () => {
     (document.activeElement as HTMLElement | null)?.blur();
@@ -72,6 +74,7 @@ export default function CurationWorkPresentationModal({
             onArtworkChanged={onArtworkChanged}
             showMedium={showMedium}
             addPicturesFrom={addPicturesFrom}
+            mainRemovable={mainRemovable}
           />
         </div>
       </div>

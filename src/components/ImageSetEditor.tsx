@@ -32,6 +32,10 @@ import { uploadPicture } from "@/lib/pictureUpload";
 //   or Videos) — or, with `addFrom="file"` (2026-11-09, the Artist App's
 //   Portfolio level), chooses a picture file from the device, uploaded
 //   straight in (lib/pictureUpload.ts).
+// - `fullControls` (2026-11-09, the Artist App — a touch screen, no
+//   hover): "Replace" (a file, with addFrom="file") and "Remove" under the
+//   main image (the next becomes main), and ✕ always showing on the
+//   others. Its `save` must then accept a new or no main image.
 
 // The drag list's name, as a page's component id is in Arrange.
 const LIST_ID = "image-set";
@@ -51,6 +55,7 @@ export default function ImageSetEditor(props: {
   onSaved: (images: ArtworkImage[]) => void;
   onError: (message: string) => void;
   addFrom?: "catalogue" | "file";
+  fullControls?: boolean;
 }) {
   const [dragging, setDragging] = useState<ItemDragData | null>(null);
   // Moving the pointer a little first, so a click on ✕ isn't a drag.
@@ -88,6 +93,7 @@ function ImageGrid({
   onSaved,
   onError,
   addFrom = "catalogue",
+  fullControls = false,
   dragging,
 }: {
   artistId: string;
@@ -97,6 +103,7 @@ function ImageGrid({
   onSaved: (images: ArtworkImage[]) => void;
   onError: (message: string) => void;
   addFrom?: "catalogue" | "file";
+  fullControls?: boolean;
   dragging: ItemDragData | null;
 }) {
   const [busy, setBusy] = useState(false);
@@ -126,7 +133,8 @@ function ImageGrid({
   // The square a chosen file is going into, while it uploads and is
   // saved — it says so there (Craig, 9 Nov: there's a short wait).
   const [fetching, setFetching] = useState<string | null>(null);
-  const addFile = async (tile: string, file: File) => {
+  // `replaceMain`: the file takes the main image's place.
+  const addFile = async (tile: string, file: File, replaceMain = false) => {
     setFetching(tile);
     setBusy(true);
     const result = await uploadPicture(artistId, file).catch(() => ({ error: "Upload failed — please try again." }));
@@ -135,7 +143,8 @@ function ImageGrid({
       setFetching(null);
       return onError(result.error);
     }
-    await add([{ id: result.imageId }]);
+    if (replaceMain) await save([result.imageId, ...ids.slice(1).filter((id) => id !== result.imageId)]);
+    else await add([{ id: result.imageId }]);
     setFetching(null);
   };
 
@@ -179,9 +188,36 @@ function ImageGrid({
           <span className="absolute bottom-0 left-0 rounded-tr bg-neutral-900/80 px-1.5 py-0.5 text-[10px] text-white">
             Main
           </span>
+          {fetching === "replace-main" && (
+            <span className="absolute inset-0 flex items-center justify-center bg-white/70 text-sm text-neutral-600">
+              Fetching image…
+            </span>
+          )}
         </ImageTile>
       ) : (
         addTile("add-main", "Add main image", "col-span-3 aspect-square")
+      )}
+      {fullControls && main && (
+        <div className="col-span-3 -mt-1 flex justify-end gap-4 text-sm text-neutral-400">
+          {addFrom === "file" && (
+            <label className="cursor-pointer hover:text-neutral-700">
+              Replace
+              <input
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={(e) => {
+                  const file = e.target.files?.[0];
+                  e.target.value = "";
+                  if (file) addFile("replace-main", file, true);
+                }}
+              />
+            </label>
+          )}
+          <button type="button" onClick={() => remove(main.id)} className="hover:text-neutral-700">
+            Remove
+          </button>
+        </div>
       )}
 
       {[0, 1, 2].map((i) => {
@@ -194,7 +230,9 @@ function ImageGrid({
               onClick={() => remove(img.id)}
               disabled={busy}
               title="Remove"
-              className="absolute right-0 top-0 hidden rounded-bl bg-black/60 px-1.5 py-0.5 text-[10px] text-white group-hover:block"
+              className={`absolute right-0 top-0 rounded-bl bg-black/60 px-1.5 py-0.5 text-[10px] text-white ${
+                fullControls ? "" : "hidden group-hover:block"
+              }`}
             >
               ✕
             </button>

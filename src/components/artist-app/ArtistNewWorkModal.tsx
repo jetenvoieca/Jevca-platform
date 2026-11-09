@@ -110,6 +110,7 @@ export default function ArtistNewWorkModal({
               }}
               onError={setError}
               addFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
+              fullControls
             />
 
             <div className="flex flex-col gap-2.5">

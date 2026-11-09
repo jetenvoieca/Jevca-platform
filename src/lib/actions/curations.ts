@@ -493,6 +493,9 @@ export async function setCurationWorkImages(
   artistId: string,
   artworkId: string,
   imageIds: string[],
+  // The main image may be replaced or removed (2026-11-09 — the Artist
+  // App, Craig's request; the admin keeps the rule above).
+  options: { mainRemovable?: boolean } = {},
 ): Promise<Result<{ images: ArtworkImage[] }>> {
   await requireArtistAccess(artistId);
   const ids = [...new Set(imageIds)];
@@ -515,7 +518,7 @@ export async function setCurationWorkImages(
   const currentMainId = item.ownImages
     ? (item.images[0]?.imageId ?? null)
     : item.artwork.mainImageId;
-  if (currentMainId && !ids.includes(currentMainId)) {
+  if (!options.mainRemovable && currentMainId && !ids.includes(currentMainId)) {
     return { error: "The main image can't be removed — make another image main instead." };
   }
 

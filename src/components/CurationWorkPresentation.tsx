@@ -69,6 +69,7 @@ export default function CurationWorkPresentation({
   onArtworkChanged,
   showMedium = true,
   addPicturesFrom = "catalogue",
+  mainRemovable = false,
 }: {
   curationId: string;
   artworkId: string;
@@ -82,6 +83,9 @@ export default function CurationWorkPresentation({
   // Where added pictures come from (ImageSetEditor's addFrom — files in
   // the Artist App's Portfolio level).
   addPicturesFrom?: "catalogue" | "file";
+  // The main picture can be replaced or removed, with the controls always
+  // showing (ImageSetEditor's fullControls — the Artist App).
+  mainRemovable?: boolean;
 }) {
   const [data, setData] = useState<Presentation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -223,7 +227,7 @@ export default function CurationWorkPresentation({
           artistId={artistId}
           siteId={siteId}
           images={data.images}
-          save={(imageIds) => setCurationWorkImages(curationId, artistId, artworkId, imageIds)}
+          save={(imageIds) => setCurationWorkImages(curationId, artistId, artworkId, imageIds, { mainRemovable })}
           onSaved={(images) => {
             setError(null);
             setData({ ...data, images });
@@ -231,6 +235,7 @@ export default function CurationWorkPresentation({
           }}
           onError={setError}
           addFrom={addPicturesFrom}
+          fullControls={mainRemovable}
         />
 
         <div className="flex flex-col gap-2.5">
