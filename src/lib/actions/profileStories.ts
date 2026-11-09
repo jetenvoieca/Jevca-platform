@@ -3,10 +3,11 @@
 import { requireArtistAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { publicMediaUrl } from "@/lib/r2";
-import { ensureFixedEntries, FIXED_ENTRIES, type ProfileStoryKind } from "@/lib/profileCatalogue";
+import { clearProfileEntries, ensureFixedEntries } from "@/lib/profileCatalogue";
+import { FIXED_ENTRIES, type FixedKind, type ProfileStoryKind } from "@/lib/profileEntries";
 
 // The Profile Catalogue (2026-10-26) — see ProfileStory in schema.prisma
-// and lib/profileCatalogue.ts (the fixed entries).
+// and lib/profileEntries.ts (the fixed entries).
 
 // One gallery in a Galleries entry (2026-11-03): its Location's name, and
 // its town and website from its Customer record.
@@ -220,6 +221,17 @@ export async function setProfileGalleries(
 export async function deleteProfileStory(id: string, artistId: string): Promise<void> {
   await requireArtistAccess(artistId);
   await db.profileStory.deleteMany({ where: { id, artistId, kind: "STORY" } });
+}
+
+// Clear all (2026-11-09) — see clearProfileEntries. Returns the
+// catalogue as it now is.
+export async function clearProfileCatalogue(
+  artistId: string,
+  choice: { fixed: FixedKind[]; stories: boolean }
+): Promise<Result<ProfileStoryRow[]>> {
+  await requireArtistAccess(artistId);
+  await clearProfileEntries(artistId, choice);
+  return entriesInOrder(artistId);
 }
 
 // The stories in this order (every story's id, first first — the fixed
