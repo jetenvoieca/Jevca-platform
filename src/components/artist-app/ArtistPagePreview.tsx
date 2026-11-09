@@ -47,7 +47,7 @@ export default function ArtistPagePreview({
           prefetch={false}
           className="shrink-0 text-sm text-neutral-500 hover:text-neutral-800"
         >
-          ← Arrange Pages
+          ← Pages
         </Link>
         <h1 className="min-w-0 flex-1 truncate text-center text-lg text-neutral-800">Preview — {title}</h1>
         <PublishButton siteId={siteId} lastPublishedAt={lastPublishedAt} />

@@ -25,6 +25,8 @@ import PublishedSiteLink from "@/components/PublishedSiteLink";
 // them (2026-11-08): "← Admin" back to the site in the admin (admin only
 // for now, like the app), and the admin's icons — the eye (the chosen
 // page's preview, on Arrange Pages), publish and the published site.
+// Buttons (2026-11-09, Craig's mockup): capitals, centred, 4px corners;
+// Pages, CV, Exhibition, Concierge, Account (Consignment dropped).
 
 const BUTTON_COLOR = "#FBF7EE";
 const CONCIERGE_COLOR = "#FAE8C3";
@@ -45,8 +47,8 @@ export default function ArtistAppFrame({
   const chosenPage = pathname === artistAppHref(siteId, "pages") ? searchParams.get("page") : null;
   const screens = [
     ...(ARTIST_APP_SHOWS_MANAGE_WORKS ? [{ label: "Manage Works", href: artistAppHref(siteId) }] : []),
-    { label: "Arrange Pages", href: artistAppHref(siteId, "pages") },
-    { label: "Update CV", href: artistAppHref(siteId, "cv") },
+    { label: "Pages", href: artistAppHref(siteId, "pages") },
+    { label: "CV", href: artistAppHref(siteId, "cv") },
   ];
 
   return (
@@ -82,11 +84,9 @@ export default function ArtistAppFrame({
               {s.label}
             </AppButton>
           ))}
-          {["Exhibition", "Consignment"].map((label) => (
-            <AppButton key={label}>{label}</AppButton>
-          ))}
+          <AppButton>Exhibition</AppButton>
           <AppButton color={CONCIERGE_COLOR}>Concierge</AppButton>
-          <AppButton>Upgrade</AppButton>
+          <AppButton>Account</AppButton>
         </nav>
       </div>
     </div>
@@ -105,7 +105,7 @@ function AppButton({
   color?: string;
   children: React.ReactNode;
 }) {
-  const className = `flex h-24 shrink-0 items-center whitespace-nowrap rounded-2xl border px-5 text-left text-2xl font-light text-neutral-500 sm:h-12 sm:rounded-xl sm:px-4 sm:text-lg lg:h-24 lg:rounded-2xl lg:px-5 lg:text-2xl ${
+  const className = `flex h-24 shrink-0 items-center justify-center whitespace-nowrap rounded-[4px] border px-5 text-center text-2xl font-light uppercase text-neutral-600 sm:h-12 sm:px-4 sm:text-lg lg:h-24 lg:px-5 lg:text-2xl ${
     active ? "border-neutral-500" : "border-neutral-300"
   }`;
   if (!href) {
