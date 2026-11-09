@@ -18,6 +18,11 @@ export const ARTIST_APP_MENU_TEXT = "#4A4A4A";
 export const ARTIST_APP_SHOWS_MANAGE_WORKS = false;
 export const ARTIST_APP_SHOWS_PRESENTATION_MEDIUM = false;
 
+// The basic "Portfolio" account level (Craig, 9 Nov — more levels to
+// come, each more sophisticated): the artwork picker without its Location
+// and Type filters. To become a setting of the client's level.
+export const ARTIST_APP_PICKER_FILTERS = false;
+
 // Its screens: Manage Works (the start), Arrange Pages and Update CV.
 export function artistAppHref(siteId: string, screen: "" | "pages" | "cv" = ""): string {
   return `/artist-app/${siteId}${screen ? `/${screen}` : ""}`;

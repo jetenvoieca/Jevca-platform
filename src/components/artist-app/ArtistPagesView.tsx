@@ -31,7 +31,11 @@ import ArtworkPicker from "@/components/ArtworkPicker";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { addWorksToCuration } from "@/lib/actions/curations";
 import { LiveSiteData } from "@/lib/siteData";
-import { ARTIST_APP_SHOWS_PRESENTATION_MEDIUM, artistAppPageHref } from "@/lib/artistApp";
+import {
+  ARTIST_APP_PICKER_FILTERS,
+  ARTIST_APP_SHOWS_PRESENTATION_MEDIUM,
+  artistAppPageHref,
+} from "@/lib/artistApp";
 import { MainPanel, PictureTile, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
 import {
   DragThumb,
@@ -568,6 +572,7 @@ function AddWorks({
       label={`+ ${words.items}`}
       triggerClassName="border border-neutral-300 px-3 text-2xl font-light text-neutral-800 hover:bg-neutral-50"
       allowCreate={false}
+      showFilters={ARTIST_APP_PICKER_FILTERS}
       excludeIds={excludeIds}
       onSelect={async (picked) => {
         if (picked.length === 0) return;

@@ -20,6 +20,7 @@ export default function ArtworkPicker({
   variant = "icon",
   triggerClassName,
   allowCreate = true,
+  showFilters = true,
   excludeIds = [],
   availableOnly = false,
   onSelect,
@@ -42,6 +43,9 @@ export default function ArtworkPicker({
   // (2026-09-24). Off for Curations, which only ever gather works that
   // already exist in the catalogue.
   allowCreate?: boolean;
+  // The Location and Type filters (off in the Artist App's Portfolio
+  // level, 2026-11-09).
+  showFilters?: boolean;
   // Artworks to leave out of the list (2026-09-24) — e.g. works already
   // in the curation being added to, so they can't be picked twice.
   excludeIds?: string[];
@@ -141,7 +145,7 @@ export default function ArtworkPicker({
     setOpen(true);
     setSelected([]);
     load(query);
-    if (!filterOptions) {
+    if (showFilters && !filterOptions) {
       getArtworkSettings(artistId).then((s) =>
         setFilterOptions({ locations: s.locations.map((l) => l.name), types: s.artworkTypes })
       );
@@ -243,39 +247,43 @@ export default function ArtworkPicker({
             autoFocus
             className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
-          <select
-            value={location}
-            onChange={(e) => {
-              setLocation(e.target.value);
-              load(query, e.target.value, type);
-            }}
-            className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
-          >
-            <option value="">All locations</option>
-            {/* The catalogue filters' "none" choices (2026-10-27). */}
-            <option value={FILTER_NONE}>No location</option>
-            {filterOptions?.locations.map((l) => (
-              <option key={l} value={l}>
-                {l}
-              </option>
-            ))}
-          </select>
-          <select
-            value={type}
-            onChange={(e) => {
-              setType(e.target.value);
-              load(query, location, e.target.value);
-            }}
-            className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
-          >
-            <option value="">All types</option>
-            <option value={FILTER_NONE}>No type</option>
-            {filterOptions?.types.map((t) => (
-              <option key={t} value={t}>
-                {t}
-              </option>
-            ))}
-          </select>
+          {showFilters && (
+            <>
+              <select
+                value={location}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  load(query, e.target.value, type);
+                }}
+                className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
+              >
+                <option value="">All locations</option>
+                {/* The catalogue filters' "none" choices (2026-10-27). */}
+                <option value={FILTER_NONE}>No location</option>
+                {filterOptions?.locations.map((l) => (
+                  <option key={l} value={l}>
+                    {l}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={type}
+                onChange={(e) => {
+                  setType(e.target.value);
+                  load(query, location, e.target.value);
+                }}
+                className="rounded-md border border-neutral-300 px-2 py-2 text-sm"
+              >
+                <option value="">All types</option>
+                <option value={FILTER_NONE}>No type</option>
+                {filterOptions?.types.map((t) => (
+                  <option key={t} value={t}>
+                    {t}
+                  </option>
+                ))}
+              </select>
+            </>
+          )}
           <div className="flex-1" />
           {allowCreate && (
             <>
