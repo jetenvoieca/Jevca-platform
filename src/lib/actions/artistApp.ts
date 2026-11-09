@@ -314,27 +314,40 @@ export async function createArtistAppWork(
 }
 
 // A work dragged from a page onto another page in the lists (2026-11-09,
-// Craig): moved from `fromCurationId` to the end of that page's curation
-// (left where it is there if it's already in it). The work itself is
-// untouched.
-export async function moveArtistAppWork(
+// Craig). Onto a page showing one picture (e.g. Home): copied — added to
+// that page's curation if it isn't in it, and made the picture the page
+// shows (first in its order there); the work stays where it was. Onto any
+// other page: moved from `fromCurationId` to the end of that page's
+// curation (left where it is there if it's already in it). The work
+// itself is untouched.
+export async function dropArtistAppWork(
   siteId: string,
   fromCurationId: string,
   toPageId: string,
   artworkId: string,
-): Promise<{ ok: true } | { error: string }> {
+): Promise<{ ok: true; copied: boolean } | { error: string }> {
   const { artistId } = await requireSiteAccess(siteId);
   const [from, toPage] = await Promise.all([
     db.curationItem.findFirst({
       where: { curationId: fromCurationId, artworkId, curation: { artistId } },
       select: { id: true },
     }),
-    db.page.findFirst({ where: { id: toPageId, siteId }, select: { curationId: true } }),
+    db.page.findFirst({ where: { id: toPageId, siteId }, select: { curationId: true, pageStyleId: true } }),
   ]);
   if (!from) return { error: "That work is no longer on this page." };
   const toCurationId = toPage?.curationId;
-  if (!toCurationId) return { error: "That page doesn't show works that can be moved there." };
-  if (toCurationId === fromCurationId) return { ok: true };
+  if (!toPage || !toCurationId) return { error: "That page doesn't show works that can be put there." };
+  if (toCurationId === fromCurationId) return { ok: true, copied: false };
+
+  // The target's one works component, if it shows a single picture.
+  const style = (await listPageStyles()).find((st) => st.id === toPage.pageStyleId);
+  const blockTypes = new Map((style?.type === "BLOCK_BUILD" ? style.layout.blocks : []).map((b) => [b.id, b.type]));
+  const worksComponents = (await getPageComponents(siteId, toPageId)).filter((c) => {
+    const type = blockTypes.get(c.blockId);
+    return c.source === "WORKS" && !!type && contentFits(type, "WORKS");
+  });
+  const onlyType = worksComponents.length === 1 ? blockTypes.get(worksComponents[0].blockId) : undefined;
+  const single = onlyType === "image" || onlyType === "picturewords" ? worksComponents[0] : null;
 
   const [already, last] = await Promise.all([
     db.curationItem.findFirst({ where: { curationId: toCurationId, artworkId }, select: { id: true } }),
@@ -344,15 +357,23 @@ export async function moveArtistAppWork(
       select: { position: true },
     }),
   ]);
-  await db.$transaction([
-    ...(already
-      ? []
-      : [
-          db.curationItem.create({
-            data: { curationId: toCurationId, artworkId, position: (last?.position ?? -1) + 1 },
-          }),
-        ]),
-    db.curationItem.delete({ where: { id: from.id } }),
-  ]);
-  return { ok: true };
+  const addThere = already
+    ? []
+    : [db.curationItem.create({ data: { curationId: toCurationId, artworkId, position: (last?.position ?? -1) + 1 } })];
+
+  if (single) {
+    await db.$transaction([
+      ...addThere,
+      db.pageComponentContent.updateMany({
+        where: { pageId: toPageId, blockId: single.blockId, source: "WORKS" },
+        data: {
+          hiddenIds: single.hiddenIds.filter((id) => id !== artworkId),
+          orderIds: [artworkId, ...single.orderIds.filter((id) => id !== artworkId)],
+        },
+      }),
+    ]);
+    return { ok: true, copied: true };
+  }
+  await db.$transaction([...addThere, db.curationItem.delete({ where: { id: from.id } })]);
+  return { ok: true, copied: false };
 }

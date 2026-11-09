@@ -14,7 +14,7 @@ import {
 import {
   addArtistAppGroupPage,
   getArtistAppPageContent,
-  moveArtistAppWork,
+  dropArtistAppWork,
   type ArtistAppPage,
   type ArtistAppPageContent,
 } from "@/lib/actions/artistApp";
@@ -58,7 +58,8 @@ import type { SiteWork } from "@/lib/siteWorks";
 // Presentation in the curation the page shows it from (Craig, 8 Nov). A
 // page without works shows its Profile entries (tap for the entry's
 // window), exhibitions or contact form instead (Craig, 9 Nov). A work
-// dragged onto another curation page in the lists moves there. Under a
+// dragged onto another curation page in the lists moves there (onto a
+// one-picture page such as Home, it's copied there as its picture). Under a
 // group of curation pages, "Add new … page" adds one (a new curation and
 // its page, in Hidden — addArtistAppGroupPage).
 
@@ -155,23 +156,25 @@ export default function ArtistPagesView({
     if (from.type === "page") {
       dropPage(from.pageId, to.kind === "page" ? { pageId: to.pageId } : { visible: to.visible });
     } else if (to.kind === "page" && takesWork(to.pageId)) {
-      moveWork(from.itemId, to.pageId);
+      dropWork(from.itemId, to.pageId);
     }
   };
 
   // A work can be dragged from an arrangeable page onto another page in
-  // the lists that shows a curation (Craig, 9 Nov) — moved there.
+  // the lists that shows a curation (Craig, 9 Nov) — moved there, or
+  // copied onto a one-picture page such as Home as its picture
+  // (dropArtistAppWork).
   const takesWork = (pageId: string) =>
     content?.kind === "arrange" && pageId !== selectedId && !!pages.find((p) => p.id === pageId)?.hasCuration;
 
-  const moveWork = async (artworkId: string, toPageId: string) => {
+  const dropWork = async (artworkId: string, toPageId: string) => {
     if (content?.kind !== "arrange" || !content.arrange || !selectedId) return;
     setError(null);
-    const result = await moveArtistAppWork(siteId, content.arrange.curationId, toPageId, artworkId).catch(() => ({
+    const result = await dropArtistAppWork(siteId, content.arrange.curationId, toPageId, artworkId).catch(() => ({
       error: "The work wasn't moved — please try again.",
     }));
     if ("error" in result) setError(result.error);
-    loadContent(selectedId);
+    else if (!result.copied) loadContent(selectedId);
   };
 
   const selected = pages.find((p) => p.id === selectedId) ?? null;
