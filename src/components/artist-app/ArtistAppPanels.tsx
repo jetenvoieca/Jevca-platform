@@ -18,7 +18,7 @@ export function MainPanel({
   children: ReactNode;
 }) {
   return (
-    <section className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-8 py-8 lg:overflow-y-auto">
+    <section className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-5 py-6 sm:overflow-y-auto lg:px-8 lg:py-8">
       {heading !== undefined && <PanelHeading aside={aside}>{heading}</PanelHeading>}
       {children}
     </section>
@@ -28,7 +28,7 @@ export function MainPanel({
 export function PanelHeading({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
   return (
     <div className="mb-8 flex items-stretch justify-center gap-3">
-      <h2 className="w-fit min-w-72 border border-neutral-200 px-6 py-1.5 text-center text-2xl text-neutral-800">
+      <h2 className="w-fit min-w-0 border border-neutral-200 px-6 py-1.5 text-center text-2xl text-neutral-800 lg:min-w-72">
         {children}
       </h2>
       {aside}
@@ -38,14 +38,15 @@ export function PanelHeading({ aside, children }: { aside?: ReactNode; children:
 
 export function SidePanel({ children }: { children: ReactNode }) {
   return (
-    <section className="flex shrink-0 flex-col gap-3 rounded-lg border border-neutral-300 bg-white p-3 lg:w-[340px] lg:overflow-y-auto">
+    <section className="flex shrink-0 flex-col gap-3 rounded-lg border border-neutral-300 bg-white p-3 sm:w-[240px] sm:overflow-y-auto lg:w-[340px]">
       {children}
     </section>
   );
 }
 
 export function WorkGrid({ children }: { children: ReactNode }) {
-  return <div className="grid grid-cols-2 gap-x-8 gap-y-7 md:grid-cols-3 xl:grid-cols-4">{children}</div>;
+  // As many columns as the panel's width allows.
+  return <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-6 gap-y-7">{children}</div>;
 }
 
 export type TileWork = {

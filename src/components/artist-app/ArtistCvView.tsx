@@ -133,7 +133,7 @@ export default function ArtistCvView({
 }
 
 function EntryGrid({ children }: { children: React.ReactNode }) {
-  return <div className="grid grid-cols-2 gap-x-6 gap-y-7 md:grid-cols-4">{children}</div>;
+  return <div className="grid grid-cols-[repeat(auto-fill,minmax(140px,1fr))] gap-x-6 gap-y-7">{children}</div>;
 }
 
 function Tile({

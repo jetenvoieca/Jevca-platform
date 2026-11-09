@@ -14,6 +14,11 @@ import EyeIcon from "@/components/EyeIcon";
 import PublishButton from "@/components/PublishButton";
 import PublishedSiteLink from "@/components/PublishedSiteLink";
 
+// Sizes (2026-11-09, Craig — half a laptop screen): wide (lg) as the
+// mockups, buttons on the right; medium (sm–lg) the buttons as a row
+// along the top, smaller, with the two panels side by side below; a phone
+// everything stacked.
+//
 // The Artist App's frame (Craig's mockups): one grey rounded frame
 // holding the screen's two panels and, on the right, the app's buttons —
 // its navigation. Buttons without a screen yet are placeholders. Above
@@ -46,10 +51,10 @@ export default function ArtistAppFrame({
 
   return (
     <div className="h-dvh bg-white p-4 lg:p-6" style={{ fontFamily: ARTIST_APP_FONT }}>
-      <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[28px] bg-[#F2F2F2] p-4 lg:flex-row lg:overflow-hidden">
-        {children}
-        {/* Scrolls on its own when taller than the screen (the iPad). */}
-        <nav className="flex shrink-0 flex-col gap-3 lg:w-[200px] lg:overflow-y-auto">
+      <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[28px] bg-[#F2F2F2] p-4 sm:overflow-hidden lg:flex-row">
+        <div className="flex flex-col gap-4 sm:min-h-0 sm:flex-1 sm:flex-row">{children}</div>
+        {/* Scrolls on its own when it doesn't fit (the iPad). */}
+        <nav className="flex shrink-0 flex-col gap-3 sm:order-first sm:flex-row sm:items-center sm:overflow-x-auto lg:order-none lg:w-[200px] lg:flex-col lg:items-stretch lg:overflow-y-auto lg:overflow-x-hidden">
           <div className="flex shrink-0 items-center gap-1">
             <Link
               href={siteNavHref(siteId, "artworks")}
@@ -100,7 +105,7 @@ function AppButton({
   color?: string;
   children: React.ReactNode;
 }) {
-  const className = `flex h-24 shrink-0 items-center rounded-2xl border px-5 text-left text-2xl font-light text-neutral-500 ${
+  const className = `flex h-24 shrink-0 items-center whitespace-nowrap rounded-2xl border px-5 text-left text-2xl font-light text-neutral-500 sm:h-12 sm:rounded-xl sm:px-4 sm:text-lg lg:h-24 lg:rounded-2xl lg:px-5 lg:text-2xl ${
     active ? "border-neutral-500" : "border-neutral-300"
   }`;
   if (!href) {
