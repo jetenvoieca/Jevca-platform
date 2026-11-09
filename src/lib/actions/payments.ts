@@ -41,14 +41,21 @@ export async function updateGallerySaleAmount(...args: Parameters<typeof sales.u
   return sales.updateGallerySaleAmount(...args);
 }
 
+// Deleting or cancelling a sale deletes its alerts (see
+// AlertEvent.purchaseId), so these three bring the Alert list and nav
+// badge up to date straight away.
 export async function deleteGallerySale(...args: Parameters<typeof sales.deleteGallerySale>) {
   await requirePurchaseAccess(args[0]);
-  return sales.deleteGallerySale(...args);
+  const result = await sales.deleteGallerySale(...args);
+  updateTag(OPEN_ALERTS_TAG);
+  return result;
 }
 
 export async function forceDeleteCompletedSale(...args: Parameters<typeof sales.forceDeleteCompletedSale>) {
   await requirePurchaseAccess(args[0]);
-  return sales.forceDeleteCompletedSale(...args);
+  const result = await sales.forceDeleteCompletedSale(...args);
+  updateTag(OPEN_ALERTS_TAG);
+  return result;
 }
 
 export async function recordGalleryPayment(...args: Parameters<typeof sales.recordGalleryPayment>) {
@@ -66,8 +73,6 @@ export async function updatePurchaseRelease(...args: Parameters<typeof sales.upd
   return sales.updatePurchaseRelease(...args);
 }
 
-// Cancelling deletes the sale's alerts, so the Alert list and nav badge
-// are brought up to date straight away.
 export async function abandonPurchase(...args: Parameters<typeof sales.abandonPurchase>) {
   await requirePurchaseAccess(args[0]);
   const result = await sales.abandonPurchase(...args);

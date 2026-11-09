@@ -510,10 +510,11 @@ model AlertEvent {
 
   // The sale this alert is about, for the two sale alert types above
   // (2026-09-21) — lets the Inbox open that sale exactly as the Sales page
-  // does. Null for every other alert type, and set back to null if the
-  // sale is later deleted (the alert itself stays).
+  // does. Null for every other alert type. Deleted with the sale
+  // (2026-11-09, direct request — it's out of date then); cancelling the
+  // sale deletes it too (see abandonPurchase).
   purchaseId String?
-  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: SetNull)
+  purchase   Purchase? @relation(fields: [purchaseId], references: [id], onDelete: Cascade)
 
   // The Hopper alerts (2026-10-31, Craig's mockup — see lib/hopperAlerts.ts):
   // how many items, and when the latest of them arrived or was processed.

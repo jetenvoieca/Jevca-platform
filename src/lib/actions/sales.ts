@@ -2,6 +2,8 @@
 
 import { requireArtistAccess, requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
+import { updateTag } from "next/cache";
+import { OPEN_ALERTS_TAG } from "@/lib/alerts";
 import { saleTitle, netOfCommission } from "@/lib/saleMath";
 import { isSaleOverdue, overdueInvoiceSelect } from "@/lib/overdue";
 
@@ -115,6 +117,8 @@ export async function resetArtistSalesData(
         data: { availability: "AVAILABLE" },
       }),
     ]);
+    // The sales' alerts went with them (see AlertEvent.purchaseId).
+    updateTag(OPEN_ALERTS_TAG);
     return { ok: true };
   } catch (err) {
     return {
