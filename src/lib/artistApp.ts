@@ -18,14 +18,10 @@ export const ARTIST_APP_MENU_TEXT = "#4A4A4A";
 export const ARTIST_APP_SHOWS_MANAGE_WORKS = false;
 export const ARTIST_APP_SHOWS_PRESENTATION_MEDIUM = false;
 
-// The basic "Portfolio" account level (Craig, 9 Nov — more levels to
-// come, each more sophisticated): the artwork picker without its Location
-// and Type filters. To become a setting of the client's level.
-export const ARTIST_APP_PICKER_FILTERS = false;
-// …and a work's pictures (a new work's, and those added in a work's
-// Presentation) chosen as files from the device, uploaded straight in
-// (not through the Hopper or the Media Catalogue).
-export const ARTIST_APP_PICTURES_FROM_FILE = true;
+// What else the app offers — pictures from the device or the Media
+// Catalogue too, the artwork picker's filters, page limits — follows the
+// site's Plan and add-ons (2026-11-09): see siteFeatures in lib/plans.ts
+// and components/artist-app/ArtistAppFeatures.tsx.
 
 // Its screens: Manage Works (the start), Arrange Pages and Update CV.
 export function artistAppHref(siteId: string, screen: "" | "pages" | "cv" = ""): string {

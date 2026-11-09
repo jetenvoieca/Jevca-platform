@@ -34,13 +34,8 @@ import ArtistNewWorkModal from "@/components/artist-app/ArtistNewWorkModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { addWorksToCuration, removeWorkFromCuration } from "@/lib/actions/curations";
 import { LiveSiteData } from "@/lib/siteData";
-import {
-  ARTIST_APP_FONT,
-  ARTIST_APP_PICKER_FILTERS,
-  ARTIST_APP_PICTURES_FROM_FILE,
-  ARTIST_APP_SHOWS_PRESENTATION_MEDIUM,
-  artistAppPageHref,
-} from "@/lib/artistApp";
+import { ARTIST_APP_FONT, ARTIST_APP_SHOWS_PRESENTATION_MEDIUM, artistAppPageHref } from "@/lib/artistApp";
+import { useArtistAppFeatures } from "@/components/artist-app/ArtistAppFeatures";
 import { MainPanel, PictureTile, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
 import {
   DragThumb,
@@ -93,6 +88,7 @@ export default function ArtistPagesView({
   // For the Galleries entry's window.
   galleries: GalleryOption[];
 }) {
+  const features = useArtistAppFeatures();
   const [pages, setPages] = useState(initialPages);
   const [selectedId, setSelectedId] = useState(firstPageId);
   const [content, setContent] = useState(firstContent);
@@ -280,6 +276,12 @@ export default function ArtistPagesView({
                           siteId={siteId}
                           groupId={addTo}
                           groupTitle={titleOf(addTo)}
+                          limit={
+                            features.pagesPerGroup !== null &&
+                            pages.filter((c) => c.parentId === addTo).length >= features.pagesPerGroup
+                              ? features.pagesPerGroup
+                              : null
+                          }
                           onAdded={(page) => {
                             setPages((prev) => arrangePages([...prev, page]));
                             selectPage(page.id);
@@ -316,7 +318,7 @@ export default function ArtistPagesView({
           // Its name, main picture or price may have changed.
           onArtworkChanged={() => loadContent(selected.id)}
           showMedium={ARTIST_APP_SHOWS_PRESENTATION_MEDIUM}
-          addPicturesFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
+          addPicturesFrom={features.picturesFrom}
           mainReplaceable
           basic
         />
@@ -348,7 +350,7 @@ export default function ArtistPagesView({
           artistId={artistId}
           siteId={siteId}
           locations={content.locations}
-          addPicturesFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
+          addPicturesFrom={features.picturesFrom}
           onLocationAdded={(l) =>
             setContent((c) =>
               c?.kind === "exhibitions"
@@ -408,16 +410,19 @@ function addsPages(pages: ArtistAppPage[], groupId: string): boolean {
 }
 
 // "Add new … page": tapped, a name box and Add (Enter); see
-// addArtistAppGroupPage.
+// addArtistAppGroupPage. Once the group has the pages its plan allows
+// (`limit`, 2026-11-09), it says so instead.
 function AddGroupPage({
   siteId,
   groupId,
   groupTitle,
+  limit,
   onAdded,
 }: {
   siteId: string;
   groupId: string;
   groupTitle: string;
+  limit: number | null;
   onAdded: (page: ArtistAppPage) => void;
 }) {
   const [naming, setNaming] = useState(false);
@@ -439,6 +444,13 @@ function AddGroupPage({
     onAdded(result);
   };
 
+  if (limit !== null) {
+    return (
+      <p className="ml-6 px-4 py-2 text-sm text-neutral-400">
+        {groupTitle} has its {limit} pages
+      </p>
+    );
+  }
   if (!naming) {
     return (
       <button
@@ -685,6 +697,7 @@ function AddWorks({
   onError: (message: string | null) => void;
 }) {
   const words = useClientWords();
+  const features = useArtistAppFeatures();
   // "Add new work" open, with the way to close the picker under it.
   const [newWork, setNewWork] = useState<{ closePicker: () => void } | null>(null);
   return (
@@ -696,7 +709,7 @@ function AddWorks({
         label={`+ ${words.items}`}
         triggerClassName="border border-neutral-300 px-3 text-2xl font-light text-neutral-800 hover:bg-neutral-50"
         allowCreate={false}
-        showFilters={ARTIST_APP_PICKER_FILTERS}
+        showFilters={features.pickerFilters}
         headerAction={(closePicker) => (
           <button
             type="button"

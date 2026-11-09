@@ -1,7 +1,7 @@
 "use client";
 
 import { useCallback, useEffect, useState } from "react";
-import ImageSetEditor from "@/components/ImageSetEditor";
+import ImageSetEditor, { type PictureSource } from "@/components/ImageSetEditor";
 import {
   getCurationWorkPresentation,
   setCurationWorkImages,
@@ -83,7 +83,7 @@ export default function CurationWorkPresentation({
   showMedium?: boolean;
   // Where added pictures come from (ImageSetEditor's addFrom — files in
   // the Artist App's Portfolio level).
-  addPicturesFrom?: "catalogue" | "file";
+  addPicturesFrom?: PictureSource;
   // The main picture can be replaced, with the controls always showing
   // (ImageSetEditor's fullControls — the Artist App).
   mainReplaceable?: boolean;

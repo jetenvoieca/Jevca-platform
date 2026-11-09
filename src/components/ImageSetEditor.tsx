@@ -29,14 +29,19 @@ import { uploadPicture } from "@/lib/pictureUpload";
 //   (2026-10-04, direct request) — it's only ever changed by making
 //   another image main, so once there is one there always is.
 // - "+ Add" picks a picture or video from the Media Catalogue (Marketing
-//   or Videos) — or, with `addFrom="file"` (2026-11-09, the Artist App's
-//   Portfolio level), chooses a picture file from the device, uploaded
-//   straight in (lib/pictureUpload.ts).
+//   or Videos) — or, with `addFrom="file"` (2026-11-09, the Artist App
+//   without Art Manager), chooses a picture file from the device, uploaded
+//   straight in (lib/pictureUpload.ts); with `addFrom="both"` (the Artist
+//   App with Art Manager) an empty square offers "+ From device" and
+//   "+ From catalogue".
 // - `fullControls` (2026-11-09, the Artist App — a touch screen, no
-//   hover): "Replace" under the main image (a file, with addFrom="file"),
-//   and ✕ always showing on the others. Its `save` must then accept a new
-//   main image. The main image is never simply removed (Craig, 9 Nov —
+//   hover): Replace under the main image (from the same sources), and ✕
+//   always showing on the others. Its `save` must then accept a new main
+//   image. The main image is never simply removed (Craig, 9 Nov —
 //   allowing it was a mistake).
+
+// Where added pictures come from.
+export type PictureSource = "catalogue" | "file" | "both";
 
 // The drag list's name, as a page's component id is in Arrange.
 const LIST_ID = "image-set";
@@ -55,7 +60,7 @@ export default function ImageSetEditor(props: {
   save: SaveImages;
   onSaved: (images: ArtworkImage[]) => void;
   onError: (message: string) => void;
-  addFrom?: "catalogue" | "file";
+  addFrom?: PictureSource;
   fullControls?: boolean;
 }) {
   const [dragging, setDragging] = useState<ItemDragData | null>(null);
@@ -103,7 +108,7 @@ function ImageGrid({
   save: SaveImages;
   onSaved: (images: ArtworkImage[]) => void;
   onError: (message: string) => void;
-  addFrom?: "catalogue" | "file";
+  addFrom?: PictureSource;
   fullControls?: boolean;
   dragging: ItemDragData | null;
 }) {
@@ -149,22 +154,63 @@ function ImageGrid({
     setFetching(null);
   };
 
+  const fromDevice = addFrom !== "catalogue";
+  const fromCatalogue = addFrom !== "file";
+
+  // A picture file from the device, into `tile` (or the main image's
+  // place), behind `children`.
+  const fileChooser = (tile: string, children: ReactNode, className: string, replaceMain = false) => (
+    <label className={`cursor-pointer ${className}`}>
+      {children}
+      <input
+        type="file"
+        accept="image/*"
+        className="hidden"
+        onChange={(e) => {
+          const file = e.target.files?.[0];
+          e.target.value = "";
+          if (file) addFile(tile, file, replaceMain);
+        }}
+      />
+    </label>
+  );
+
+  // A picture or video from the Media Catalogue, as plain words.
+  const catalogueChooser = (label: string, onSelect: (picked: { id: string }[]) => void) => (
+    <MediaPicker
+      artistId={artistId}
+      siteId={siteId}
+      mode="single"
+      label={label}
+      mediaKinds={["PHOTO", "VIDEO"]}
+      catalogueViews
+      variant="text"
+      onSelect={onSelect}
+    />
+  );
+
+  const emptyTile =
+    "flex h-full w-full flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400";
+
   const addTile = (key: string, label: string, className = "aspect-square") => (
     <div key={key} className={className}>
-      {addFrom === "file" ? (
-        <label className="flex h-full w-full cursor-pointer flex-col items-center justify-center rounded-md border-2 border-dashed border-neutral-300 text-sm text-neutral-400 hover:border-neutral-400 hover:text-neutral-600">
-          {fetching === key ? <span className="text-neutral-500">Fetching image…</span> : `+ ${label}`}
-          <input
-            type="file"
-            accept="image/*"
-            className="hidden"
-            onChange={(e) => {
-              const file = e.target.files?.[0];
-              e.target.value = "";
-              if (file) addFile(key, file);
-            }}
-          />
-        </label>
+      {addFrom === "both" ? (
+        <div className={`${emptyTile} gap-3 px-1 text-center`}>
+          {fetching === key ? (
+            <span className="text-neutral-500">Fetching image…</span>
+          ) : (
+            <>
+              {fileChooser(key, "+ From device", "hover:text-neutral-700")}
+              {catalogueChooser("+ From catalogue", add)}
+            </>
+          )}
+        </div>
+      ) : addFrom === "file" ? (
+        fileChooser(
+          key,
+          fetching === key ? <span className="text-neutral-500">Fetching image…</span> : `+ ${label}`,
+          `${emptyTile} hover:border-neutral-400 hover:text-neutral-600`,
+        )
       ) : (
         <MediaPicker
           artistId={artistId}
@@ -200,21 +246,18 @@ function ImageGrid({
       )}
       {fullControls && main && (
         <div className="col-span-3 -mt-1 flex justify-end gap-4 text-sm text-neutral-400">
-          {addFrom === "file" && (
-            <label className="cursor-pointer hover:text-neutral-700">
-              Replace
-              <input
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={(e) => {
-                  const file = e.target.files?.[0];
-                  e.target.value = "";
-                  if (file) addFile("replace-main", file, true);
-                }}
-              />
-            </label>
-          )}
+          {fromDevice &&
+            fileChooser(
+              "replace-main",
+              addFrom === "both" ? "Replace from device" : "Replace",
+              "hover:text-neutral-700",
+              true,
+            )}
+          {fromCatalogue &&
+            catalogueChooser(addFrom === "both" ? "Replace from catalogue" : "Replace", (picked) => {
+              const id = picked[0]?.id;
+              if (id) save([id, ...ids.slice(1).filter((i) => i !== id)]);
+            })}
         </div>
       )}
 

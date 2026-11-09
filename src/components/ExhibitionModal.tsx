@@ -1,7 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
-import ImageSetEditor from "@/components/ImageSetEditor";
+import ImageSetEditor, { type PictureSource } from "@/components/ImageSetEditor";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { createLocation } from "@/lib/actions/locations";
 import type { LocationSummary } from "@/lib/artworkSettingsData";
@@ -68,7 +68,7 @@ export default function ExhibitionModal({
   onDeleted: () => void;
   onClose: () => void;
   // Where pictures are added from (ImageSetEditor's addFrom).
-  addPicturesFrom?: "catalogue" | "file";
+  addPicturesFrom?: PictureSource;
 }) {
   // A new one is kept here until it's added.
   const [draft, setDraft] = useState(BLANK);

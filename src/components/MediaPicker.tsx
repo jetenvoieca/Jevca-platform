@@ -101,7 +101,10 @@ export default function MediaPicker({
   //
   // "icon" (2026-10-26, the Profile Catalogue's ⊞ beside its heading): a
   // small borderless ⊞ button, `label` as its tooltip.
-  variant?: "tile" | "button" | "inline" | "icon";
+  //
+  // "text" (2026-11-09, ImageSetEditor's "From catalogue"): `label` as
+  // plain words, no border.
+  variant?: "tile" | "button" | "inline" | "icon" | "text";
   onClose?: () => void;
   // Picked media, and (withArtworks) picked artworks — one call with
   // everything picked.
@@ -270,6 +273,12 @@ export default function MediaPicker({
   let trigger: ReactNode;
   if (variant === "icon") {
     trigger = <AddIconButton label={label} onClick={handleOpen} />;
+  } else if (variant === "text") {
+    trigger = (
+      <button type="button" onClick={handleOpen} className="hover:text-neutral-700">
+        {label}
+      </button>
+    );
   } else if (variant === "button") {
     trigger = (
       <button

@@ -1,5 +1,6 @@
 "use client";
 
+import type { PictureSource } from "@/components/ImageSetEditor";
 import { useEffect } from "react";
 import CurationWorkPresentation from "@/components/CurationWorkPresentation";
 
@@ -29,7 +30,7 @@ export default function CurationWorkPresentationModal({
   // See CurationWorkPresentation.
   onArtworkChanged: () => void;
   showMedium?: boolean;
-  addPicturesFrom?: "catalogue" | "file";
+  addPicturesFrom?: PictureSource;
   mainReplaceable?: boolean;
   basic?: boolean;
 }) {

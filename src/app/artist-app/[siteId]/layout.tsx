@@ -3,6 +3,8 @@ import { notFound, redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { getCurrentUser } from "@/lib/currentUser";
 import ClientWordsProvider from "@/components/ClientWordsProvider";
+import ArtistAppFeaturesProvider from "@/components/artist-app/ArtistAppFeatures";
+import { readSiteFeatures } from "@/lib/siteFeaturesData";
 
 export const dynamic = "force-dynamic";
 
@@ -38,6 +40,12 @@ export default async function ArtistAppLayout({
   if (!site) notFound();
 
   // Shared pieces (e.g. the media picker) word themselves for the
-  // client's type, as in the admin — see ClientWordsProvider.
-  return <ClientWordsProvider kind={site.artist.kind}>{children}</ClientWordsProvider>;
+  // client's type, as in the admin — see ClientWordsProvider. What the app
+  // offers follows the site's Plan and add-ons (ArtistAppFeatures).
+  const features = await readSiteFeatures(siteId);
+  return (
+    <ClientWordsProvider kind={site.artist.kind}>
+      <ArtistAppFeaturesProvider features={features}>{children}</ArtistAppFeaturesProvider>
+    </ClientWordsProvider>
+  );
 }

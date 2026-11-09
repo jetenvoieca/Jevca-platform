@@ -13,6 +13,7 @@ import { arrangeItems, contentFits, pageWorks } from "@/lib/pageComponents";
 import { readPageStories } from "@/lib/pageStories";
 import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel";
 import { readLocations, type LocationSummary } from "@/lib/artworkSettingsData";
+import { readSiteFeatures } from "@/lib/siteFeaturesData";
 import { pageShownWorks, type SiteWork } from "@/lib/siteWorks";
 import { CURATION_SECTION_TYPES } from "@/lib/curationSections";
 import { uniquePageSlug } from "@/lib/pageSlugs";
@@ -50,7 +51,8 @@ export async function listArtistAppPages(siteId: string): Promise<ArtistAppPage[
 // it, both named `name`. The page goes under the group, in Hidden Pages
 // (so nothing shows on the site until it's moved to Live), and looks like
 // the group's first page — its Display Style and menu, and its works
-// component(s) (arranged afresh). Returns the new page.
+// component(s) (arranged afresh). Not once the group has the pages the
+// site's plan allows (2026-11-09). Returns the new page.
 export async function addArtistAppGroupPage(
   siteId: string,
   groupId: string,
@@ -77,6 +79,10 @@ export async function addArtistAppGroupPage(
   const model = group?.children[0];
   if (!group || !model || group.children.some((c) => !c.curationId)) {
     return { error: "Pages can't be added here." };
+  }
+  const { pagesPerGroup } = await readSiteFeatures(siteId);
+  if (pagesPerGroup !== null && group.children.length >= pagesPerGroup) {
+    return { error: `This group already has its ${pagesPerGroup} pages.` };
   }
   if (await db.curation.findFirst({ where: { artistId, name }, select: { id: true } })) {
     return { error: "A curation with this name already exists — choose another name." };

@@ -1766,10 +1766,13 @@ model PlanTheme {
 }
 
 // The add-ons there are (2026-11-09) — each a feature a Plan can offer
-// at a monthly price. EXTRA_PAGE_GROUP is charged for each one: another
-// group of pages beside the Plan's own (e.g. "Drawings" beside
-// "Portfolio"), each up to the Plan's pagesPerGroup. See lib/plans.ts.
+// at a monthly price. ART_MANAGER: the Artist App's richer ways (pictures
+// from the Media Catalogue too, the artwork picker's filters).
+// EXTRA_PAGE_GROUP is charged for each one: another group of pages beside
+// the Plan's own (e.g. "Drawings" beside "Portfolio"), each up to the
+// Plan's pagesPerGroup. See lib/plans.ts.
 enum AddOn {
+  ART_MANAGER
   LOCATIONS
   ECOMMERCE
   MAILINGS

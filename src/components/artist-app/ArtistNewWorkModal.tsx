@@ -11,7 +11,7 @@ import {
 } from "@/lib/actions/artistApp";
 import type { ArtworkImage } from "@/lib/artworkImages";
 import { CURRENCIES } from "@/lib/currencies";
-import { ARTIST_APP_PICTURES_FROM_FILE } from "@/lib/artistApp";
+import { useArtistAppFeatures } from "@/components/artist-app/ArtistAppFeatures";
 
 // "Add new work" (2026-11-09, Craig's mockup): a curation's Presentation
 // for a work that doesn't exist yet — pictures, Name, Description (larger)
@@ -38,6 +38,7 @@ export default function ArtistNewWorkModal({
   onAdded: () => void;
 }) {
   const words = useClientWords();
+  const features = useArtistAppFeatures();
   const item = words.item.toLowerCase();
   const [images, setImages] = useState<ArtworkImage[]>([]);
   const [name, setName] = useState("");
@@ -109,7 +110,7 @@ export default function ArtistNewWorkModal({
                 setImages(next);
               }}
               onError={setError}
-              addFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
+              addFrom={features.picturesFrom}
               fullControls
             />
 
