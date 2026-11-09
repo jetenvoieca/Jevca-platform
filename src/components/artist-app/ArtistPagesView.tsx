@@ -30,7 +30,7 @@ import ContactPanel from "@/components/ContactPanel";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import ArtistNewWorkModal from "@/components/artist-app/ArtistNewWorkModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
-import { addWorksToCuration } from "@/lib/actions/curations";
+import { addWorksToCuration, removeWorkFromCuration } from "@/lib/actions/curations";
 import { LiveSiteData } from "@/lib/siteData";
 import {
   ARTIST_APP_FONT,
@@ -202,11 +202,13 @@ export default function ArtistPagesView({
             <PageWorks
               key={`${selected.id}:${contentLoad}`}
               siteId={siteId}
+              artistId={artistId}
               pageId={selected.id}
               data={content}
               dragging={dragging}
               onError={setError}
               onOpen={setPresenting}
+              onRemoved={() => loadContent(selected.id)}
             />
           )}
         </MainPanel>
@@ -449,19 +451,24 @@ function PageRow({
 // for this page only.
 function PageWorks({
   siteId,
+  artistId,
   pageId,
   data,
   dragging,
   onError,
   onOpen,
+  onRemoved,
 }: {
   siteId: string;
+  artistId: string;
   pageId: string;
   data: Extract<ArtistAppPageContent, { works: SiteWork[] }>;
   dragging: DragData | null;
   onError: (message: string | null) => void;
   // A work tapped: its Presentation, in the curation it's shown from.
   onOpen: (work: SiteWork) => void;
+  // After "Remove work" (the page's content is loaded afresh).
+  onRemoved: () => void;
 }) {
   const [works, setWorks] = useState(data.works);
   const arrange = data.arrange;
@@ -488,6 +495,23 @@ function PageWorks({
 
   useArrangeReorder(data.kind === "arrange" && arrange ? arrange.blockId : "", move);
 
+  // "Remove work" (Craig, 9 Nov): out of the page's curation, after a
+  // check — the work itself stays in the Catalogue.
+  const remove = async (work: SiteWork) => {
+    if (!arrange) return;
+    if (!confirm(`Remove "${work.catalogueName}" from this page? It stays in your catalogue.`)) return;
+    const before = works;
+    setWorks(works.filter((w) => w.artworkId !== work.artworkId));
+    onError(null);
+    const result = await removeWorkFromCuration(arrange.curationId, artistId, work.artworkId).catch(() => ({
+      error: "",
+    }));
+    if ("error" in result) {
+      setWorks(before);
+      onError("The work wasn't removed — please try again.");
+    } else onRemoved();
+  };
+
   if (works.length === 0) return <p className="text-center text-neutral-400">No works on this page</p>;
 
   // One picture on the page (Craig, 8 Nov): the work shown, then the
@@ -497,7 +521,7 @@ function PageWorks({
     return (
       <>
         <WorkGrid>
-          <WorkTile work={shown} onClick={() => onOpen(shown)} className="cursor-pointer" />
+          <WorkTile hideNumber work={shown} onClick={() => onOpen(shown)} className="cursor-pointer" />
         </WorkGrid>
         <p className="mt-2 text-sm text-neutral-400">On the page</p>
         {others.length > 0 && (
@@ -509,6 +533,7 @@ function PageWorks({
               {others.map((w) => (
                 <WorkTile
                   key={w.artworkId}
+                  hideNumber
                   work={w}
                   onClick={() => move(w.artworkId, shown.artworkId)}
                   className="cursor-pointer opacity-80 hover:opacity-100"
@@ -539,9 +564,16 @@ function PageWorks({
               work={w}
               dragging={dragging}
               onClick={() => onOpen(w)}
+              onRemove={() => remove(w)}
             />
           ) : (
-            <WorkTile key={`${w.artworkId}:${i}`} work={w} onClick={() => onOpen(w)} className="cursor-pointer" />
+            <WorkTile
+              key={`${w.artworkId}:${i}`}
+              hideNumber
+              work={w}
+              onClick={() => onOpen(w)}
+              className="cursor-pointer"
+            />
           ),
         )}
       </WorkGrid>
@@ -663,11 +695,13 @@ function DraggableWork({
   work,
   dragging,
   onClick,
+  onRemove,
 }: {
   blockId: string;
   work: SiteWork;
   dragging: DragData | null;
   onClick: () => void;
+  onRemove: () => void;
 }) {
   const drag = useArrangeItem(blockId, work.artworkId, work.imageUrl, dragging);
   return (
@@ -677,6 +711,21 @@ function DraggableWork({
       {...drag.listeners}
       onClick={onClick}
       work={work}
+      aside={
+        <button
+          type="button"
+          // Not a drag, and not the tile's tap.
+          onMouseDown={(e) => e.stopPropagation()}
+          onTouchStart={(e) => e.stopPropagation()}
+          onClick={(e) => {
+            e.stopPropagation();
+            onRemove();
+          }}
+          className="shrink-0 border border-neutral-300 px-3 py-1 text-sm text-neutral-800 hover:bg-neutral-50"
+        >
+          Remove work
+        </button>
+      }
       className={`cursor-grab ${TOUCH_DRAG_CLASS} ${drag.isDragging ? "opacity-30" : ""} ${
         drag.target ? "outline outline-4 outline-neutral-400" : ""
       }`}

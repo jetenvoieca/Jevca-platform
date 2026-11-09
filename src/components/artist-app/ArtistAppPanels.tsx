@@ -58,32 +58,38 @@ export type TileWork = {
 
 // A work: square picture, its name (cut short) and ★ #number. Takes a
 // ref and any attributes, so a screen can make it draggable.
-export const WorkTile = forwardRef<HTMLDivElement, { work: TileWork } & HTMLAttributes<HTMLDivElement>>(
-  function WorkTile({ work, className = "", ...rest }, ref) {
-    return (
-      <div ref={ref} className={`min-w-0 ${className}`} {...rest}>
-        {work.imageUrl ? (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img
-            src={work.imageUrl}
-            alt=""
-            loading="lazy"
-            draggable={false}
-            className="aspect-square w-full rounded-sm object-cover"
-          />
-        ) : (
-          <div className="aspect-square w-full rounded-sm bg-neutral-100" />
-        )}
-        <div className="mt-2 flex items-baseline justify-between gap-2 text-sm">
-          <span className="min-w-0 truncate text-neutral-800">{work.catalogueName}</span>
-          <span className="shrink-0 text-neutral-400">
-            <BaseStar isBase={work.isBase} />#{work.catalogueNumber}
-          </span>
-        </div>
+// `aside` (2026-11-09, Arrange Pages) takes the place of the ★ #number
+// (e.g. "Remove work"); `hideNumber` leaves the number out.
+export const WorkTile = forwardRef<
+  HTMLDivElement,
+  { work: TileWork; aside?: ReactNode; hideNumber?: boolean } & HTMLAttributes<HTMLDivElement>
+>(function WorkTile({ work, aside, hideNumber = false, className = "", ...rest }, ref) {
+  return (
+    <div ref={ref} className={`min-w-0 ${className}`} {...rest}>
+      {work.imageUrl ? (
+        // eslint-disable-next-line @next/next/no-img-element
+        <img
+          src={work.imageUrl}
+          alt=""
+          loading="lazy"
+          draggable={false}
+          className="aspect-square w-full rounded-sm object-cover"
+        />
+      ) : (
+        <div className="aspect-square w-full rounded-sm bg-neutral-100" />
+      )}
+      <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+        <span className="min-w-0 truncate text-neutral-800">{work.catalogueName}</span>
+        {aside ??
+          (!hideNumber && (
+            <span className="shrink-0 text-neutral-400">
+              <BaseStar isBase={work.isBase} />#{work.catalogueNumber}
+            </span>
+          ))}
       </div>
-    );
-  },
-);
+    </div>
+  );
+});
 
 // A square picture (a video's still, with a play mark) or an empty square,
 // with a line or two under it — a Profile entry or an exhibition on a
