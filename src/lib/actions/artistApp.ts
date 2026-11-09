@@ -312,3 +312,47 @@ export async function createArtistAppWork(
   ]);
   return { ok: true };
 }
+
+// A work dragged from a page onto another page in the lists (2026-11-09,
+// Craig): moved from `fromCurationId` to the end of that page's curation
+// (left where it is there if it's already in it). The work itself is
+// untouched.
+export async function moveArtistAppWork(
+  siteId: string,
+  fromCurationId: string,
+  toPageId: string,
+  artworkId: string,
+): Promise<{ ok: true } | { error: string }> {
+  const { artistId } = await requireSiteAccess(siteId);
+  const [from, toPage] = await Promise.all([
+    db.curationItem.findFirst({
+      where: { curationId: fromCurationId, artworkId, curation: { artistId } },
+      select: { id: true },
+    }),
+    db.page.findFirst({ where: { id: toPageId, siteId }, select: { curationId: true } }),
+  ]);
+  if (!from) return { error: "That work is no longer on this page." };
+  const toCurationId = toPage?.curationId;
+  if (!toCurationId) return { error: "That page doesn't show works that can be moved there." };
+  if (toCurationId === fromCurationId) return { ok: true };
+
+  const [already, last] = await Promise.all([
+    db.curationItem.findFirst({ where: { curationId: toCurationId, artworkId }, select: { id: true } }),
+    db.curationItem.findFirst({
+      where: { curationId: toCurationId },
+      orderBy: { position: "desc" },
+      select: { position: true },
+    }),
+  ]);
+  await db.$transaction([
+    ...(already
+      ? []
+      : [
+          db.curationItem.create({
+            data: { curationId: toCurationId, artworkId, position: (last?.position ?? -1) + 1 },
+          }),
+        ]),
+    db.curationItem.delete({ where: { id: from.id } }),
+  ]);
+  return { ok: true };
+}

@@ -14,6 +14,7 @@ import {
 import {
   addArtistAppGroupPage,
   getArtistAppPageContent,
+  moveArtistAppWork,
   type ArtistAppPage,
   type ArtistAppPageContent,
 } from "@/lib/actions/artistApp";
@@ -56,7 +57,8 @@ import type { SiteWork } from "@/lib/siteWorks";
 // before dragging (useArtistAppSensors). Tapping a work opens its
 // Presentation in the curation the page shows it from (Craig, 8 Nov). A
 // page without works shows its Profile entries (tap for the entry's
-// window), exhibitions or contact form instead (Craig, 9 Nov). Under a
+// window), exhibitions or contact form instead (Craig, 9 Nov). A work
+// dragged onto another curation page in the lists moves there. Under a
 // group of curation pages, "Add new … page" adds one (a new curation and
 // its page, in Hidden — addArtistAppGroupPage).
 
@@ -149,8 +151,27 @@ export default function ArtistPagesView({
     ignoreClickAfterDrag();
     const from = e.active.data.current as DragData | undefined;
     const to = e.over?.data.current as PageDropData | undefined;
-    if (from?.type !== "page" || !to) return;
-    dropPage(from.pageId, to.kind === "page" ? { pageId: to.pageId } : { visible: to.visible });
+    if (!from || !to) return;
+    if (from.type === "page") {
+      dropPage(from.pageId, to.kind === "page" ? { pageId: to.pageId } : { visible: to.visible });
+    } else if (to.kind === "page" && takesWork(to.pageId)) {
+      moveWork(from.itemId, to.pageId);
+    }
+  };
+
+  // A work can be dragged from an arrangeable page onto another page in
+  // the lists that shows a curation (Craig, 9 Nov) — moved there.
+  const takesWork = (pageId: string) =>
+    content?.kind === "arrange" && pageId !== selectedId && !!pages.find((p) => p.id === pageId)?.hasCuration;
+
+  const moveWork = async (artworkId: string, toPageId: string) => {
+    if (content?.kind !== "arrange" || !content.arrange || !selectedId) return;
+    setError(null);
+    const result = await moveArtistAppWork(siteId, content.arrange.curationId, toPageId, artworkId).catch(() => ({
+      error: "The work wasn't moved — please try again.",
+    }));
+    if ("error" in result) setError(result.error);
+    loadContent(selectedId);
   };
 
   const selected = pages.find((p) => p.id === selectedId) ?? null;
@@ -230,6 +251,7 @@ export default function ArtistPagesView({
                     <Fragment key={p.id}>
                       <PageRow
                         page={p}
+                        dropAllowed={dragging?.type !== "item" || takesWork(p.id)}
                         selected={p.id === selectedId}
                         under={p.parentId && !parentHere ? titleOf(p.parentId) : null}
                         onSelect={() => selectPage(p.id)}
@@ -412,11 +434,15 @@ function AddGroupPage({
 
 function PageRow({
   page,
+  dropAllowed,
   selected,
   under,
   onSelect,
 }: {
   page: ArtistAppPage;
+  // What's being dragged can be dropped here (a page always; a work only
+  // onto a page it can move to).
+  dropAllowed: boolean;
   selected: boolean;
   // The top page's name, when it's in the other list.
   under: string | null;
@@ -438,7 +464,7 @@ function PageRow({
         page.parentId ? "ml-6" : ""
       } ${selected ? "border-neutral-600" : "border-neutral-200 hover:bg-neutral-50"} ${
         drag.isDragging ? "opacity-30" : ""
-      } ${drop.isOver && !drag.isDragging ? "ring-2 ring-neutral-400" : ""}`}
+      } ${drop.isOver && dropAllowed && !drag.isDragging ? "ring-2 ring-neutral-400" : ""}`}
     >
       <span className="min-w-0 truncate">{page.title}</span>
       {under && <span className="shrink-0 text-xs text-neutral-400">under {under}</span>}
