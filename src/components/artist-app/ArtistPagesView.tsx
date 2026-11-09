@@ -12,17 +12,21 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  getArtistAppPageWorks,
+  getArtistAppPageContent,
   type ArtistAppPage,
-  type ArtistAppPageWorks,
+  type ArtistAppPageContent,
 } from "@/lib/actions/artistApp";
+import type { ExhibitionRow } from "@/lib/actions/exhibitions";
+import type { ProfileStoryRow } from "@/lib/actions/profileStories";
+import { exhibitionDates } from "@/lib/exhibitionDates";
 import { reorderPages } from "@/lib/actions/pages";
 import { setPageComponentItems } from "@/lib/actions/pageComponents";
 import { movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
+import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
 import { ARTIST_APP_SHOWS_PRESENTATION_MEDIUM, artistAppPageHref } from "@/lib/artistApp";
-import { MainPanel, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
+import { MainPanel, PictureTile, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
 import {
   DragThumb,
   TOUCH_DRAG_CLASS,
@@ -36,9 +40,11 @@ import type { SiteWork } from "@/lib/siteWorks";
 // page's works. Drag a page to reorder it or move it between Live and
 // Hidden (rules in lib/artistAppPageOrder.ts); drag a work onto another
 // to reorder the page's works — on this page only, where the page allows
-// it (see getArtistAppPageWorks). On a touch screen, press and hold
+// it (see getArtistAppPageContent). On a touch screen, press and hold
 // before dragging (useArtistAppSensors). Tapping a work opens its
-// Presentation in the curation the page shows it from (Craig, 8 Nov).
+// Presentation in the curation the page shows it from (Craig, 8 Nov). A
+// page without works shows its Profile entries (tap for the entry's
+// window) or exhibitions instead (Craig, 9 Nov).
 
 type PageDragData = { type: "page"; pageId: string };
 type PageDropData = { kind: "page"; pageId: string } | { kind: "list"; visible: boolean };
@@ -56,39 +62,44 @@ export default function ArtistPagesView({
   artistId,
   pages: initialPages,
   firstPageId,
-  firstWorks,
+  firstContent,
+  galleries,
 }: {
   siteId: string;
   artistId: string;
   // Arranged (arrangePages).
   pages: ArtistAppPage[];
   firstPageId: string | null;
-  firstWorks: ArtistAppPageWorks | null;
+  firstContent: ArtistAppPageContent | null;
+  // For the Galleries entry's window.
+  galleries: GalleryOption[];
 }) {
   const [pages, setPages] = useState(initialPages);
   const [selectedId, setSelectedId] = useState(firstPageId);
-  const [works, setWorks] = useState(firstWorks);
+  const [content, setContent] = useState(firstContent);
   // Counts loads, so the grid starts afresh with each.
-  const [worksLoad, setWorksLoad] = useState(0);
-  const [loadingWorks, setLoadingWorks] = useState(false);
-  // The work whose Presentation is open.
+  const [contentLoad, setContentLoad] = useState(0);
+  const [loading, setLoading] = useState(false);
+  // The work whose Presentation is open, or the Profile entry whose
+  // window is.
   const [presenting, setPresenting] = useState<SiteWork | null>(null);
+  const [openStory, setOpenStory] = useState<ProfileStoryRow | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragData | null>(null);
 
   const sensors = useArtistAppSensors();
 
-  const loadWorks = async (pageId: string) => {
-    setLoadingWorks(true);
+  const loadContent = async (pageId: string) => {
+    setLoading(true);
     setError(null);
     try {
-      setWorks(await getArtistAppPageWorks(siteId, pageId));
+      setContent(await getArtistAppPageContent(siteId, pageId));
     } catch {
-      setWorks(null);
-      setError("That page's works couldn't be loaded.");
+      setContent(null);
+      setError("That page couldn't be loaded.");
     } finally {
-      setWorksLoad((n) => n + 1);
-      setLoadingWorks(false);
+      setContentLoad((n) => n + 1);
+      setLoading(false);
     }
   };
 
@@ -98,7 +109,7 @@ export default function ArtistPagesView({
     setSelectedId(pageId);
     // Into the address without reloading (see the page's route).
     window.history.replaceState(null, "", artistAppPageHref(siteId, pageId));
-    loadWorks(pageId);
+    loadContent(pageId);
   };
 
   const dropPage = async (fromId: string, drop: PageDrop) => {
@@ -145,19 +156,23 @@ export default function ArtistPagesView({
         }}
       >
         <MainPanel heading={selected?.title ?? "Pages"}>
-          {loadingWorks ? (
+          {loading ? (
             <p className="text-center text-neutral-400">Loading…</p>
-          ) : selected && works ? (
+          ) : !selected || !content ? null : content.kind === "stories" ? (
+            <PageStories stories={content.stories} onOpen={setOpenStory} />
+          ) : content.kind === "exhibitions" ? (
+            <PageExhibitions exhibitions={content.exhibitions} />
+          ) : (
             <PageWorks
-              key={`${selected.id}:${worksLoad}`}
+              key={`${selected.id}:${contentLoad}`}
               siteId={siteId}
               pageId={selected.id}
-              data={works}
+              data={content}
               dragging={dragging}
               onError={setError}
               onOpen={setPresenting}
             />
-          ) : null}
+          )}
         </MainPanel>
 
         <SidePanel>
@@ -202,8 +217,28 @@ export default function ArtistPagesView({
           siteId={siteId}
           onClose={() => setPresenting(null)}
           // Its name, main picture or price may have changed.
-          onArtworkChanged={() => loadWorks(selected.id)}
+          onArtworkChanged={() => loadContent(selected.id)}
           showMedium={ARTIST_APP_SHOWS_PRESENTATION_MEDIUM}
+        />
+      )}
+      {openStory && selected && (
+        <ProfileStoryModal
+          key={openStory.id}
+          story={openStory}
+          artistId={artistId}
+          siteId={siteId}
+          galleries={galleries}
+          onClose={() => setOpenStory(null)}
+          onSaved={(row) => {
+            setOpenStory(row);
+            setContent((c) =>
+              c?.kind === "stories" ? { ...c, stories: c.stories.map((s) => (s.id === row.id ? row : s)) } : c,
+            );
+          }}
+          onDeleted={() => {
+            setOpenStory(null);
+            loadContent(selected.id);
+          }}
         />
       )}
     </>
@@ -278,7 +313,7 @@ function PageWorks({
 }: {
   siteId: string;
   pageId: string;
-  data: ArtistAppPageWorks;
+  data: Extract<ArtistAppPageContent, { works: SiteWork[] }>;
   dragging: DragData | null;
   onError: (message: string | null) => void;
   // A work tapped: its Presentation, in the curation it's shown from.
@@ -367,6 +402,42 @@ function PageWorks({
         )}
       </WorkGrid>
     </>
+  );
+}
+
+// The Profile entries a page's Profile stories show, in their order.
+function PageStories({ stories, onOpen }: { stories: ProfileStoryRow[]; onOpen: (s: ProfileStoryRow) => void }) {
+  if (stories.length === 0) return <p className="text-center text-neutral-400">Nothing on this page yet</p>;
+  return (
+    <WorkGrid>
+      {stories.map((s) => (
+        <PictureTile
+          key={s.id}
+          url={s.media?.thumbUrl ?? null}
+          video={s.media?.kind === "VIDEO"}
+          label={s.caption || "Untitled"}
+          onClick={() => onOpen(s)}
+        />
+      ))}
+    </WorkGrid>
+  );
+}
+
+// The exhibitions a page shows, as it lists them.
+function PageExhibitions({ exhibitions }: { exhibitions: ExhibitionRow[] }) {
+  if (exhibitions.length === 0) return <p className="text-center text-neutral-400">No exhibitions yet</p>;
+  return (
+    <WorkGrid>
+      {exhibitions.map((e) => (
+        <PictureTile
+          key={e.id}
+          url={e.images[0]?.url ?? null}
+          video={e.images[0]?.kind === "VIDEO"}
+          label={e.name || e.venue?.name || "Untitled"}
+          detail={exhibitionDates(e.startDate, e.endDate)}
+        />
+      ))}
+    </WorkGrid>
   );
 }
 

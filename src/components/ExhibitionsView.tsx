@@ -5,7 +5,7 @@ import AddIconButton from "@/components/AddIconButton";
 import ImageSetEditor from "@/components/ImageSetEditor";
 import ImageFill from "@/components/ImageFill";
 import { useBackdropClose } from "@/lib/useBackdropClose";
-import { formatDate } from "@/lib/formatDate";
+import { exhibitionDates } from "@/lib/exhibitionDates";
 import { createLocation } from "@/lib/actions/locations";
 import type { LocationSummary } from "@/lib/artworkSettingsData";
 import {
@@ -32,11 +32,6 @@ const PANEL = "rounded-xl border border-neutral-300 px-3.5 py-2.5";
 const PANEL_TITLE = "mb-1 text-center text-base text-neutral-900";
 const FIELD = "w-full rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800";
 const NEW_VENUE = "__new__";
-
-// "01/02/2026 - 01/05/2026", either end alone, or nothing.
-function datesLine(e: Pick<ExhibitionRow, "startDate" | "endDate">): string {
-  return [e.startDate, e.endDate].filter((d): d is string => !!d).map(formatDate).join(" - ");
-}
 
 export default function ExhibitionsView({
   artistId,
@@ -109,7 +104,7 @@ export default function ExhibitionsView({
                 <p className="mt-2 truncate text-sm font-medium text-neutral-900">
                   {e.venue?.name || e.name || "New exhibition"}
                 </p>
-                <p className="text-sm text-neutral-500">{datesLine(e) || " "}</p>
+                <p className="text-sm text-neutral-500">{exhibitionDates(e.startDate, e.endDate) || " "}</p>
               </button>
             ))}
           </div>

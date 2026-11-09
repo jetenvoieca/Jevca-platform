@@ -1,5 +1,6 @@
 import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
 import BaseStar from "@/components/BaseStar";
+import { PlayMark } from "@/components/SectionMediaView";
 
 // The Artist App's shared pieces (Craig's mockups): the large white panel
 // with its heading box(es), the narrower panel beside it, and a work's
@@ -71,3 +72,43 @@ export const WorkTile = forwardRef<HTMLDivElement, { work: TileWork } & HTMLAttr
     );
   },
 );
+
+// A square picture (a video's still, with a play mark) or an empty square,
+// with a line or two under it — a Profile entry or an exhibition on a
+// page (2026-11-09). Tappable when given `onClick`.
+export function PictureTile({
+  url,
+  video = false,
+  label,
+  detail,
+  onClick,
+}: {
+  url: string | null;
+  video?: boolean;
+  label: string;
+  detail?: string;
+  onClick?: () => void;
+}) {
+  const body = (
+    <>
+      <div className="relative">
+        {url ? (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={url} alt="" loading="lazy" draggable={false} className="aspect-square w-full rounded-sm object-cover" />
+        ) : (
+          <div className="aspect-square w-full rounded-sm border border-neutral-300" />
+        )}
+        {video && <PlayMark />}
+      </div>
+      <p className="mt-2 truncate text-sm text-neutral-800">{label}</p>
+      {detail && <p className="truncate text-sm text-neutral-400">{detail}</p>}
+    </>
+  );
+  return onClick ? (
+    <button type="button" onClick={onClick} className="block min-w-0 text-left">
+      {body}
+    </button>
+  ) : (
+    <div className="min-w-0">{body}</div>
+  );
+}

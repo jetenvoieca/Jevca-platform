@@ -1,7 +1,8 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
 import { artistAppPageHref } from "@/lib/artistApp";
-import { getArtistAppPageWorks, listArtistAppPages } from "@/lib/actions/artistApp";
+import { getArtistAppPageContent, listArtistAppPages } from "@/lib/actions/artistApp";
+import { readLocations } from "@/lib/artworkSettingsData";
 import { arrangePages, pageToOpen } from "@/lib/artistAppPageOrder";
 import ArtistPagesView from "@/components/artist-app/ArtistPagesView";
 
@@ -25,7 +26,9 @@ export default async function ArtistPagesPage({
   const chosen = pages.find((p) => p.id === page) ?? pages[0];
   const firstId = chosen ? pageToOpen(pages, chosen.id) : null;
   if (firstId && firstId !== page) redirect(artistAppPageHref(siteId, firstId));
-  const works = firstId ? await getArtistAppPageWorks(siteId, firstId) : null;
+  const content = firstId ? await getArtistAppPageContent(siteId, firstId) : null;
+  // For the Galleries entry's window (a Profile page's entries open theirs).
+  const galleries = (await readLocations(site!.artistId)).filter((l) => l.type === "GALLERY");
 
   return (
     <ArtistPagesView
@@ -33,7 +36,8 @@ export default async function ArtistPagesPage({
       artistId={site!.artistId}
       pages={pages}
       firstPageId={firstId}
-      firstWorks={works}
+      firstContent={content}
+      galleries={galleries.map((g) => ({ id: g.id, name: g.name }))}
     />
   );
 }
