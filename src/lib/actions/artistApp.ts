@@ -13,6 +13,8 @@ import { arrangeItems, contentFits, pageWorks } from "@/lib/pageComponents";
 import { readPageStories } from "@/lib/pageStories";
 import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel";
 import { pageShownWorks, type SiteWork } from "@/lib/siteWorks";
+import { CURATION_SECTION_TYPES } from "@/lib/curationSections";
+import { uniquePageSlug } from "@/lib/pageSlugs";
 
 // The Artist App's Arrange Pages (2026-11-08, Craig's mockup).
 
@@ -21,17 +23,95 @@ export type ArtistAppPage = {
   title: string;
   visible: boolean;
   parentId: string | null;
+  // Shows a curation (pages under a group that all do can have more
+  // added — see addArtistAppGroupPage).
+  hasCuration: boolean;
 };
 
 // The site's pages in their order (Live and Hidden together, as saved —
 // see reorderPages).
 export async function listArtistAppPages(siteId: string): Promise<ArtistAppPage[]> {
   await requireSiteAccess(siteId);
-  return db.page.findMany({
+  const rows = await db.page.findMany({
     where: { siteId },
     orderBy: { position: "asc" },
-    select: { id: true, title: true, visible: true, parentId: true },
+    select: { id: true, title: true, visible: true, parentId: true, curationId: true },
   });
+  return rows.map(({ curationId, ...p }) => ({ ...p, hasCuration: !!curationId }));
+}
+
+// "Add new … page" under a group of curation pages (2026-11-09, Craig's
+// mockup — e.g. a new portfolio page): a new curation and a page showing
+// it, both named `name`. The page goes under the group, in Hidden Pages
+// (so nothing shows on the site until it's moved to Live), and looks like
+// the group's first page — its Display Style and menu, and its works
+// component(s) (arranged afresh). Returns the new page.
+export async function addArtistAppGroupPage(
+  siteId: string,
+  groupId: string,
+  nameRaw: string,
+): Promise<ArtistAppPage | { error: string }> {
+  const { artistId } = await requireSiteAccess(siteId);
+  const name = nameRaw.trim();
+  if (!name) return { error: "Give the page a name." };
+
+  const group = await db.page.findFirst({
+    where: { id: groupId, siteId, parentId: null },
+    select: {
+      children: {
+        orderBy: { position: "asc" },
+        select: {
+          curationId: true,
+          pageStyleId: true,
+          menuStyleId: true,
+          componentContents: { where: { source: "WORKS", sectionId: null }, select: { blockId: true } },
+        },
+      },
+    },
+  });
+  const model = group?.children[0];
+  if (!group || !model || group.children.some((c) => !c.curationId)) {
+    return { error: "Pages can't be added here." };
+  }
+  if (await db.curation.findFirst({ where: { artistId, name }, select: { id: true } })) {
+    return { error: "A curation with this name already exists — choose another name." };
+  }
+
+  const [slug, last] = await Promise.all([
+    uniquePageSlug(siteId, name),
+    db.page.aggregate({ where: { siteId }, _max: { position: true } }),
+  ]);
+  const page = await db.$transaction(async (tx) => {
+    // Made with its presentation sections, as createCuration.
+    const curation = await tx.curation.create({
+      data: { artistId, name, sections: { create: CURATION_SECTION_TYPES.map((t) => ({ type: t.value })) } },
+      select: { id: true },
+    });
+    return tx.page.create({
+      data: {
+        siteId,
+        title: name,
+        slug,
+        visible: false,
+        position: (last._max.position ?? -1) + 1,
+        parentId: groupId,
+        curationId: curation.id,
+        pageStyleId: model.pageStyleId,
+        menuStyleId: model.menuStyleId,
+        componentContents: {
+          create: model.componentContents.map((c) => ({
+            blockId: c.blockId,
+            source: "WORKS" as const,
+            sectionId: null,
+            hiddenIds: [],
+            orderIds: [],
+          })),
+        },
+      },
+      select: { id: true, title: true, visible: true, parentId: true },
+    });
+  });
+  return { ...page, hasCuration: true };
 }
 
 // What a page's grid shows (its works, or — on a page without works —

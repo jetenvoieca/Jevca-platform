@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { Fragment, useState } from "react";
 import {
   DndContext,
   DragOverlay,
@@ -12,6 +12,7 @@ import {
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
+  addArtistAppGroupPage,
   getArtistAppPageContent,
   type ArtistAppPage,
   type ArtistAppPageContent,
@@ -21,7 +22,7 @@ import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import { exhibitionDates } from "@/lib/exhibitionDates";
 import { reorderPages } from "@/lib/actions/pages";
 import { setPageComponentItems } from "@/lib/actions/pageComponents";
-import { movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
+import { arrangePages, movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
@@ -46,7 +47,9 @@ import type { SiteWork } from "@/lib/siteWorks";
 // before dragging (useArtistAppSensors). Tapping a work opens its
 // Presentation in the curation the page shows it from (Craig, 8 Nov). A
 // page without works shows its Profile entries (tap for the entry's
-// window), exhibitions or contact form instead (Craig, 9 Nov).
+// window), exhibitions or contact form instead (Craig, 9 Nov). Under a
+// group of curation pages, "Add new … page" adds one (a new curation and
+// its page, in Hidden — addArtistAppGroupPage).
 
 type PageDragData = { type: "page"; pageId: string };
 type PageDropData = { kind: "page"; pageId: string } | { kind: "list"; visible: boolean };
@@ -187,24 +190,42 @@ export default function ArtistPagesView({
 
         <SidePanel>
           {error && <p className="px-1 text-sm text-red-600">{error}</p>}
-          {[true, false].map((visible) => (
-            <PageList key={String(visible)} visible={visible}>
-              {pages
-                .filter((p) => p.visible === visible)
-                .map((p) => {
-                  const parentHere = !!p.parentId && pages.some((q) => q.id === p.parentId && q.visible === visible);
+          {[true, false].map((visible) => {
+            const listed = pages.filter((p) => p.visible === visible);
+            return (
+              <PageList key={String(visible)} visible={visible}>
+                {listed.map((p, i) => {
+                  const parentHere = !!p.parentId && listed.some((q) => q.id === p.parentId);
+                  // After a group's last page in this list, its Add.
+                  const groupId = parentHere ? p.parentId : p.id;
+                  const next = listed[i + 1];
+                  const lastOfGroup = !!groupId && next?.parentId !== groupId;
+                  const addTo = lastOfGroup && groupId && addsPages(pages, groupId) ? groupId : null;
                   return (
-                    <PageRow
-                      key={p.id}
-                      page={p}
-                      selected={p.id === selectedId}
-                      under={p.parentId && !parentHere ? titleOf(p.parentId) : null}
-                      onSelect={() => selectPage(p.id)}
-                    />
+                    <Fragment key={p.id}>
+                      <PageRow
+                        page={p}
+                        selected={p.id === selectedId}
+                        under={p.parentId && !parentHere ? titleOf(p.parentId) : null}
+                        onSelect={() => selectPage(p.id)}
+                      />
+                      {addTo && (
+                        <AddGroupPage
+                          siteId={siteId}
+                          groupId={addTo}
+                          groupTitle={titleOf(addTo)}
+                          onAdded={(page) => {
+                            setPages((prev) => arrangePages([...prev, page]));
+                            selectPage(page.id);
+                          }}
+                        />
+                      )}
+                    </Fragment>
                   );
                 })}
-            </PageList>
-          ))}
+              </PageList>
+            );
+          })}
         </SidePanel>
 
         <DragOverlay dropAnimation={null}>
@@ -270,6 +291,96 @@ function PageList({ visible, children }: { visible: boolean; children: React.Rea
     >
       <h3 className="mb-2 text-center text-lg text-neutral-800">{visible ? "Live Pages" : "Hidden Pages"}</h3>
       {children}
+    </div>
+  );
+}
+
+// A group whose pages all show a curation (e.g. portfolio) can have more
+// added.
+function addsPages(pages: ArtistAppPage[], groupId: string): boolean {
+  const group = pages.find((p) => p.id === groupId);
+  const children = pages.filter((p) => p.parentId === groupId);
+  return !!group && !group.parentId && children.length > 0 && children.every((c) => c.hasCuration);
+}
+
+// "Add new … page": tapped, a name box and Add (Enter); see
+// addArtistAppGroupPage.
+function AddGroupPage({
+  siteId,
+  groupId,
+  groupTitle,
+  onAdded,
+}: {
+  siteId: string;
+  groupId: string;
+  groupTitle: string;
+  onAdded: (page: ArtistAppPage) => void;
+}) {
+  const [naming, setNaming] = useState(false);
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+
+  const add = async () => {
+    if (saving || !name.trim()) return;
+    setSaving(true);
+    setError(null);
+    const result = await addArtistAppGroupPage(siteId, groupId, name).catch(() => ({
+      error: "The page wasn't added — please try again.",
+    }));
+    setSaving(false);
+    if ("error" in result) return setError(result.error);
+    setNaming(false);
+    setName("");
+    onAdded(result);
+  };
+
+  if (!naming) {
+    return (
+      <button
+        type="button"
+        onClick={() => setNaming(true)}
+        className="ml-6 rounded-sm border border-neutral-200 bg-white px-4 py-2 text-left text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
+      >
+        Add new {groupTitle} page
+      </button>
+    );
+  }
+  return (
+    <div className="ml-6 flex flex-col gap-1">
+      <div className="flex gap-1.5">
+        <input
+          autoFocus
+          value={name}
+          onChange={(e) => setName(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Enter") add();
+            if (e.key === "Escape") setNaming(false);
+          }}
+          placeholder="New page's name"
+          className="min-w-0 flex-1 rounded-sm border border-neutral-400 px-3 py-1.5 text-sm text-neutral-900"
+        />
+        <button
+          type="button"
+          onClick={add}
+          disabled={saving || !name.trim()}
+          className="shrink-0 rounded-sm border border-neutral-400 px-3 text-sm text-neutral-800 hover:bg-neutral-50 disabled:opacity-40"
+        >
+          {saving ? "Adding…" : "Add"}
+        </button>
+        <button
+          type="button"
+          onClick={() => {
+            setNaming(false);
+            setError(null);
+          }}
+          aria-label="Cancel"
+          className="shrink-0 px-1.5 text-sm text-neutral-500 hover:text-neutral-800"
+        >
+          ✕
+        </button>
+      </div>
+      {error && <p className="text-xs text-red-600">{error}</p>}
     </div>
   );
 }
