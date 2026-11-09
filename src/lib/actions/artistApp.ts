@@ -12,6 +12,7 @@ import { listProfileStories, type ProfileStoryRow } from "@/lib/actions/profileS
 import { arrangeItems, contentFits, pageWorks } from "@/lib/pageComponents";
 import { readPageStories } from "@/lib/pageStories";
 import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel";
+import { readLocations, type LocationSummary } from "@/lib/artworkSettingsData";
 import { pageShownWorks, type SiteWork } from "@/lib/siteWorks";
 import { CURATION_SECTION_TYPES } from "@/lib/curationSections";
 import { uniquePageSlug } from "@/lib/pageSlugs";
@@ -130,7 +131,8 @@ export async function addArtistAppGroupPage(
 //   Picture & words, e.g. Home): "single" — the first is the one shown,
 //   and another can be chosen in its place;
 // - a page with Profile stories: the entries they show, in their order;
-// - a page with Exhibitions: the exhibitions shown, as the page lists them;
+// - a page with Exhibitions: the exhibitions shown, as the page lists them,
+//   and the artist's Locations (venues, for the exhibition window);
 // - the Contact panel page: its panel's settings, to draw the form;
 // - any other page: its works as shown, in an order set up elsewhere.
 export type ArtistAppPageContent =
@@ -141,7 +143,7 @@ export type ArtistAppPageContent =
       arrange: { blockId: string; hiddenIds: string[]; curationId: string } | null;
     }
   | { kind: "stories"; stories: ProfileStoryRow[] }
-  | { kind: "exhibitions"; exhibitions: ExhibitionRow[] }
+  | { kind: "exhibitions"; exhibitions: ExhibitionRow[]; locations: LocationSummary[] }
   | { kind: "contact"; settings: ContactPanelSettings };
 
 const NO_WORKS: ArtistAppPageContent = { kind: "fixed", works: [], arrange: null };
@@ -210,9 +212,9 @@ export async function getArtistAppPageContent(siteId: string, pageId: string): P
   }
   const exhibitionsBlock = blocks.find((b) => b.type === "exhibitions");
   if (exhibitionsBlock) {
-    const shown = await listShownExhibitions(artistId);
+    const [shown, locations] = await Promise.all([listShownExhibitions(artistId), readLocations(artistId)]);
     const newestFirst = exhibitionsBlock.exhibitions?.newestFirst !== false;
-    return { kind: "exhibitions", exhibitions: newestFirst ? [...shown].reverse() : shown };
+    return { kind: "exhibitions", exhibitions: newestFirst ? [...shown].reverse() : shown, locations };
   }
   return NO_WORKS;
 }

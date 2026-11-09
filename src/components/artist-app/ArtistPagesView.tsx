@@ -27,6 +27,7 @@ import { arrangePages, movePage, pageToOpen, type PageDrop } from "@/lib/artistA
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
+import ExhibitionModal from "@/components/ExhibitionModal";
 import ContactPanel from "@/components/ContactPanel";
 import ArtworkPicker from "@/components/ArtworkPicker";
 import ArtistNewWorkModal from "@/components/artist-app/ArtistNewWorkModal";
@@ -98,10 +99,13 @@ export default function ArtistPagesView({
   // Counts loads, so the grid starts afresh with each.
   const [contentLoad, setContentLoad] = useState(0);
   const [loading, setLoading] = useState(false);
-  // The work whose Presentation is open, or the Profile entry whose
-  // window is.
+  // The work whose Presentation is open, or the Profile entry or
+  // exhibition whose window is (and whether that exhibition changed, so
+  // the page is read again on closing — its order or listing may differ).
   const [presenting, setPresenting] = useState<SiteWork | null>(null);
   const [openStory, setOpenStory] = useState<ProfileStoryRow | null>(null);
+  const [openExhibitionId, setOpenExhibitionId] = useState<string | null>(null);
+  const [exhibitionChanged, setExhibitionChanged] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<DragData | null>(null);
 
@@ -179,6 +183,8 @@ export default function ArtistPagesView({
   };
 
   const selected = pages.find((p) => p.id === selectedId) ?? null;
+  const openExhibition =
+    content?.kind === "exhibitions" ? (content.exhibitions.find((e) => e.id === openExhibitionId) ?? null) : null;
   const titleOf = (id: string | null) => pages.find((p) => p.id === id)?.title ?? "";
   const draggedPage = dragging?.type === "page" ? pages.find((p) => p.id === dragging.pageId) : null;
 
@@ -214,7 +220,7 @@ export default function ArtistPagesView({
           ) : !selected || !content ? null : content.kind === "stories" ? (
             <PageStories stories={content.stories} onOpen={setOpenStory} />
           ) : content.kind === "exhibitions" ? (
-            <PageExhibitions exhibitions={content.exhibitions} />
+            <PageExhibitions exhibitions={content.exhibitions} onOpen={setOpenExhibitionId} />
           ) : content.kind === "contact" ? (
             // The form as the site shows it (messages are only sent from
             // the published site).
@@ -323,6 +329,41 @@ export default function ArtistPagesView({
           onDeleted={() => {
             setOpenStory(null);
             loadContent(selected.id);
+          }}
+        />
+      )}
+      {openExhibition && selected && content?.kind === "exhibitions" && (
+        <ExhibitionModal
+          key={openExhibition.id}
+          exhibition={openExhibition}
+          artistId={artistId}
+          siteId={siteId}
+          locations={content.locations}
+          addPicturesFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
+          onLocationAdded={(l) =>
+            setContent((c) =>
+              c?.kind === "exhibitions"
+                ? { ...c, locations: [...c.locations, l].sort((a, b) => a.name.localeCompare(b.name)) }
+                : c,
+            )
+          }
+          onSaved={(row) => {
+            setExhibitionChanged(true);
+            setContent((c) =>
+              c?.kind === "exhibitions"
+                ? { ...c, exhibitions: c.exhibitions.map((e) => (e.id === row.id ? row : e)) }
+                : c,
+            );
+          }}
+          onDeleted={() => {
+            setOpenExhibitionId(null);
+            setExhibitionChanged(false);
+            loadContent(selected.id);
+          }}
+          onClose={() => {
+            setOpenExhibitionId(null);
+            if (exhibitionChanged) loadContent(selected.id);
+            setExhibitionChanged(false);
           }}
         />
       )}
@@ -705,8 +746,15 @@ function PageStories({ stories, onOpen }: { stories: ProfileStoryRow[]; onOpen: 
   );
 }
 
-// The exhibitions a page shows, as it lists them.
-function PageExhibitions({ exhibitions }: { exhibitions: ExhibitionRow[] }) {
+// The exhibitions a page shows, as it lists them; a tap opens its window
+// (ExhibitionModal, as in the admin — 2026-11-09).
+function PageExhibitions({
+  exhibitions,
+  onOpen,
+}: {
+  exhibitions: ExhibitionRow[];
+  onOpen: (id: string) => void;
+}) {
   if (exhibitions.length === 0) return <p className="text-center text-neutral-400">No exhibitions yet</p>;
   return (
     <WorkGrid>
@@ -717,6 +765,7 @@ function PageExhibitions({ exhibitions }: { exhibitions: ExhibitionRow[] }) {
           video={e.images[0]?.kind === "VIDEO"}
           label={e.name || e.venue?.name || "Untitled"}
           detail={exhibitionDates(e.startDate, e.endDate)}
+          onClick={() => onOpen(e.id)}
         />
       ))}
     </WorkGrid>
