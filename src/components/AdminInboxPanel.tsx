@@ -39,7 +39,7 @@ import { dismissAlert } from "@/lib/actions/subscriptions";
 import {
   refreshOpenAlerts,
   getProcessedAlerts,
-  deleteProcessedAlert,
+  deleteAlert,
   type ProcessedAlertItem,
 } from "@/lib/actions/clientAlerts";
 import type { AlertItem } from "@/lib/alerts";
@@ -130,9 +130,11 @@ import { PROJECT_FILL, PROJECT_INK } from "@/lib/projectColours";
 //     cards with an action panel (see AlertClientPanel); an
 //     overdue-invoice alert opens the same sale
 //     modal as Consolidated Sales (see SaleModal), as does a sale alert
-//     raised by the Studio app — which, being only for information, can
-//     also be deleted straight from the list; every other alert shows its
-//     message with a link and, where allowed, Dismiss (see AlertDetail).
+//     raised by the Studio app; every other alert shows its message with
+//     a link and, where allowed, Dismiss (see AlertDetail). Every stored
+//     alert also has a Delete on its row (2026-11-09, direct request —
+//     some go out of date), which removes it for good; those worked out
+//     live can't be deleted (see deleteAlert).
 //   - Personal mode (2026-10-09): Craig's own Gmail, in a panel of its
 //     own — see PersonalMailPanel. Its Make task (2026-10-10) makes a task
 //     that remembers the conversation, and that task's Open email comes
@@ -305,15 +307,6 @@ function mailboxOf(mode: Mode): Mailbox | null {
   if (mode === "art") return "ART";
   if (mode === "business") return "BUSINESS";
   return null;
-}
-
-// The sale alerts the Studio app raises (SALE_RECORDED, SALE_LINK_CREATED)
-// are only there for information, so they can be deleted straight from the
-// list — whether or not they know which sale they are about (the earliest
-// ones don't). The overdue-invoice alerts share the SALE_ prefix but are
-// worked out live and can't be dismissed, so `dismissable` rules them out.
-function isInformationalSaleAlert(alert: AlertItem): boolean {
-  return alert.dismissable && alert.type.startsWith("SALE_");
 }
 
 // Who an alert row is about: the client — with their site on a Hopper
@@ -1113,7 +1106,7 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
     setSwipedId(null);
     setBusyId(id);
     startTransition(async () => {
-      await deleteProcessedAlert(id);
+      await deleteAlert(id);
       setBusyId(null);
       setProcessedAlerts((list) => (list ? list.filter((a) => a.id !== id) : list));
     });
@@ -1387,14 +1380,12 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
     });
   };
 
-  // Deletes an alert straight from the list, without opening it — for the
-  // sale alerts, which are only there for information. It's dismissed, so
-  // it moves into the processed list.
+  // Deletes a stored alert for good, straight from the list (see
+  // deleteAlert) — it doesn't go to the processed list.
   const handleAlertDelete = (a: AlertItem) => {
+    if (!confirm("Delete this alert? This can't be undone.")) return;
     startTransition(async () => {
-      await dismissAlert(a.id);
-      await refreshOpenAlerts();
-      refreshRight();
+      await deleteAlert(a.id);
       router.refresh();
     });
   };
@@ -1679,7 +1670,7 @@ export default function AdminInboxPanel(props: DashboardProps | InboxProps) {
                       {capitaliseParagraphs(a.message)}
                     </p>
                   </button>
-                  {isInformationalSaleAlert(a) && (
+                  {a.dismissable && (
                     <button
                       type="button"
                       onClick={() => handleAlertDelete(a)}

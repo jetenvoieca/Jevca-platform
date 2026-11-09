@@ -1062,7 +1062,8 @@ export async function updatePurchaseRelease(purchaseId: string, siteId: string, 
 // Kept as history (status ABANDONED), not deleted — SaleTerms is
 // completely untouched, ready for the next buyer.
 // If instalments had already started, also cancels the Stripe schedule so
-// nothing keeps auto-charging a sale that isn't happening.
+// nothing keeps auto-charging a sale that isn't happening. Its Inbox
+// alerts are deleted.
 //
 // Reverts Availability back to AVAILABLE if this Purchase was the one
 // holding it RESERVED — since starting either kind of sale marks
@@ -1088,6 +1089,10 @@ export async function abandonPurchase(
   await retireStatementLinksListing(purchase.id);
   for (const charge of openCharges) await abandonPurchase(charge.id, siteId);
 
+  // Don't block marking it abandoned locally just because Stripe's side
+  // failed to cancel (e.g. it already finished/cancelled) — but the
+  // caller should still know, in case it needs a manual check in Stripe.
+  let stripeError: string | null = null;
   try {
     const stripe = getStripeClientForSale(purchase);
     if (purchase.stripeSubscriptionId) {
@@ -1096,24 +1101,19 @@ export async function abandonPurchase(
       await stripe.subscriptionSchedules.cancel(purchase.stripeSubscriptionScheduleId);
     }
   } catch (err) {
-    // Don't block marking it abandoned locally just because Stripe's side
-    // failed to cancel (e.g. it already finished/cancelled) — but the
-    // caller should still know, in case it needs a manual check in Stripe.
-    await db.purchase.update({
-      where: { id: purchaseId },
-      data: { status: "ABANDONED", closedAt: new Date() },
-    });
-    await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
-    return { ok: false, error: stripeErrorMessage(err) };
+    stripeError = stripeErrorMessage(err);
   }
 
   await db.purchase.update({
     where: { id: purchaseId },
     data: { status: "ABANDONED", closedAt: new Date() },
   });
+  // The sale's Inbox alerts (Sale recorded, Payment link) are out of date
+  // now, so they go (2026-11-09, direct request).
+  await db.alertEvent.deleteMany({ where: { purchaseId } });
   await resetAvailabilityIfNothingSoldOrActive(purchase.artworkId);
 
-  return { ok: true };
+  return stripeError ? { ok: false, error: stripeError } : { ok: true };
 }
 
 // ---------- Shared helpers ----------

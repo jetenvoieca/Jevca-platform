@@ -110,9 +110,8 @@ export async function reinstateSubscription(artistId: string, siteId: string): P
 
 // Expires the cached open-alerts scan (see OPEN_ALERTS_TAG) — called
 // after something changed a sale from the Inbox's sale modal (marked
-// paid, cancelled, deleted, invoice sent), which the sale actions
-// themselves don't do, so the Alert list and nav badge catch up straight
-// away.
+// paid, deleted, invoice sent), which those sale actions themselves
+// don't do, so the Alert list and nav badge catch up straight away.
 export async function refreshOpenAlerts(): Promise<void> {
   await requireAdmin();
   updateTag(OPEN_ALERTS_TAG);
@@ -169,9 +168,13 @@ export async function getProcessedAlerts(): Promise<ProcessedAlertItem[]> {
   }));
 }
 
-// Deletes a processed alert's record for good. Only ever an alert that's
-// already been dealt with — an open one can't be removed this way.
-export async function deleteProcessedAlert(id: string): Promise<void> {
+// Deletes a stored alert for good — an open one from the Alert list
+// (2026-11-09, direct request: some go out of date, e.g. a sale later
+// cancelled) or a processed one. Alerts worked out live (an overdue
+// invoice, say) aren't stored, so can't be deleted: they clear once the
+// problem is dealt with.
+export async function deleteAlert(id: string): Promise<void> {
   await requireAdmin();
-  await db.alertEvent.deleteMany({ where: { id, resolvedAt: { not: null } } });
+  await db.alertEvent.deleteMany({ where: { id } });
+  updateTag(OPEN_ALERTS_TAG);
 }

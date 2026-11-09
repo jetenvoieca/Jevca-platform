@@ -4,6 +4,8 @@ import * as sales from "@/lib/purchases";
 import { NotAllowedError, requireSiteAccess } from "@/lib/currentUser";
 import { customerOwner, requirePurchaseAccess } from "@/lib/recordOwners";
 import { db } from "@/lib/db";
+import { updateTag } from "next/cache";
+import { OPEN_ALERTS_TAG } from "@/lib/alerts";
 
 // Sales and their payments, from the browser (2026-10-26): each checks
 // the person logged in has access to the sale (its artwork's client), then
@@ -64,9 +66,13 @@ export async function updatePurchaseRelease(...args: Parameters<typeof sales.upd
   return sales.updatePurchaseRelease(...args);
 }
 
+// Cancelling deletes the sale's alerts, so the Alert list and nav badge
+// are brought up to date straight away.
 export async function abandonPurchase(...args: Parameters<typeof sales.abandonPurchase>) {
   await requirePurchaseAccess(args[0]);
-  return sales.abandonPurchase(...args);
+  const result = await sales.abandonPurchase(...args);
+  updateTag(OPEN_ALERTS_TAG);
+  return result;
 }
 
 export async function createCardEntryIntent(...args: Parameters<typeof sales.createCardEntryIntent>) {
