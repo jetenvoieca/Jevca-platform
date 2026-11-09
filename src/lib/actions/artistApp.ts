@@ -11,6 +11,7 @@ import { listShownExhibitions, type ExhibitionRow } from "@/lib/actions/exhibiti
 import { listProfileStories, type ProfileStoryRow } from "@/lib/actions/profileStories";
 import { arrangeItems, contentFits, pageWorks } from "@/lib/pageComponents";
 import { readPageStories } from "@/lib/pageStories";
+import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel";
 import { pageShownWorks, type SiteWork } from "@/lib/siteWorks";
 
 // The Artist App's Arrange Pages (2026-11-08, Craig's mockup).
@@ -46,6 +47,7 @@ export async function listArtistAppPages(siteId: string): Promise<ArtistAppPage[
 //   and another can be chosen in its place;
 // - a page with Profile stories: the entries they show, in their order;
 // - a page with Exhibitions: the exhibitions shown, as the page lists them;
+// - the Contact panel page: its panel's settings, to draw the form;
 // - any other page: its works as shown, in an order set up elsewhere.
 export type ArtistAppPageContent =
   | {
@@ -54,7 +56,8 @@ export type ArtistAppPageContent =
       arrange: { blockId: string; hiddenIds: string[] } | null;
     }
   | { kind: "stories"; stories: ProfileStoryRow[] }
-  | { kind: "exhibitions"; exhibitions: ExhibitionRow[] };
+  | { kind: "exhibitions"; exhibitions: ExhibitionRow[] }
+  | { kind: "contact"; settings: ContactPanelSettings };
 
 const NO_WORKS: ArtistAppPageContent = { kind: "fixed", works: [], arrange: null };
 
@@ -62,9 +65,11 @@ export async function getArtistAppPageContent(siteId: string, pageId: string): P
   const { artistId } = await requireSiteAccess(siteId);
   const page = await db.page.findFirst({
     where: { id: pageId, siteId },
-    select: { curationId: true, pageStyleId: true },
+    select: { curationId: true, pageStyleId: true, contactPanel: true },
   });
   if (!page) return NO_WORKS;
+  const contactPanel = readContactPanel(page.contactPanel);
+  if (contactPanel) return { kind: "contact", settings: contactPanel };
 
   const style = (await listPageStyles()).find((s) => s.id === page.pageStyleId) ?? null;
   const blocks = style?.type === "BLOCK_BUILD" ? style.layout.blocks : [];

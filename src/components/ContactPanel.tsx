@@ -40,7 +40,8 @@ export function useOpenContactPanel(): OpenPanel | null {
   return useContext(ContactPanelContext);
 }
 
-export default function ContactPanel({ settings, onClosed }: OpenPanel) {
+// `inline` (2026-11-09, the Artist App): drawn in place — no slide, no ✕.
+export default function ContactPanel({ settings, onClosed, inline = false }: OpenPanel & { inline?: boolean }) {
   const siteData = useSiteData();
   const site = siteData.forms;
   // "start": drawn off to the right, about to slide in; "in": showing;
@@ -70,6 +71,10 @@ export default function ContactPanel({ settings, onClosed }: OpenPanel) {
 
   // Slides in once it's been drawn off to the right.
   useEffect(() => {
+    if (inline) {
+      setPhase("in");
+      return;
+    }
     const frame = requestAnimationFrame(() => setPhase("in"));
     return () => cancelAnimationFrame(frame);
   }, []);
@@ -86,8 +91,12 @@ export default function ContactPanel({ settings, onClosed }: OpenPanel) {
     color: settings.textColour,
     fontFamily: SITE_FONT_FAMILY[settings.font],
     fontSize: settings.textSize,
-    transform: phase === "in" ? "translateX(0)" : "translateX(105%)",
-    transition: phase === "start" ? "none" : `transform ${SLIDE_SECONDS}s ease-out`,
+    ...(inline
+      ? {}
+      : {
+          transform: phase === "in" ? "translateX(0)" : "translateX(105%)",
+          transition: phase === "start" ? "none" : `transform ${SLIDE_SECONDS}s ease-out`,
+        }),
   };
   const field: CSSProperties = { font: "inherit", color: "#222222" };
   const fieldClass = "w-full max-w-md border border-neutral-500 bg-white px-2 py-1.5 outline-none focus:border-neutral-800";
@@ -119,9 +128,12 @@ export default function ContactPanel({ settings, onClosed }: OpenPanel) {
   };
 
   return (
-    <div className="relative min-h-full px-6 pb-8 pt-1 shadow-[-12px_0_24px_-16px_rgba(0,0,0,0.35)]" style={look}>
+    <div
+      className={`relative min-h-full px-6 pb-8 ${inline ? "pt-6" : "pt-1 shadow-[-12px_0_24px_-16px_rgba(0,0,0,0.35)]"}`}
+      style={look}
+    >
       {/* ✕ stays in view as the page scrolls (2026-11-03). */}
-      <div className="sticky top-0 z-10 -mr-4 flex h-0 justify-end">
+      <div className={`sticky top-0 z-10 -mr-4 flex h-0 justify-end ${inline ? "hidden" : ""}`}>
         <button
           type="button"
           onClick={() => setPhase("out")}

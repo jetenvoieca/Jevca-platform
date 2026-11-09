@@ -25,6 +25,8 @@ import { movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
+import ContactPanel from "@/components/ContactPanel";
+import { LiveSiteData } from "@/lib/siteData";
 import { ARTIST_APP_SHOWS_PRESENTATION_MEDIUM, artistAppPageHref } from "@/lib/artistApp";
 import { MainPanel, PictureTile, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
 import {
@@ -44,7 +46,7 @@ import type { SiteWork } from "@/lib/siteWorks";
 // before dragging (useArtistAppSensors). Tapping a work opens its
 // Presentation in the curation the page shows it from (Craig, 8 Nov). A
 // page without works shows its Profile entries (tap for the entry's
-// window) or exhibitions instead (Craig, 9 Nov).
+// window), exhibitions or contact form instead (Craig, 9 Nov).
 
 type PageDragData = { type: "page"; pageId: string };
 type PageDropData = { kind: "page"; pageId: string } | { kind: "list"; visible: boolean };
@@ -162,6 +164,14 @@ export default function ArtistPagesView({
             <PageStories stories={content.stories} onOpen={setOpenStory} />
           ) : content.kind === "exhibitions" ? (
             <PageExhibitions exhibitions={content.exhibitions} />
+          ) : content.kind === "contact" ? (
+            // The form as the site shows it (messages are only sent from
+            // the published site).
+            <div className="mx-auto max-w-xl overflow-hidden rounded-sm border border-neutral-200">
+              <LiveSiteData siteId={siteId} artistId={artistId}>
+                <ContactPanel settings={content.settings} onClosed={() => {}} inline />
+              </LiveSiteData>
+            </div>
           ) : (
             <PageWorks
               key={`${selected.id}:${contentLoad}`}
