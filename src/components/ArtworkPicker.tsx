@@ -18,6 +18,7 @@ export default function ArtworkPicker({
   mode = "single",
   label,
   variant = "icon",
+  triggerClassName,
   allowCreate = true,
   excludeIds = [],
   availableOnly = false,
@@ -34,6 +35,9 @@ export default function ArtworkPicker({
   // add icon's implication would be misleading. See decisions-log,
   // 2026-08-05.
   variant?: "icon" | "button";
+  // The "button" variant's own look (2026-11-09 — the Artist App's
+  // "+ Works").
+  triggerClassName?: string;
   // Whether the "type a new artwork name… Create" box is offered
   // (2026-09-24). Off for Curations, which only ever gather works that
   // already exist in the catalogue.
@@ -213,7 +217,7 @@ export default function ArtworkPicker({
       <button
         type="button"
         onClick={handleOpen}
-        className="rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50"
+        className={triggerClassName ?? "rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm hover:bg-neutral-50"}
       >
         {triggerLabel}
       </button>

@@ -133,7 +133,8 @@ export type ArtistAppPageContent =
   | {
       kind: "showcase" | "arrange" | "single" | "fixed";
       works: SiteWork[];
-      arrange: { blockId: string; hiddenIds: string[] } | null;
+      // The component, the works it leaves out, and the curation it shows.
+      arrange: { blockId: string; hiddenIds: string[]; curationId: string } | null;
     }
   | { kind: "stories"; stories: ProfileStoryRow[] }
   | { kind: "exhibitions"; exhibitions: ExhibitionRow[] }
@@ -184,7 +185,11 @@ export async function getArtistAppPageContent(siteId: string, pageId: string): P
       ...w,
       curationId: curation.id,
     }));
-    return { kind, works, arrange: { blockId: content.blockId, hiddenIds: content.hiddenIds } };
+    return {
+      kind,
+      works,
+      arrange: { blockId: content.blockId, hiddenIds: content.hiddenIds, curationId: curation.id },
+    };
   }
 
   const works = pageShownWorks({ curationId, style, components, canvas }, curations);

@@ -27,6 +27,9 @@ import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
 import ContactPanel from "@/components/ContactPanel";
+import ArtworkPicker from "@/components/ArtworkPicker";
+import { useClientWords } from "@/components/ClientWordsProvider";
+import { addWorksToCuration } from "@/lib/actions/curations";
 import { LiveSiteData } from "@/lib/siteData";
 import { ARTIST_APP_SHOWS_PRESENTATION_MEDIUM, artistAppPageHref } from "@/lib/artistApp";
 import { MainPanel, PictureTile, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
@@ -160,7 +163,20 @@ export default function ArtistPagesView({
           ignoreClickAfterDrag();
         }}
       >
-        <MainPanel heading={selected?.title ?? "Pages"}>
+        <MainPanel
+          heading={selected?.title ?? "Pages"}
+          aside={
+            selected && !loading && content?.kind === "arrange" && content.arrange ? (
+              <AddWorks
+                artistId={artistId}
+                curationId={content.arrange.curationId}
+                excludeIds={[...content.works.map((w) => w.artworkId), ...content.arrange.hiddenIds]}
+                onAdded={() => loadContent(selected.id)}
+                onError={setError}
+              />
+            ) : null
+          }
+        >
           {loading ? (
             <p className="text-center text-neutral-400">Loading…</p>
           ) : !selected || !content ? null : content.kind === "stories" ? (
@@ -523,6 +539,48 @@ function PageWorks({
         )}
       </WorkGrid>
     </>
+  );
+}
+
+// "+ Works" beside the heading of a page whose works can be arranged
+// (Craig, 9 Nov): the artwork picker; the works chosen join the page's
+// curation, at its end.
+function AddWorks({
+  artistId,
+  curationId,
+  excludeIds,
+  onAdded,
+  onError,
+}: {
+  artistId: string;
+  curationId: string;
+  // Already in the curation.
+  excludeIds: string[];
+  onAdded: () => void;
+  onError: (message: string | null) => void;
+}) {
+  const words = useClientWords();
+  return (
+    <ArtworkPicker
+      artistId={artistId}
+      mode="multi"
+      variant="button"
+      label={`+ ${words.items}`}
+      triggerClassName="border border-neutral-300 px-3 text-2xl font-light text-neutral-800 hover:bg-neutral-50"
+      allowCreate={false}
+      excludeIds={excludeIds}
+      onSelect={async (picked) => {
+        if (picked.length === 0) return;
+        onError(null);
+        const result = await addWorksToCuration(
+          curationId,
+          artistId,
+          picked.map((a) => a.id),
+        ).catch(() => ({ error: "" }));
+        if ("error" in result) onError(`The ${words.items.toLowerCase()} weren't added — please try again.`);
+        else onAdded();
+      }}
+    />
   );
 }
 

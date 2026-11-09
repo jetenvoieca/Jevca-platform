@@ -6,22 +6,33 @@ import { PlayMark } from "@/components/SectionMediaView";
 // with its heading box(es), the narrower panel beside it, and a work's
 // tile.
 
-// With `heading`, opens with that heading; otherwise the screen places
-// its own PanelHeadings.
-export function MainPanel({ heading, children }: { heading?: string; children: ReactNode }) {
+// With `heading`, opens with that heading (and `aside` beside it, e.g. a
+// button); otherwise the screen places its own PanelHeadings.
+export function MainPanel({
+  heading,
+  aside,
+  children,
+}: {
+  heading?: string;
+  aside?: ReactNode;
+  children: ReactNode;
+}) {
   return (
     <section className="min-w-0 flex-1 rounded-md border border-neutral-300 bg-white px-8 py-8 lg:overflow-y-auto">
-      {heading !== undefined && <PanelHeading>{heading}</PanelHeading>}
+      {heading !== undefined && <PanelHeading aside={aside}>{heading}</PanelHeading>}
       {children}
     </section>
   );
 }
 
-export function PanelHeading({ children }: { children: ReactNode }) {
+export function PanelHeading({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
   return (
-    <h2 className="mx-auto mb-8 w-fit min-w-72 border border-neutral-200 px-6 py-1.5 text-center text-2xl text-neutral-800">
-      {children}
-    </h2>
+    <div className="mb-8 flex items-stretch justify-center gap-3">
+      <h2 className="w-fit min-w-72 border border-neutral-200 px-6 py-1.5 text-center text-2xl text-neutral-800">
+        {children}
+      </h2>
+      {aside}
+    </div>
   );
 }
 
