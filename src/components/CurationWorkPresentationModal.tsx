@@ -18,6 +18,7 @@ export default function CurationWorkPresentationModal({
   showMedium = true,
   addPicturesFrom = "catalogue",
   mainRemovable = false,
+  basic = false,
 }: {
   curationId: string;
   artworkId: string;
@@ -30,6 +31,7 @@ export default function CurationWorkPresentationModal({
   showMedium?: boolean;
   addPicturesFrom?: "catalogue" | "file";
   mainRemovable?: boolean;
+  basic?: boolean;
 }) {
   const close = () => {
     (document.activeElement as HTMLElement | null)?.blur();
@@ -75,6 +77,7 @@ export default function CurationWorkPresentationModal({
             showMedium={showMedium}
             addPicturesFrom={addPicturesFrom}
             mainRemovable={mainRemovable}
+            basic={basic}
           />
         </div>
       </div>

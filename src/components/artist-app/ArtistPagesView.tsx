@@ -303,6 +303,7 @@ export default function ArtistPagesView({
           showMedium={ARTIST_APP_SHOWS_PRESENTATION_MEDIUM}
           addPicturesFrom={ARTIST_APP_PICTURES_FROM_FILE ? "file" : "catalogue"}
           mainRemovable
+          basic
         />
       )}
       {openStory && selected && (

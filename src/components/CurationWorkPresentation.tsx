@@ -70,6 +70,7 @@ export default function CurationWorkPresentation({
   showMedium = true,
   addPicturesFrom = "catalogue",
   mainRemovable = false,
+  basic = false,
 }: {
   curationId: string;
   artworkId: string;
@@ -86,6 +87,10 @@ export default function CurationWorkPresentation({
   // The main picture can be replaced or removed, with the controls always
   // showing (ImageSetEditor's fullControls — the Artist App).
   mainRemovable?: boolean;
+  // Laid out as the Artist App's Add new work form (2026-11-09, Craig —
+  // the Portfolio level): a larger Description, and Full price only (no
+  // Purchase Options heading or instalments; online sales come later).
+  basic?: boolean;
 }) {
   const [data, setData] = useState<Presentation | null>(null);
   const [loading, setLoading] = useState(true);
@@ -273,14 +278,14 @@ export default function CurationWorkPresentation({
               value={descriptionDraft}
               onChange={(e) => setDescriptionDraft(e.target.value)}
               onBlur={saveDescription}
-              rows={3}
+              rows={basic ? 9 : 3}
               placeholder="Describe this work for this curation"
               className="w-full resize-y rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
             />
           </div>
 
           <div className={PANEL}>
-            <h3 className={PANEL_TITLE}>Purchase Options</h3>
+            {!basic && <h3 className={PANEL_TITLE}>Purchase Options</h3>}
             <label className="mb-1 block text-xs font-medium text-neutral-700">Full price</label>
             <div className="flex items-center gap-2">
               <select
@@ -297,7 +302,9 @@ export default function CurationWorkPresentation({
                   </option>
                 ))}
               </select>
-              <div className="flex min-w-0 flex-1 items-center gap-2 rounded-md border border-neutral-200 p-1">
+              <div
+                className={`flex min-w-0 flex-1 items-center gap-2 ${basic ? "" : "rounded-md border border-neutral-200 p-1"}`}
+              >
                 <input
                   type="text"
                   inputMode="decimal"
@@ -318,15 +325,19 @@ export default function CurationWorkPresentation({
                     if (e.key === "Enter") e.currentTarget.blur();
                   }}
                   placeholder="0"
-                  className="w-24 min-w-0 rounded-md border border-neutral-300 px-2 py-1 text-sm"
+                  className={`min-w-0 rounded-md border border-neutral-300 px-2 py-1 text-sm ${basic ? "flex-1" : "w-24"}`}
                 />
-                <span className="whitespace-nowrap text-sm text-neutral-500">or {count} instalments of</span>
-                <span
-                  title="Follows the full price. The number of instalments is set in Settings → Financial → Payments defaults."
-                  className="w-20 shrink-0 rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm text-neutral-700"
-                >
-                  {perInstalment != null ? formatAmount(perInstalment) : "—"}
-                </span>
+                {!basic && (
+                  <>
+                    <span className="whitespace-nowrap text-sm text-neutral-500">or {count} instalments of</span>
+                    <span
+                      title="Follows the full price. The number of instalments is set in Settings → Financial → Payments defaults."
+                      className="w-20 shrink-0 rounded-md border border-neutral-300 bg-neutral-50 px-2 py-1 text-sm text-neutral-700"
+                    >
+                      {perInstalment != null ? formatAmount(perInstalment) : "—"}
+                    </span>
+                  </>
+                )}
               </div>
             </div>
           </div>
