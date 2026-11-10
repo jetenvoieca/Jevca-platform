@@ -1,4 +1,5 @@
 import type { SiteAddOnRow } from "@/lib/plans";
+import { BUSINESS_WEBSITE_HOST } from "@/lib/businessWebsite";
 
 // Sign-up links (2026-11-10, Craig's request) — see SignupLink in
 // schema.prisma. No database here, so the screens can use it too; the
@@ -29,9 +30,10 @@ export function signupLinkStatus(
   return link.openedAt ? "OPENED" : "NOT_OPENED";
 }
 
-// Where a link opens, from the site's own address.
-export function signupLinkPath(token: string): string {
-  return `/signup/${token}`;
+// Where a link opens (2026-11-10, Craig): on the business website,
+// www.jetenvoieca.com (middleware serves /signup there).
+export function signupLinkUrl(token: string): string {
+  return `https://${BUSINESS_WEBSITE_HOST}/signup/${token}`;
 }
 
 export type SignupLinkRow = {

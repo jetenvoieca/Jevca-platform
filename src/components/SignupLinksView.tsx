@@ -8,8 +8,8 @@ import { ADD_ONS, monthlyTotalPence, type PlanSummary, type SiteAddOnChoice } fr
 import {
   SIGNUP_LINK_LIMITS,
   SIGNUP_LINK_STATUS_LABEL,
-  signupLinkPath,
   signupLinkStatus,
+  signupLinkUrl,
   type SignupLinkRow,
   type SignupLinkStatus,
 } from "@/lib/signupLinks";
@@ -37,8 +37,6 @@ const STATUS_STYLE: Record<SignupLinkStatus, string> = {
 const formatDate = (iso: string) =>
   new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric", timeZone: "Europe/Paris" });
 
-const fullLink = (token: string) => `${window.location.origin}${signupLinkPath(token)}`;
-
 export default function SignupLinksView({
   links,
   plans,
@@ -60,7 +58,7 @@ export default function SignupLinksView({
   const nowDate = new Date(now);
 
   const copy = async (token: string) => {
-    await navigator.clipboard.writeText(fullLink(token));
+    await navigator.clipboard.writeText(signupLinkUrl(token));
     setCopied(token);
   };
 
@@ -257,12 +255,12 @@ function NewLinkModal({
         {token ? (
           <div className="flex flex-col gap-3">
             <p className="text-sm text-neutral-600">Send this link. It works once, until it expires.</p>
-            <input readOnly value={fullLink(token)} onFocus={(e) => e.target.select()} className={field} />
+            <input readOnly value={signupLinkUrl(token)} onFocus={(e) => e.target.select()} className={field} />
             <div className="flex justify-end gap-2">
               <button
                 type="button"
                 onClick={async () => {
-                  await navigator.clipboard.writeText(fullLink(token));
+                  await navigator.clipboard.writeText(signupLinkUrl(token));
                   setCopied(true);
                 }}
                 className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800"

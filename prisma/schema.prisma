@@ -3127,6 +3127,10 @@ model MarketingContactLink {
 // and email filled in. Works once, until `expiresAt`: opening it sets
 // `openedAt`, signing up `completedAt` and the `site` made. Deleting the
 // plan or theme deletes its links. See lib/signupLinks.ts.
+// What the person gives on the sign-up page (`signup…`, their chosen
+// password hashed) is kept here while they pay at Stripe (`stripeMode`,
+// `stripeCheckoutSessionId`) — the client, site and login are made from it
+// once Stripe confirms the payment; the password hash is then cleared.
 model SignupLink {
   id          String     @id @default(cuid())
   token       String     @unique
@@ -3140,6 +3144,12 @@ model SignupLink {
   expiresAt   DateTime
   openedAt    DateTime?
   completedAt DateTime?
+  signupName              String?
+  signupEmail             String?
+  signupPhone             String?
+  passwordHash            String?
+  stripeMode              StripeMode?
+  stripeCheckoutSessionId String?    @unique
   siteId      String?    @unique
   site        Site?      @relation(fields: [siteId], references: [id], onDelete: SetNull)
   addOns      SignupLinkAddOn[]

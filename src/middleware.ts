@@ -12,6 +12,8 @@ import { BUSINESS_WEBSITE_DOMAIN, BUSINESS_WEBSITE_HOST } from "@/lib/businessWe
 // contact form (2026-10-20) sends with a server action, posted to the
 // page itself.
 const WEBSITE_ROUTE_PREFIX = "/public-website";
+// Sign-up pages (2026-11-10), served on the business website only.
+const SIGNUP_PATH_PREFIX = "/signup/";
 
 // Campaign mails' own address, news.jevca.art (2026-10-08): it serves
 // only what a sent mail links to — its images (/api/media) and the
@@ -116,6 +118,9 @@ export async function middleware(request: NextRequest) {
   }
   if (host === BUSINESS_WEBSITE_HOST) {
     if (pathname.startsWith("/api/media")) return NextResponse.next();
+    // Sign-up (2026-11-10): the app's own pages, public — each checks its
+    // link itself.
+    if (pathname.startsWith(SIGNUP_PATH_PREFIX)) return NextResponse.next();
     if (pathname.startsWith("/api/")) return new NextResponse(null, { status: 404 });
     const url = request.nextUrl.clone();
     url.pathname = pathname === "/" ? WEBSITE_ROUTE_PREFIX : `${WEBSITE_ROUTE_PREFIX}${pathname}`;
