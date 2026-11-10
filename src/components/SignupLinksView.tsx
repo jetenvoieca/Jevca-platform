@@ -87,7 +87,7 @@ export default function SignupLinksView({
         </button>
       </div>
       {plans.length === 0 && (
-        <p className="mb-4 text-sm text-neutral-500">Make a plan under Templates → Plans first.</p>
+        <p className="mb-4 text-sm text-neutral-500">Make a plan under Administration → Plans first.</p>
       )}
       {error && <p className="mb-4 rounded-md bg-red-50 px-3 py-2 text-sm text-red-600">{error}</p>}
 

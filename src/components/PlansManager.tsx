@@ -8,7 +8,7 @@ import { ADD_ONS, PLAN_LIMITS, type AddOnKey, type PlanSummary } from "@/lib/pla
 import { CURRENCIES } from "@/lib/currencies";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
-// Templates → Plans (2026-11-09, Craig's request — see lib/plans.ts):
+// Administration → Plans (2026-11-09, Craig's request — see lib/plans.ts):
 // the list of plans on the right with New and Delete; the chosen plan on
 // the left — its name, monthly price, the groups of pages it includes and
 // pages per group, what it includes (one item a line — listed on the

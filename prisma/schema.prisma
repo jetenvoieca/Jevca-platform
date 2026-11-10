@@ -1755,7 +1755,7 @@ model SiteTheme {
 // Plan and its add-ons (Site.planId, SiteAddOn), each at the price it
 // joined at (Site.planPrice, SiteAddOn.monthlyPrice); the monthly total is
 // shown only for now — Stripe is still set by hand. Managed under
-// Templates → Plans; chosen per site under Administration → Clients.
+// Administration → Plans; chosen per site under Administration → Clients.
 // See lib/plans.ts.
 model Plan {
   id             String  @id @default(cuid())
@@ -2682,7 +2682,7 @@ model PlatformSettings {
 
   // Whether sign-ups pay in Stripe's Test or Live mode (2026-11-10) — the
   // platform's own account (lib/platformStripe.ts). Test until sign-up has
-  // been tried; switched under Templates → Plans.
+  // been tried; switched under Administration → Plans.
   signupStripeMode StripeMode @default(TEST)
 
   updatedAt DateTime @updatedAt

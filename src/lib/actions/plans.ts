@@ -22,7 +22,7 @@ import {
 } from "@/lib/plans";
 
 // Subscriber options (2026-11-09) — see Plan in schema.prisma and
-// lib/plans.ts. Plans are managed by admins under Templates → Plans; a
+// lib/plans.ts. Plans are managed by admins under Administration → Plans; a
 // site's Plan, Site Theme and add-ons are chosen under Administration →
 // Clients, and (2026-11-10) its add-ons by the artist too, on the Artist
 // App's Account.

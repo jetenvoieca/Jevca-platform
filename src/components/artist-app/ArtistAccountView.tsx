@@ -18,7 +18,7 @@ import PlanAddOnsList from "@/components/PlanAddOnsList";
 import { MainPanel, SidePanel } from "@/components/artist-app/ArtistAppPanels";
 
 // The Artist App's Account (2026-11-10, Craig's mockup). On the left the
-// plan and what it includes (Templates → Plans), and the client's Contact
+// plan and what it includes (Administration → Plans), and the client's Contact
 // Details, each saved when its box is left; on the right the plan — what
 // the site pays for it, theme and pages included, fixed — and its add-ons
 // to tick (those it has at the prices it took them at), kept with Update (the app then follows

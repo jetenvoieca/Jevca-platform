@@ -76,6 +76,8 @@ export function buildAccountsSection(
       { label: "Dashboard", href: "/accounts/dashboard", active: active === "dashboard", badge: alertCount },
       { label: "Inbox", href: "/accounts/inbox", active: active === "inbox" },
       { label: "Subscriptions", href: "/accounts", active: active === "subscriptions" },
+      // Subscriber options (2026-11-09; under Administration since 2026-11-10).
+      { label: "Plans", href: "/accounts/plans", active: active === "plans" },
       { label: "Expenses", href: "/accounts/expenses", active: active === "expenses" },
       { label: "Account", href: "/accounts/summary", active: active === "accountSummary" },
       { label: "Consolidated Sales", href: "/accounts/sales", active: active === "sales" },
@@ -108,8 +110,6 @@ export function buildTemplatesSection(active: TopNavKey | null): AppShellNavEntr
       { label: "Menus", href: "/templates/menus", active: active === "menuStyles" },
       // The pages a site of each theme has (2026-11-03).
       { label: "Site Themes", href: "/templates/site-themes", active: active === "siteThemes" },
-      // Subscriber options (2026-11-09).
-      { label: "Plans", href: "/templates/plans", active: active === "plans" },
       {
         label: "Presentations",
         href: "/templates/presentations",
