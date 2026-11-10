@@ -138,13 +138,14 @@ export type SiteAccount = {
 
 // What a site's Plan and add-ons give it in the Artist App (2026-11-09):
 // pictures from the device, or with Art Manager from the Media Catalogue
-// too; the artwork picker's Location and Type filters with Art Manager or
+// too; with Art Manager the Catalogue screen (2026-11-10); the artwork picker's Location and Type filters with Art Manager or
 // Locations; and how many pages a group may have (null: no limit) and how
 // many groups (the Plan's, plus each Additional group of pages — kept for
 // when groups can be added). A site with no Plan works as Portfolio did:
 // pictures from the device, no filters, no limits.
 export type SiteFeatures = {
   picturesFrom: "file" | "both";
+  catalogue: boolean;
   pickerFilters: boolean;
   pagesPerGroup: number | null;
   pageGroups: number | null;
@@ -157,6 +158,7 @@ export function siteFeatures(
   const has = (key: AddOnKey) => addOns.find((a) => a.addOn === key)?.quantity ?? 0;
   return {
     picturesFrom: has("ART_MANAGER") ? "both" : "file",
+    catalogue: has("ART_MANAGER") > 0,
     pickerFilters: has("ART_MANAGER") > 0 || has("LOCATIONS") > 0,
     pagesPerGroup: plan ? plan.pagesPerGroup : null,
     pageGroups: plan ? plan.groupsIncluded + has("EXTRA_PAGE_GROUP") : null,

@@ -13,6 +13,7 @@ import { publishedHomePath } from "@/lib/siteSnapshot";
 import EyeIcon from "@/components/EyeIcon";
 import PublishButton from "@/components/PublishButton";
 import PublishedSiteLink from "@/components/PublishedSiteLink";
+import { useArtistAppFeatures } from "@/components/artist-app/ArtistAppFeatures";
 
 // Sizes (2026-11-09, Craig — half a laptop screen): wide (lg) as the
 // mockups, buttons on the right; medium (sm–lg) the buttons as a row
@@ -27,7 +28,8 @@ import PublishedSiteLink from "@/components/PublishedSiteLink";
 // admin's icons — the eye (the chosen page's preview, on Arrange Pages),
 // publish and the published site.
 // Buttons (2026-11-09, Craig's mockup): capitals, centred, 4px corners;
-// Pages, CV, Exhibition, Concierge, Account (Consignment dropped).
+// Pages, CV, Exhibition, Concierge, Account (Consignment dropped); with
+// Art Manager (2026-11-10) Catalogue first — the admin's Artwork Catalogue.
 
 const BUTTON_COLOR = "#FBF7EE";
 const CONCIERGE_COLOR = "#FAE8C3";
@@ -51,7 +53,10 @@ export default function ArtistAppFrame({
   const searchParams = useSearchParams();
   // Arrange Pages keeps its chosen page in the address (`page`).
   const chosenPage = pathname === artistAppHref(siteId, "pages") ? searchParams.get("page") : null;
+  const { catalogue } = useArtistAppFeatures();
+  const catalogueHref = artistAppHref(siteId, "artworks");
   const screens = [
+    ...(catalogue ? [{ label: "Catalogue", href: catalogueHref }] : []),
     ...(ARTIST_APP_SHOWS_MANAGE_WORKS ? [{ label: "Manage Works", href: artistAppHref(siteId) }] : []),
     { label: "Pages", href: artistAppHref(siteId, "pages") },
     { label: "CV", href: artistAppHref(siteId, "cv") },
@@ -93,7 +98,11 @@ export default function ArtistAppFrame({
             <PublishedSiteLink href={publishedHomePath(siteId)} />
           </div>
           {screens.map((s) => (
-            <AppButton key={s.label} href={s.href} active={pathname === s.href}>
+            <AppButton
+              key={s.label}
+              href={s.href}
+              active={pathname === s.href || (s.href === catalogueHref && pathname.startsWith(`${s.href}/`))}
+            >
               {s.label}
             </AppButton>
           ))}

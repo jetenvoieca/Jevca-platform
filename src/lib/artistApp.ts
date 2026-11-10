@@ -23,8 +23,12 @@ export const ARTIST_APP_SHOWS_PRESENTATION_MEDIUM = false;
 // site's Plan and add-ons (2026-11-09): see siteFeatures in lib/plans.ts
 // and components/artist-app/ArtistAppFeatures.tsx.
 
-// Its screens: Manage Works (the start), Arrange Pages and Update CV.
-export function artistAppHref(siteId: string, screen: "" | "pages" | "cv" | "account" = ""): string {
+// Its screens: Manage Works (the start), Arrange Pages, Update CV, Account
+// and with Art Manager the Catalogue ("artworks") and its Add Artworks.
+export function artistAppHref(
+  siteId: string,
+  screen: "" | "pages" | "cv" | "account" | "artworks" | "artworks/add" = "",
+): string {
   return `/artist-app/${siteId}${screen ? `/${screen}` : ""}`;
 }
 
