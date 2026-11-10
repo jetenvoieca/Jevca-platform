@@ -54,7 +54,14 @@ export default function ClientOwnerPanel({
       <h1 className="mb-4 text-lg font-semibold text-neutral-900">{site.name}</h1>
       <div className="flex flex-col gap-4 lg:flex-row lg:items-start">
         <OwnerCard artist={artist} className="lg:flex-1" />
-        <DomainCard site={site} className="lg:flex-1" />
+        {/* Middle column (2026-11-10, Craig's mockup): the site's domain, then
+            the client's Hopper token, login and what they can reach. */}
+        <div className="flex flex-col gap-4 lg:flex-1">
+          <DomainCard site={site} />
+          <HopperTokenCard artistId={artist.id} kind={artist.kind} hopperToken={artist.hopperToken} />
+          <ArtistLoginCard key={artist.id} artistId={artist.id} login={login} />
+          <MenuAccessCard key={`access-${artist.id}`} artistId={artist.id} initial={menuAccess} />
+        </div>
         <div className="flex flex-col gap-4 lg:flex-1">
           <PlanCard key={`plan-${site.id}`} siteId={site.id} plans={plans} themes={themes} initial={subscription} />
           <SubscriptionCard
@@ -63,9 +70,6 @@ export default function ClientOwnerPanel({
             defaultCurrency={site.defaultCurrency}
             subscriptionPayments={subscriptionPayments}
           />
-          <HopperTokenCard artistId={artist.id} kind={artist.kind} hopperToken={artist.hopperToken} />
-          <ArtistLoginCard key={artist.id} artistId={artist.id} login={login} />
-          <MenuAccessCard key={`access-${artist.id}`} artistId={artist.id} initial={menuAccess} />
         </div>
       </div>
     </div>

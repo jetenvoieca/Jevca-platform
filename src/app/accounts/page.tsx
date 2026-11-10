@@ -6,6 +6,10 @@ import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
 import AccountsBackfillButton from "@/components/AccountsBackfillButton";
 import AccountsPeriodView from "@/components/AccountsPeriodView";
+import SignupLinksView from "@/components/SignupLinksView";
+import { listSignupLinks } from "@/lib/actions/signupLinks";
+import { listPlans } from "@/lib/actions/plans";
+import { listSiteThemes } from "@/lib/actions/siteThemes";
 
 export const dynamic = "force-dynamic";
 
@@ -29,13 +33,69 @@ type MonthGroup = {
 // specifically the subscription-revenue view. Business Expenses, which
 // used to be embedded below this content, now lives on its own page at
 // /accounts/expenses.
-export default async function AccountsPage() {
+//
+// Two tabs (2026-11-10, Craig — to keep the menu short): Payments, the
+// subscription money coming in, and Sign-up links, how new subscriptions
+// start (SignupLinksView).
+export default async function AccountsPage({ searchParams }: { searchParams: Promise<{ tab?: string }> }) {
+  const { tab } = await searchParams;
+  const signups = tab === "signups";
+  const [openAlerts, recentSites] = await Promise.all([getOpenAlerts(), getRecentSites()]);
+
+  return (
+    <AppShell
+      navItems={buildTopNavItems("subscriptions", openAlerts.length, recentSites)}
+      content={
+        <div className={`mx-auto px-6 py-6 ${signups ? "max-w-5xl" : "max-w-3xl"}`}>
+          <div className="mb-4 flex items-center justify-between">
+            <h1 className="text-2xl font-semibold text-neutral-900">Subscriptions</h1>
+            <Link
+              href="/accounts/sales"
+              className="text-sm text-neutral-500 underline-offset-2 hover:underline"
+            >
+              Consolidated Sales →
+            </Link>
+          </div>
+          <nav className="mb-6 flex gap-6 border-b border-neutral-200 text-sm">
+            {[
+              { label: "Payments", href: "/accounts", on: !signups },
+              { label: "Sign-up links", href: "/accounts?tab=signups", on: signups },
+            ].map((t) => (
+              <Link
+                key={t.label}
+                href={t.href}
+                className={`-mb-px border-b-2 pb-2 ${
+                  t.on ? "border-neutral-900 text-neutral-900" : "border-transparent text-neutral-500 hover:text-neutral-800"
+                }`}
+              >
+                {t.label}
+              </Link>
+            ))}
+          </nav>
+          {signups ? await signupLinksTab() : await paymentsTab()}
+        </div>
+      }
+    />
+  );
+}
+
+async function signupLinksTab() {
+  const [links, plans, themes] = await Promise.all([listSignupLinks(), listPlans(), listSiteThemes()]);
+  return (
+    <SignupLinksView
+      links={links}
+      plans={plans}
+      themes={themes.map((t) => ({ id: t.id, name: t.name }))}
+      now={new Date().toISOString()}
+    />
+  );
+}
+
+async function paymentsTab() {
   const payments = await db.subscriptionPayment.findMany({
     include: { artist: { select: { name: true, paymentMethod: true } } },
     orderBy: { paidAt: "desc" },
   });
-  const [openAlerts, recentSites] = await Promise.all([getOpenAlerts(), getRecentSites()]);
-
   const months = new Map<string, MonthGroup>();
   for (const p of payments) {
     // 2026-08-19 — a payment with an invalid paidAt won't crash this page
@@ -77,36 +137,22 @@ export default async function AccountsPage() {
   const currentYear = new Date().getFullYear();
 
   return (
-    <AppShell
-      navItems={buildTopNavItems("subscriptions", openAlerts.length, recentSites)}
-      content={
-        <div className="mx-auto max-w-3xl px-6 py-6">
-          <div className="mb-1 flex items-center justify-between">
-            <h1 className="text-2xl font-semibold text-neutral-900">Subscriptions</h1>
-            <Link
-              href="/accounts/sales"
-              className="text-sm text-neutral-500 underline-offset-2 hover:underline"
-            >
-              Consolidated Sales →
-            </Link>
-          </div>
-          <p className="mb-6 text-sm text-neutral-500">
-            Subscription revenue by month — artists and brands paying us. Stripe and manually-entered
-            payments together. Totals are kept separate per currency rather than combined, since
-            converting between them isn&apos;t something to do silently. For artists&apos; and
-            brands&apos; own sales to their buyers, see Consolidated Sales — for your own business costs, see
-            Expenses.
-          </p>
+    <>
+      <p className="mb-6 text-sm text-neutral-500">
+        Subscription revenue by month — artists and brands paying us. Stripe and manually-entered
+        payments together. Totals are kept separate per currency rather than combined, since
+        converting between them isn&apos;t something to do silently. For artists&apos; and
+        brands&apos; own sales to their buyers, see Consolidated Sales — for your own business costs, see
+        Expenses.
+      </p>
 
-          <AccountsBackfillButton />
+      <AccountsBackfillButton />
 
-          {sortedMonths.length === 0 ? (
-            <p className="text-sm text-neutral-500">No subscription payments recorded yet.</p>
-          ) : (
-            <AccountsPeriodView sortedMonths={sortedMonths} currentYear={currentYear} />
-          )}
-        </div>
-      }
-    />
+      {sortedMonths.length === 0 ? (
+        <p className="text-sm text-neutral-500">No subscription payments recorded yet.</p>
+      ) : (
+        <AccountsPeriodView sortedMonths={sortedMonths} currentYear={currentYear} />
+      )}
+    </>
   );
 }

@@ -18,8 +18,8 @@ import PlanAddOnsList from "@/components/PlanAddOnsList";
 import ConfirmDialog from "@/components/ConfirmDialog";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 
-// Administration → Sign-ups (2026-11-10, Craig's request — see
-// lib/signupLinks.ts): the sign-up links made, newest first — who for, the
+// Administration → Subscriptions → Sign-up links (2026-11-10, Craig's
+// request — see lib/signupLinks.ts): the sign-up links made, newest first — who for, the
 // offer and what it comes to a month, when made and until when, where it's
 // got to (Not opened, Started, Signed up — with the site made — or
 // Expired), Copy link while it can still be used and Delete until signed
@@ -76,8 +76,7 @@ export default function SignupLinksView({
 
   return (
     <div>
-      <div className="mb-4 flex items-center gap-3">
-        <h1 className="flex-1 text-xl font-semibold text-neutral-900">Sign-ups</h1>
+      <div className="mb-4 flex items-center justify-end">
         <button
           type="button"
           onClick={() => setCreating(true)}
