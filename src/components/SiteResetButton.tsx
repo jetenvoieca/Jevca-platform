@@ -3,12 +3,13 @@
 import { useState, useTransition } from "react";
 import { createPortal } from "react-dom";
 import { useRouter } from "next/navigation";
-import { resetSite, type ResetParts, type ResetResult } from "@/lib/actions/siteReset";
+import { resetSite, resetSiteContentRound, type ResetParts, type ResetResult } from "@/lib/actions/siteReset";
 
-// Delete all (2026-11-03, Craig's request — admin only, for testing a
-// site's set-up end to end): a bin in the site header opening a window
-// to tick what to delete from the site — see resetSite — then type DELETE
-// to confirm. Says afterwards what went and what couldn't.
+// Delete all (2026-11-03, Craig's request — admin only, for clearing a
+// site to set it up again): a bin in the site header opening a window to
+// tick what to delete from the site — see resetSite — then type DELETE
+// to confirm. Artworks and media go in rounds, with a running count
+// (2026-11-10). Says afterwards what went and what was kept.
 
 const PARTS: { key: keyof ResetParts; label: string; detail: string }[] = [
   { key: "pages", label: "Pages", detail: "Every page — a clean start." },
@@ -21,13 +22,16 @@ const PARTS: { key: keyof ResetParts; label: string; detail: string }[] = [
   {
     key: "artworks",
     label: "Artworks, curations & media",
-    detail: "Every artwork, curation, Hopper item and Media Catalogue picture — for re-importing.",
+    detail:
+      "Every curation, artwork, Hopper item and Media Catalogue picture — for re-importing. Kept: artworks with a sale or at a Location (none at a Location if Locations is ticked too), and their pictures.",
   },
 ];
 
 const NONE: ResetParts = { pages: false, exhibitionsProfile: false, locations: false, artworks: false };
 
-function summary(r: ResetResult): string {
+type Counts = ResetResult & { artworks: number; media: number };
+
+function deleted(r: Counts): string {
   const done = [
     r.pages && `${r.pages} pages`,
     r.exhibitions && `${r.exhibitions} exhibitions`,
@@ -37,10 +41,7 @@ function summary(r: ResetResult): string {
     r.artworks && `${r.artworks} artworks`,
     r.media && `${r.media} pictures and videos`,
   ].filter(Boolean);
-  return (
-    (done.length ? `Deleted ${done.join(", ")}.` : "Nothing to delete.") +
-    (r.kept.length ? ` Kept: ${r.kept.join("; ")}.` : "")
-  );
+  return done.length ? `Deleted ${done.join(", ")}.` : "Nothing to delete.";
 }
 
 export default function SiteResetButton({ siteId }: { siteId: string }) {
@@ -62,8 +63,30 @@ export default function SiteResetButton({ siteId }: { siteId: string }) {
 
   const run = () => {
     startTransition(async () => {
-      const result = await resetSite(siteId, parts);
-      setMessage("error" in result ? result.error : summary(result));
+      const first = await resetSite(siteId, parts);
+      if ("error" in first) {
+        setMessage(first.error);
+        return;
+      }
+      const counts: Counts = { ...first, artworks: 0, media: 0 };
+      let kept = "";
+      if (parts.artworks) {
+        for (;;) {
+          setMessage(`Deleting… ${counts.artworks} artworks, ${counts.media} pictures and videos so far.`);
+          const round = await resetSiteContentRound(siteId);
+          if ("error" in round) {
+            kept = ` Stopped: ${round.error}`;
+            break;
+          }
+          counts.artworks += round.artworks;
+          counts.media += round.media;
+          if (round.done) {
+            kept = ` Kept ${round.done.keptArtworks} artworks (sold or at a Location) and ${round.done.keptMedia} pictures and videos.`;
+            break;
+          }
+        }
+      }
+      setMessage(deleted(counts) + kept);
       setParts(NONE);
       setTyped("");
       router.refresh();

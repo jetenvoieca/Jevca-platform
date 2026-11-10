@@ -1,4 +1,4 @@
-import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, GetObjectCommand, DeleteObjectCommand, DeleteObjectsCommand } from "@aws-sdk/client-s3";
 import { getSignedUrl } from "@aws-sdk/s3-request-presigner";
 
 const accountId = process.env.R2_ACCOUNT_ID!;
@@ -34,6 +34,18 @@ export async function getFromR2(key: string) {
 // this app for things that should stay recoverable.
 export async function deleteFromR2(key: string): Promise<void> {
   await r2.send(new DeleteObjectCommand({ Bucket: R2_BUCKET, Key: key }));
+}
+
+// Several files at once (2026-11-10, Delete all) — up to 1,000 per request.
+export async function deleteManyFromR2(keys: string[]): Promise<void> {
+  for (let i = 0; i < keys.length; i += 1000) {
+    await r2.send(
+      new DeleteObjectsCommand({
+        Bucket: R2_BUCKET,
+        Delete: { Objects: keys.slice(i, i + 1000).map((Key) => ({ Key })), Quiet: true },
+      })
+    );
+  }
 }
 
 // A short-lived URL the browser can PUT a file straight to, bypassing
