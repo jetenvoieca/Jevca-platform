@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { changeOwnPassword } from "@/lib/actions/auth";
 import { MIN_PASSWORD_LENGTH } from "@/lib/passwordRules";
+import PasswordInput from "@/components/PasswordInput";
 
 const box =
   "mb-3 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm";
@@ -37,16 +38,14 @@ export default function ChangePasswordForm({
         value={email}
         autoComplete="username"
       />
-      <input
-        type="password"
+      <PasswordInput
         name="current"
         required
         placeholder="Current password"
         autoComplete="current-password"
         className={box}
       />
-      <input
-        type="password"
+      <PasswordInput
         name="password"
         required
         minLength={MIN_PASSWORD_LENGTH}
@@ -54,8 +53,7 @@ export default function ChangePasswordForm({
         autoComplete="new-password"
         className={box}
       />
-      <input
-        type="password"
+      <PasswordInput
         name="again"
         required
         placeholder="New password again"

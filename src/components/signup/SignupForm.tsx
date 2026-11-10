@@ -6,6 +6,7 @@ import { ADD_ONS, monthlyTotalPence } from "@/lib/plans";
 import { MIN_PASSWORD_LENGTH } from "@/lib/passwordRules";
 import { formatMoney } from "@/lib/currencies";
 import type { SignupOffer } from "@/lib/signupRecords";
+import PasswordInput from "@/components/PasswordInput";
 
 // The sign-up page's offer and form (2026-11-10): the plan, what it
 // includes, each line's price and the monthly total; then name, email
@@ -94,8 +95,7 @@ export default function SignupForm({ token, offer }: { token: string; offer: Sig
         </label>
         <label className="flex flex-col gap-1 text-sm text-neutral-700">
           Choose a password — at least {MIN_PASSWORD_LENGTH} characters
-          <input
-            type="password"
+          <PasswordInput
             value={password}
             onChange={(e) => setPassword(e.target.value)}
             required
@@ -106,8 +106,7 @@ export default function SignupForm({ token, offer }: { token: string; offer: Sig
         </label>
         <label className="flex flex-col gap-1 text-sm text-neutral-700">
           The password again
-          <input
-            type="password"
+          <PasswordInput
             value={again}
             onChange={(e) => setAgain(e.target.value)}
             required

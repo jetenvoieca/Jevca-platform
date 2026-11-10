@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { setUpAdmin, type LoginState } from "@/lib/actions/auth";
 import { MIN_PASSWORD_LENGTH } from "@/lib/passwordRules";
+import PasswordInput from "@/components/PasswordInput";
 
 const initialState: LoginState = {};
 const box =
@@ -29,8 +30,7 @@ export default function SetUpAdminForm() {
         choose your own email and password — from then on you log in with those.
       </p>
 
-      <input
-        type="password"
+      <PasswordInput
         name="shared"
         required
         placeholder="Current shared password"
@@ -52,8 +52,7 @@ export default function SetUpAdminForm() {
         autoComplete="username"
         className={box}
       />
-      <input
-        type="password"
+      <PasswordInput
         name="password"
         required
         minLength={MIN_PASSWORD_LENGTH}
@@ -61,8 +60,7 @@ export default function SetUpAdminForm() {
         autoComplete="new-password"
         className={box}
       />
-      <input
-        type="password"
+      <PasswordInput
         name="again"
         required
         placeholder="New password again"

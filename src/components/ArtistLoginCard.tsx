@@ -7,6 +7,7 @@ import {
   type ArtistLogin,
 } from "@/lib/actions/users";
 import { MIN_PASSWORD_LENGTH } from "@/lib/passwordRules";
+import PasswordInput from "@/components/PasswordInput";
 
 // The client's own login (2026-10-26), on Administration → Clients: their
 // name, email and a password you choose for them (blank keeps the
@@ -80,8 +81,7 @@ export default function ArtistLoginCard({
           autoComplete="off"
           className={box}
         />
-        <input
-          type="password"
+        <PasswordInput
           value={password}
           onChange={(e) => setPassword(e.target.value)}
           placeholder={

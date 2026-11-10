@@ -3,6 +3,7 @@
 import { useActionState } from "react";
 import { resetPassword, type LoginState } from "@/lib/actions/auth";
 import { MIN_PASSWORD_LENGTH } from "@/lib/passwordRules";
+import PasswordInput from "@/components/PasswordInput";
 
 const initialState: LoginState = {};
 const box = "mb-3 w-full rounded-md border border-neutral-300 px-3 py-2 text-sm";
@@ -16,8 +17,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
       <h1 className="mb-1 text-lg font-semibold text-neutral-900">Choose a new password</h1>
       <p className="mb-4 text-sm text-neutral-500">At least {MIN_PASSWORD_LENGTH} characters.</p>
       <input type="hidden" name="token" value={token} />
-      <input
-        type="password"
+      <PasswordInput
         name="password"
         autoComplete="new-password"
         autoFocus
@@ -26,7 +26,7 @@ export default function ResetPasswordForm({ token }: { token: string }) {
         placeholder="New password"
         className={box}
       />
-      <input type="password" name="again" autoComplete="new-password" required placeholder="New password again" className={box} />
+      <PasswordInput name="again" autoComplete="new-password" required placeholder="New password again" className={box} />
       {state.error && <p className="mb-3 text-xs text-red-600">{state.error}</p>}
       <button
         type="submit"

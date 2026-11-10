@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useActionState } from "react";
 import { login, type LoginState } from "@/lib/actions/auth";
+import PasswordInput from "@/components/PasswordInput";
 
 const initialState: LoginState = {};
 const box =
@@ -33,8 +34,7 @@ export default function LoginForm({ next }: { next: string }) {
         placeholder="Email"
         className={box}
       />
-      <input
-        type="password"
+      <PasswordInput
         name="password"
         autoComplete="current-password"
         required
