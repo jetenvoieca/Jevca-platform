@@ -504,7 +504,7 @@ model SubscriptionPayment {
 // creates a payment link; see purchaseId below.
 model AlertEvent {
   id       String @id @default(cuid())
-  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED" | "EMAIL_REPLY_RECEIVED" | "SALE_RECORDED" | "SALE_LINK_CREATED" | "HOPPER_ITEMS_ADDED" | "HOPPER_ITEMS_PROCESSED"
+  type     String // "SUBSCRIPTION_PAYMENT_FAILED" | "SUBSCRIPTION_CANCELLED" | "EMAIL_REPLY_RECEIVED" | "SALE_RECORDED" | "SALE_LINK_CREATED" | "HOPPER_ITEMS_ADDED" | "HOPPER_ITEMS_PROCESSED" | "SIGNUP_COMPLETED"
   severity String @default("WARNING") // "INFO" | "WARNING" | "CRITICAL"
   message  String
 
@@ -1090,7 +1090,8 @@ model OutboundEmail {
   // What this send actually was, for the Sent list: "ADMIN" (ad hoc
   // Compose), "REPLY" (from an open thread), "TASK" (sent from a task,
   // 2026-09-27), "INVOICE", "RECEIPT", "CERTIFICATE" or "STATEMENT"
-  // (2026-10-20, to a gallery location: customerId). INVOICE vs
+  // (2026-10-20, to a gallery location: customerId), "WELCOME" (on
+  // sign-up, 2026-11-10). INVOICE vs
   // RECEIPT is decided by invoiceEmail.ts from the sale's paid status at
   // the moment it's sent — same distinction already used for the email
   // wording itself. Free string, not an enum, same convention as
@@ -1425,6 +1426,14 @@ model Site {
   addOns      SiteAddOn[]
   // The sign-up link it was made from, if any (2026-11-10).
   signupLink  SignupLink?
+  // Billed from its plan (2026-11-10, sign-up): its subscription in the
+  // platform's own Stripe account (lib/platformStripe.ts), in
+  // `billingStripeMode`, kept in step with its plan and add-ons. No
+  // subscription: billed by hand (Artist.stripeSubscriptionCustomerId).
+  billingStripeMode        StripeMode?
+  stripeCustomerId         String?
+  stripeSubscriptionId     String?     @unique
+  stripeSubscriptionStatus String?
 
   @@index([artistId])
   @@index([menuStyleId])

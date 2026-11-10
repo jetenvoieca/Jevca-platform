@@ -21,6 +21,8 @@ export const ALERT_TYPE_LABELS: Record<string, string> = {
   // 2026-10-31 — see lib/hopperAlerts.ts.
   HOPPER_ITEMS_ADDED: "Added to Hopper",
   HOPPER_ITEMS_PROCESSED: "Hopper processed",
+  // 2026-11-10 — see lib/signupCompletion.ts.
+  SIGNUP_COMPLETED: "New sign-up",
 };
 
 // Alert types whose time matters as well as their date (2026-10-31, the

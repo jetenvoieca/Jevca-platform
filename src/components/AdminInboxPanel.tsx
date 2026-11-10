@@ -263,6 +263,8 @@ const KIND_LABELS: Record<string, string> = {
   RECEIPT: "Receipt",
   CERTIFICATE: "Certificate",
   STATEMENT: "Statement",
+  // 2026-11-10 — sent on sign-up (lib/signupCompletion.ts).
+  WELCOME: "Welcome",
 };
 
 const DELETE_MESSAGE_CONFIRM =

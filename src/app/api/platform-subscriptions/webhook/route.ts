@@ -7,6 +7,8 @@ import {
   recordPlatformInvoiceFailed,
   updatePlatformSubscriptionStatus,
 } from "@/lib/platformSubscriptionSync";
+import { completeSignup } from "@/lib/signupCompletion";
+import { updateSiteSubscriptionStatus } from "@/lib/siteBilling";
 
 // Raw body required for Stripe signature verification — req.text() reads
 // exactly that; no extra route config needed in the App Router.
@@ -41,6 +43,14 @@ export async function POST(req: NextRequest) {
 
   try {
     switch (event.type) {
+      // A sign-up paid (2026-11-10): makes the client, site and login —
+      // see lib/signupCompletion.ts.
+      case "checkout.session.completed": {
+        const session = event.data.object as Stripe.Checkout.Session;
+        if (session.metadata?.signupLinkId) await completeSignup(session.id, mode);
+        break;
+      }
+
       // A subscription payment (the artist paying us) succeeding —
       // covers both the very first invoice and every renewal after it.
       //
@@ -133,6 +143,8 @@ export async function POST(req: NextRequest) {
             status: subscription.status,
           });
         }
+        // A site billed from its plan (2026-11-10).
+        await updateSiteSubscriptionStatus(subscription.id, subscription.status);
         break;
       }
 
