@@ -1,6 +1,6 @@
 "use server";
 
-import { requireAdmin } from "@/lib/currentUser";
+import { requireAdmin, requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { isCurrency } from "@/lib/currencies";
 import {
@@ -10,6 +10,7 @@ import {
   type AddOnKey,
   type PlanAddOnPrice,
   type PlanSummary,
+  type SiteAccount,
   type SiteAddOnChoice,
   type SiteSubscription,
 } from "@/lib/plans";
@@ -17,7 +18,8 @@ import {
 // Subscriber options (2026-11-09) — see Plan in schema.prisma and
 // lib/plans.ts. Plans are managed by admins under Templates → Plans; a
 // site's Plan, Site Theme and add-ons are chosen under Administration →
-// Clients.
+// Clients, and (2026-11-10) its add-ons by the artist too, on the Artist
+// App's Account.
 
 type Result = { ok: true } | { error: string };
 
@@ -31,6 +33,7 @@ const PLAN_SELECT = {
   currency: true,
   groupsIncluded: true,
   pagesPerGroup: true,
+  included: true,
   themes: { orderBy: { position: "asc" }, select: { siteThemeId: true } },
   addOns: { select: { addOn: true, monthlyPrice: true } },
   _count: { select: { sites: true } },
@@ -43,6 +46,7 @@ type PlanRecord = {
   currency: string;
   groupsIncluded: number;
   pagesPerGroup: number;
+  included: string;
   themes: { siteThemeId: string }[];
   addOns: { addOn: AddOnKey; monthlyPrice: { toFixed: (digits: number) => string } }[];
   _count: { sites: number };
@@ -56,6 +60,7 @@ function toSummary(p: PlanRecord): PlanSummary {
     currency: p.currency,
     groupsIncluded: p.groupsIncluded,
     pagesPerGroup: p.pagesPerGroup,
+    included: p.included,
     themeIds: p.themes.map((t) => t.siteThemeId),
     addOns: p.addOns
       .map((a) => ({ addOn: a.addOn, monthlyPrice: a.monthlyPrice.toFixed(2) }))
@@ -104,6 +109,15 @@ export async function updatePlan(
   if (!inRange(input.pagesPerGroup, PLAN_LIMITS.pagesPerGroup)) {
     return { error: `Pages in a group must be ${PLAN_LIMITS.pagesPerGroup.min} to ${PLAN_LIMITS.pagesPerGroup.max}.` };
   }
+  // One item a line, blank lines dropped.
+  const included = input.included
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+  if (included.length > PLAN_LIMITS.included.maxLength) {
+    return { error: "What's included is too long." };
+  }
 
   const themeIds = [...new Set(input.themeIds)];
   const found = await db.siteTheme.count({ where: { id: { in: themeIds } } });
@@ -130,6 +144,7 @@ export async function updatePlan(
         currency: input.currency,
         groupsIncluded: input.groupsIncluded,
         pagesPerGroup: input.pagesPerGroup,
+        included,
       },
     }),
     db.planTheme.deleteMany({ where: { planId: id } }),
@@ -174,6 +189,26 @@ export async function getSiteSubscription(siteId: string): Promise<SiteSubscript
   };
 }
 
+// Add-ons for a site on `plan`, checked: only those it offers, each once;
+// a quantity only for those charged each (otherwise 1).
+function checkAddOns(
+  plan: Pick<PlanSummary, "addOns">,
+  input: SiteAddOnChoice[],
+): { addOns: SiteAddOnChoice[] } | { error: string } {
+  const offered = new Set(plan.addOns.map((a) => a.addOn));
+  const addOns: SiteAddOnChoice[] = [];
+  for (const a of input) {
+    if (!offered.has(a.addOn)) return { error: "That add-on isn't offered on this plan." };
+    if (addOns.some((x) => x.addOn === a.addOn)) continue;
+    const quantity = PER_ITEM.has(a.addOn) ? a.quantity : 1;
+    if (!inRange(quantity, PLAN_LIMITS.quantity)) {
+      return { error: `Quantity must be ${PLAN_LIMITS.quantity.min} to ${PLAN_LIMITS.quantity.max}.` };
+    }
+    addOns.push({ addOn: a.addOn, quantity });
+  }
+  return { addOns };
+}
+
 // Sets a site's Plan, Site Theme (one the Plan allows), add-ons (those it
 // offers) and own monthly price. No plan: none of those either.
 export async function setSiteSubscription(siteId: string, input: SiteSubscription): Promise<Result> {
@@ -196,16 +231,9 @@ export async function setSiteSubscription(siteId: string, input: SiteSubscriptio
       return { error: "That theme isn't one this plan allows." };
     }
     siteThemeId = input.siteThemeId ?? summary.themeIds[0] ?? null;
-    const offered = new Set(summary.addOns.map((a) => a.addOn));
-    for (const a of input.addOns) {
-      if (!offered.has(a.addOn)) return { error: "That add-on isn't offered on this plan." };
-      if (addOns.some((x) => x.addOn === a.addOn)) continue;
-      const quantity = PER_ITEM.has(a.addOn) ? a.quantity : 1;
-      if (!inRange(quantity, PLAN_LIMITS.quantity)) {
-        return { error: `Quantity must be ${PLAN_LIMITS.quantity.min} to ${PLAN_LIMITS.quantity.max}.` };
-      }
-      addOns.push({ addOn: a.addOn, quantity });
-    }
+    const checked = checkAddOns(summary, input.addOns);
+    if ("error" in checked) return checked;
+    addOns.push(...checked.addOns);
   }
 
   await db.$transaction([
@@ -219,6 +247,54 @@ export async function setSiteSubscription(siteId: string, input: SiteSubscriptio
     }),
     db.siteAddOn.deleteMany({ where: { siteId } }),
     db.siteAddOn.createMany({ data: addOns.map((a) => ({ siteId, ...a })) }),
+  ]);
+  return { ok: true };
+}
+
+// A site's plan for the Artist App's Account (2026-11-10) — see
+// SiteAccount in lib/plans.ts. The site's own price, if it has one, is
+// shown as the plan's price.
+export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
+  await requireSiteAccess(siteId);
+  const site = await db.site.findUniqueOrThrow({
+    where: { id: siteId },
+    select: {
+      monthlyOverride: true,
+      siteTheme: { select: { name: true } },
+      plan: { select: PLAN_SELECT },
+      addOns: { select: { addOn: true, quantity: true } },
+    },
+  });
+  const addOns = site.addOns.sort((a, b) => ADD_ON_ORDER.get(a.addOn)! - ADD_ON_ORDER.get(b.addOn)!);
+  if (!site.plan) return { plan: null, addOns };
+  const plan = toSummary(site.plan);
+  return {
+    plan: {
+      name: plan.name,
+      monthlyPrice: site.monthlyOverride?.toFixed(2) ?? plan.monthlyPrice,
+      currency: plan.currency,
+      groupsIncluded: plan.groupsIncluded,
+      pagesPerGroup: plan.pagesPerGroup,
+      included: plan.included ? plan.included.split("\n") : [],
+      themeName: site.siteTheme?.name ?? null,
+      addOns: plan.addOns,
+    },
+    addOns,
+  };
+}
+
+// The add-ons the artist chose on the Artist App's Account (2026-11-10):
+// only those the site's plan offers. Its plan, theme and own price stay
+// as the admin set them.
+export async function setSiteAddOns(siteId: string, input: SiteAddOnChoice[]): Promise<Result> {
+  await requireSiteAccess(siteId);
+  const site = await db.site.findUnique({ where: { id: siteId }, select: { plan: { select: PLAN_SELECT } } });
+  if (!site?.plan) return { error: "This site has no plan yet." };
+  const checked = checkAddOns(toSummary(site.plan), input);
+  if ("error" in checked) return checked;
+  await db.$transaction([
+    db.siteAddOn.deleteMany({ where: { siteId } }),
+    db.siteAddOn.createMany({ data: checked.addOns.map((a) => ({ siteId, ...a })) }),
   ]);
   return { ok: true };
 }

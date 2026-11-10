@@ -79,6 +79,7 @@ type ArtistData = {
   writingVoice: string | null;
   instagramHandle: string | null;
   facebookUrl: string | null;
+  tiktokHandle: string | null;
   showFooterAddress: boolean;
   logoByline: string | null;
   // The Certificate of Authenticity's signature image (2026-09-03) —
@@ -459,6 +460,19 @@ export default function SiteSettingsPanel({
             Shown under a Side list menu on the website. Re-publish the site after changing it.
           </p>
           {savedField === "facebookUrl" && <p className="mt-1 text-xs text-green-600">Saved</p>}
+
+          <label className={`${labelCls} mt-4`}>TikTok username</label>
+          <input
+            key={`tiktok-${artist.id}`}
+            type="text"
+            defaultValue={artist.tiktokHandle || ""}
+            onBlur={(e) => handleProfileTextSave("tiktokHandle", e.target.value)}
+            disabled={isPending}
+            placeholder="e.g. louisedear"
+            className={inputCls}
+          />
+          <p className="mt-1 text-xs text-neutral-400">Not shown on the website yet.</p>
+          {savedField === "tiktokHandle" && <p className="mt-1 text-xs text-green-600">Saved</p>}
 
           <label className="mt-4 flex items-center gap-2 text-sm text-neutral-700">
             <input

@@ -86,7 +86,9 @@ export default function ArtistAppFrame({
           ))}
           <AppButton>Exhibition</AppButton>
           <AppButton color={CONCIERGE_COLOR}>Concierge</AppButton>
-          <AppButton>Account</AppButton>
+          <AppButton href={artistAppHref(siteId, "account")} active={pathname === artistAppHref(siteId, "account")}>
+            Account
+          </AppButton>
         </nav>
       </div>
     </div>

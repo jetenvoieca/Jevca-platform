@@ -24,7 +24,7 @@ export const ARTIST_APP_SHOWS_PRESENTATION_MEDIUM = false;
 // and components/artist-app/ArtistAppFeatures.tsx.
 
 // Its screens: Manage Works (the start), Arrange Pages and Update CV.
-export function artistAppHref(siteId: string, screen: "" | "pages" | "cv" = ""): string {
+export function artistAppHref(siteId: string, screen: "" | "pages" | "cv" | "account" = ""): string {
   return `/artist-app/${siteId}${screen ? `/${screen}` : ""}`;
 }
 

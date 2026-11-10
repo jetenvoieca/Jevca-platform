@@ -2,21 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { setSiteSubscription } from "@/lib/actions/plans";
-import {
-  ADD_ONS,
-  PLAN_LIMITS,
-  monthlyTotalPence,
-  type AddOnKey,
-  type PlanSummary,
-  type SiteSubscription,
-} from "@/lib/plans";
+import type { PlanSummary, SiteSubscription } from "@/lib/plans";
+import PlanAddOnsList from "@/components/PlanAddOnsList";
 import { formatMoney } from "@/lib/currencies";
 
 // The site's subscription (2026-11-09, Craig's request — see
 // lib/plans.ts), on Administration → Clients: its Plan, the Site Theme it
 // uses (one the Plan allows) and the add-ons the Plan offers, ticked, an
 // additional group of pages with how many — and what that comes to a
-// month. "Own price" (existing customers'; saved when its box is left,
+// month (PlanAddOnsList). "Own price" (existing customers'; saved when its box is left,
 // kept if the plan changes) replaces the plan's price; add-ons are added
 // on top.
 // Shown only: Stripe is still set by hand (Subscription). Each change
@@ -65,13 +59,6 @@ export default function PlanCard({
       monthlyOverride: chosen ? value.monthlyOverride : null,
     });
     if (!chosen) setOverride("");
-  };
-
-  const quantityOf = (key: AddOnKey) => value.addOns.find((a) => a.addOn === key)?.quantity ?? 0;
-  const setQuantity = (key: AddOnKey, quantity: number) => {
-    const others = value.addOns.filter((a) => a.addOn !== key);
-    const next = quantity > 0 ? [...others, { addOn: key, quantity }] : others;
-    save({ ...value, addOns: ADD_ONS.flatMap((o) => next.filter((a) => a.addOn === o.key)) });
   };
 
   const field = "rounded-md border border-neutral-300 px-2 py-1 text-sm";
@@ -148,54 +135,13 @@ export default function PlanCard({
               included.
             </p>
 
-            {plan.addOns.length > 0 && (
-              <div className="flex flex-col gap-1.5">
-                {plan.addOns.map((a) => {
-                  const option = ADD_ONS.find((o) => o.key === a.addOn)!;
-                  const quantity = quantityOf(a.addOn);
-                  const price = formatMoney(a.monthlyPrice, plan.currency, "when-any");
-                  return (
-                    <div key={a.addOn} className="flex items-center gap-2">
-                      <label className="flex flex-1 items-center gap-2">
-                        <input
-                          type="checkbox"
-                          checked={quantity > 0}
-                          disabled={isPending}
-                          onChange={(e) => setQuantity(a.addOn, e.target.checked ? 1 : 0)}
-                        />
-                        {option.label}
-                      </label>
-                      {option.perItem && quantity > 0 && (
-                        <input
-                          type="number"
-                          min={PLAN_LIMITS.quantity.min}
-                          max={PLAN_LIMITS.quantity.max}
-                          value={quantity}
-                          disabled={isPending}
-                          onChange={(e) => {
-                            const n = Number(e.target.value);
-                            if (Number.isInteger(n) && n >= PLAN_LIMITS.quantity.min && n <= PLAN_LIMITS.quantity.max) {
-                              setQuantity(a.addOn, n);
-                            }
-                          }}
-                          aria-label={`How many ${option.label.toLowerCase()}`}
-                          className={`${field} w-14`}
-                        />
-                      )}
-                      <span className="w-20 shrink-0 text-right text-neutral-500">
-                        + {price}
-                        {option.perItem ? " each" : ""}
-                      </span>
-                    </div>
-                  );
-                })}
-              </div>
-            )}
-
-            <p className="flex justify-between border-t border-neutral-200 pt-2 font-medium">
-              <span>A month</span>
-              <span>{formatMoney(monthlyTotalPence(plan, value.addOns, value.monthlyOverride) / 100, plan.currency)}</span>
-            </p>
+            <PlanAddOnsList
+              plan={plan}
+              monthlyPrice={value.monthlyOverride ?? plan.monthlyPrice}
+              value={value.addOns}
+              onChange={(addOns) => save({ ...value, addOns })}
+              disabled={isPending}
+            />
           </>
         )}
         {error && <p className="text-xs text-red-600">{error}</p>}

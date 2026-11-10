@@ -199,6 +199,9 @@ model Artist {
   // The artist's Facebook page, a full link (2026-10-23) — shown with
   // their Instagram under a Side list menu on their website.
   facebookUrl     String?
+  // The artist's TikTok username, without the @ (2026-11-09, the Artist
+  // App's Account — Contact Details). Not shown on the website yet.
+  tiktokHandle    String?
   // Whether the artist's address shows in the footer of their campaign
   // mails and website pages (2026-10-21, Craig's choice — per artist).
   // Mails sent to people in the USA legally need a postal address.
@@ -1745,6 +1748,9 @@ model Plan {
   currency       String  @default("GBP")
   groupsIncluded Int     @default(1)
   pagesPerGroup  Int     @default(10)
+  // What it includes, one item a line (2026-11-10) — listed on the
+  // Artist App's Account.
+  included       String  @default("")
 
   themes PlanTheme[]
   addOns PlanAddOn[]

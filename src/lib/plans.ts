@@ -15,6 +15,7 @@ export const ADD_ONS: { key: AddOnKey; label: string; perItem: boolean }[] = [
 ];
 
 export const PLAN_LIMITS = {
+  included: { maxLength: 2000 },
   groupsIncluded: { min: 1, max: 20 },
   pagesPerGroup: { min: 1, max: 100 },
   // Extra page groups a site can have.
@@ -31,6 +32,8 @@ export type PlanSummary = {
   currency: string;
   groupsIncluded: number;
   pagesPerGroup: number;
+  // What it includes, one item a line (shown on the Artist App's Account).
+  included: string;
   // The Site Themes it allows, the default first.
   themeIds: string[];
   // The add-ons it offers, in ADD_ONS order.
@@ -63,7 +66,7 @@ export function toPence(value: string): number | null {
 // price, or the site's own price for it (`monthlyOverride`), plus its
 // add-ons — those the plan doesn't offer count for nothing.
 export function monthlyTotalPence(
-  plan: PlanSummary,
+  plan: Pick<PlanSummary, "monthlyPrice" | "addOns">,
   addOns: SiteAddOnChoice[],
   monthlyOverride: string | null,
 ): number {
@@ -73,6 +76,26 @@ export function monthlyTotalPence(
     toPence(monthlyOverride ?? plan.monthlyPrice) ?? 0,
   );
 }
+
+// A site's plan as the Artist App's Account shows it (2026-11-10): its
+// price (the site's own price for it, if it has one), what it includes,
+// the theme the site uses, and the add-ons it offers with those the site
+// has.
+export type SiteAccountPlan = {
+  name: string;
+  monthlyPrice: string;
+  currency: string;
+  groupsIncluded: number;
+  pagesPerGroup: number;
+  included: string[];
+  themeName: string | null;
+  addOns: PlanAddOnPrice[];
+};
+
+export type SiteAccount = {
+  plan: SiteAccountPlan | null;
+  addOns: SiteAddOnChoice[];
+};
 
 // What a site's Plan and add-ons give it in the Artist App (2026-11-09):
 // pictures from the device, or with Art Manager from the Media Catalogue

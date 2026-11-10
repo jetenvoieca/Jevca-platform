@@ -10,8 +10,9 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 // Templates → Plans (2026-11-09, Craig's request — see lib/plans.ts):
 // the list of plans on the right with New and Delete; the chosen plan on
 // the left — its name, monthly price, the groups of pages it includes and
-// pages per group, the Site Themes it allows (the default marked) and the
-// add-ons it offers, each at its monthly price. Save keeps the changes; a
+// pages per group, what it includes (one item a line — listed on the
+// Artist App's Account), the Site Themes it allows (the default marked)
+// and the add-ons it offers, each at its monthly price. Save keeps the changes; a
 // site's plan is chosen under Administration → Clients.
 
 type Draft = Omit<PlanSummary, "id" | "siteCount">;
@@ -22,6 +23,7 @@ const draftOf = (p: PlanSummary): Draft => ({
   currency: p.currency,
   groupsIncluded: p.groupsIncluded,
   pagesPerGroup: p.pagesPerGroup,
+  included: p.included,
   themeIds: p.themeIds,
   addOns: p.addOns,
 });
@@ -93,6 +95,7 @@ export default function PlansManager({
         currency: "GBP",
         groupsIncluded: 1,
         pagesPerGroup: 10,
+        included: "",
         themeIds: [],
         addOns: [],
       });
@@ -161,6 +164,18 @@ export default function PlansManager({
                 value={draft.pagesPerGroup}
                 onChange={(e) => change({ pagesPerGroup: Number(e.target.value) })}
                 className={`${field} w-28`}
+              />
+            </div>
+
+            <div>
+              <h2 className="mb-1 text-base font-medium text-neutral-900">What&apos;s included</h2>
+              <p className="mb-2 text-xs text-neutral-500">One item a line — listed on the Artist App&apos;s Account.</p>
+              <textarea
+                value={draft.included}
+                onChange={(e) => change({ included: e.target.value })}
+                rows={9}
+                maxLength={PLAN_LIMITS.included.maxLength}
+                className={`${field} w-full`}
               />
             </div>
 

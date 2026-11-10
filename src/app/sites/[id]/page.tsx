@@ -143,6 +143,7 @@ export default async function SiteSettingsPage({
             writingVoice: site.artist.writingVoice,
             instagramHandle: site.artist.instagramHandle,
             facebookUrl: site.artist.facebookUrl,
+            tiktokHandle: site.artist.tiktokHandle,
             showFooterAddress: site.artist.showFooterAddress,
             logoByline: site.artist.logoByline,
             signatureUrl: site.artist.signatureUrl,
