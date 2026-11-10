@@ -4,9 +4,12 @@ import { requireAdmin, requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { isCurrency } from "@/lib/currencies";
 import type { StripeMode } from "@/lib/stripe";
+import { PLAN_SELECT, readPlan, readPlans, toPlanSummary } from "@/lib/planRecords";
 import {
-  ADD_ONS,
+  ADD_ON_ORDER,
   PLAN_LIMITS,
+  checkAddOns,
+  inRange,
   toPence,
   type AddOnKey,
   type PlanAddOnPrice,
@@ -26,56 +29,9 @@ import {
 
 type Result = { ok: true } | { error: string };
 
-const ADD_ON_ORDER = new Map(ADD_ONS.map((a, i) => [a.key, i]));
-const PER_ITEM = new Set(ADD_ONS.filter((a) => a.perItem).map((a) => a.key));
-
-const PLAN_SELECT = {
-  id: true,
-  name: true,
-  monthlyPrice: true,
-  currency: true,
-  groupsIncluded: true,
-  pagesPerGroup: true,
-  included: true,
-  themes: { orderBy: { position: "asc" }, select: { siteThemeId: true } },
-  addOns: { select: { addOn: true, monthlyPrice: true } },
-  _count: { select: { sites: true } },
-} as const;
-
-type PlanRecord = {
-  id: string;
-  name: string;
-  monthlyPrice: { toFixed: (digits: number) => string };
-  currency: string;
-  groupsIncluded: number;
-  pagesPerGroup: number;
-  included: string;
-  themes: { siteThemeId: string }[];
-  addOns: { addOn: AddOnKey; monthlyPrice: { toFixed: (digits: number) => string } }[];
-  _count: { sites: number };
-};
-
-function toSummary(p: PlanRecord): PlanSummary {
-  return {
-    id: p.id,
-    name: p.name,
-    monthlyPrice: p.monthlyPrice.toFixed(2),
-    currency: p.currency,
-    groupsIncluded: p.groupsIncluded,
-    pagesPerGroup: p.pagesPerGroup,
-    included: p.included,
-    themeIds: p.themes.map((t) => t.siteThemeId),
-    addOns: p.addOns
-      .map((a) => ({ addOn: a.addOn, monthlyPrice: a.monthlyPrice.toFixed(2) }))
-      .sort((a, b) => ADD_ON_ORDER.get(a.addOn)! - ADD_ON_ORDER.get(b.addOn)!),
-    siteCount: p._count.sites,
-  };
-}
-
 export async function listPlans(): Promise<PlanSummary[]> {
   await requireAdmin();
-  const rows = await db.plan.findMany({ orderBy: { name: "asc" }, select: PLAN_SELECT });
-  return rows.map(toSummary);
+  return readPlans();
 }
 
 export async function createPlan(nameRaw: string): Promise<{ id: string } | { error: string }> {
@@ -86,10 +42,6 @@ export async function createPlan(nameRaw: string): Promise<{ id: string } | { er
     return { error: "There's already a plan with that name." };
   }
   return db.plan.create({ data: { name, monthlyPrice: 0 }, select: { id: true } });
-}
-
-function inRange(n: number, limits: { min: number; max: number }): boolean {
-  return Number.isInteger(n) && n >= limits.min && n <= limits.max;
 }
 
 // Saves a plan. Sites on it keep the prices they joined at (new prices
@@ -197,26 +149,6 @@ export async function getSiteSubscription(siteId: string): Promise<SiteSubscript
   };
 }
 
-// Add-ons for a site on `plan`, checked: only those it offers, each once;
-// a quantity only for those charged each (otherwise 1).
-function checkAddOns(
-  plan: Pick<PlanSummary, "addOns">,
-  input: SiteAddOnChoice[],
-): { addOns: SiteAddOnChoice[] } | { error: string } {
-  const offered = new Set(plan.addOns.map((a) => a.addOn));
-  const addOns: SiteAddOnChoice[] = [];
-  for (const a of input) {
-    if (!offered.has(a.addOn)) return { error: "That add-on isn't offered on this plan." };
-    if (addOns.some((x) => x.addOn === a.addOn)) continue;
-    const quantity = PER_ITEM.has(a.addOn) ? a.quantity : 1;
-    if (!inRange(quantity, PLAN_LIMITS.quantity)) {
-      return { error: `Quantity must be ${PLAN_LIMITS.quantity.min} to ${PLAN_LIMITS.quantity.max}.` };
-    }
-    addOns.push({ addOn: a.addOn, quantity });
-  }
-  return { addOns };
-}
-
 // Replaces a site's add-ons with `rows`.
 function writeAddOns(siteId: string, rows: SiteAddOnRow[]) {
   return [
@@ -246,9 +178,8 @@ export async function setSiteSubscription(
   let planPence: number | null = null;
   let addOns: SiteAddOnRow[] = [];
   if (input.planId) {
-    const plan = await db.plan.findUnique({ where: { id: input.planId }, select: PLAN_SELECT });
-    if (!plan) return { error: "That plan wasn't found." };
-    const summary = toSummary(plan);
+    const summary = await readPlan(input.planId);
+    if (!summary) return { error: "That plan wasn't found." };
     const samePlan = site.planId === input.planId;
     planPence = toPence(samePlan && input.planPrice?.trim() ? input.planPrice : summary.monthlyPrice);
     if (planPence === null) return { error: "The price for the plan couldn't be read." };
@@ -286,7 +217,7 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
   });
   const addOns = toAddOnRows(site.addOns);
   if (!site.plan) return { plan: null, addOns };
-  const plan = toSummary(site.plan);
+  const plan = toPlanSummary(site.plan);
   return {
     plan: {
       name: plan.name,
@@ -313,7 +244,7 @@ export async function setSiteAddOns(siteId: string, input: SiteAddOnChoice[]): P
     select: { plan: { select: PLAN_SELECT }, addOns: { select: ADD_ON_ROW_SELECT } },
   });
   if (!site?.plan) return { error: "This site has no plan yet." };
-  const summary = toSummary(site.plan);
+  const summary = toPlanSummary(site.plan);
   const checked = checkAddOns(summary, input);
   if ("error" in checked) return checked;
   await db.$transaction(writeAddOns(siteId, priceAddOns(checked.addOns, toAddOnRows(site.addOns), summary.addOns)));

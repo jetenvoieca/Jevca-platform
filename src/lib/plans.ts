@@ -22,6 +22,14 @@ export const PLAN_LIMITS = {
   quantity: { min: 1, max: 20 },
 } as const;
 
+// Each add-on's place in ADD_ONS, for keeping lists in that order.
+export const ADD_ON_ORDER = new Map(ADD_ONS.map((a, i) => [a.key, i]));
+const PER_ITEM = new Set(ADD_ONS.filter((a) => a.perItem).map((a) => a.key));
+
+export function inRange(n: number, limits: { min: number; max: number }): boolean {
+  return Number.isInteger(n) && n >= limits.min && n <= limits.max;
+}
+
 export type PlanAddOnPrice = { addOn: AddOnKey; monthlyPrice: string };
 
 export type PlanSummary = {
@@ -64,6 +72,26 @@ export function toPence(value: string): number | null {
   if (!/^\d+(\.\d{1,2})?$/.test(v)) return null;
   const [whole, frac = ""] = v.split(".");
   return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
+}
+
+// Add-ons chosen for `plan`, checked: only those it offers, each once; a
+// quantity only for those charged each (otherwise 1).
+export function checkAddOns(
+  plan: { addOns: PlanAddOnPrice[] },
+  input: SiteAddOnChoice[],
+): { addOns: SiteAddOnChoice[] } | { error: string } {
+  const offered = new Set(plan.addOns.map((a) => a.addOn));
+  const addOns: SiteAddOnChoice[] = [];
+  for (const a of input) {
+    if (!offered.has(a.addOn)) return { error: "That add-on isn't offered on this plan." };
+    if (addOns.some((x) => x.addOn === a.addOn)) continue;
+    const quantity = PER_ITEM.has(a.addOn) ? a.quantity : 1;
+    if (!inRange(quantity, PLAN_LIMITS.quantity)) {
+      return { error: `Quantity must be ${PLAN_LIMITS.quantity.min} to ${PLAN_LIMITS.quantity.max}.` };
+    }
+    addOns.push({ addOn: a.addOn, quantity });
+  }
+  return { addOns };
 }
 
 // Chosen add-ons with their prices: those the site already has at the

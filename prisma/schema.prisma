@@ -1423,6 +1423,8 @@ model Site {
   siteThemeId String?
   siteTheme   SiteTheme? @relation(fields: [siteThemeId], references: [id], onDelete: SetNull)
   addOns      SiteAddOn[]
+  // The sign-up link it was made from, if any (2026-11-10).
+  signupLink  SignupLink?
 
   @@index([artistId])
   @@index([menuStyleId])
@@ -1723,9 +1725,11 @@ model SiteTheme {
   siteMenuStyleId String?
   siteMenuStyle   MenuStyle? @relation(fields: [siteMenuStyleId], references: [id], onDelete: SetNull)
   entries         Json       @default("[]")
-  // The Plans that allow it, and the sites using it (2026-11-09).
-  plans PlanTheme[]
-  sites Site[]
+  // The Plans that allow it, the sites using it (2026-11-09) and the
+  // sign-up links offering it (2026-11-10).
+  plans       PlanTheme[]
+  sites       Site[]
+  signupLinks SignupLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -1755,9 +1759,10 @@ model Plan {
   // Artist App's Account.
   included       String  @default("")
 
-  themes PlanTheme[]
-  addOns PlanAddOn[]
-  sites  Site[]
+  themes      PlanTheme[]
+  addOns      PlanAddOn[]
+  sites       Site[]
+  signupLinks SignupLink[]
 
   createdAt DateTime @default(now())
   updatedAt DateTime @updatedAt
@@ -3113,4 +3118,46 @@ model MarketingContactLink {
 
   @@id([galleryId, artistId])
   @@index([artistId])
+}
+
+// A sign-up link (2026-11-10, Craig's request — Administration →
+// Sign-ups): a fixed offer for one person — a Plan, the Site Theme the new
+// site gets, what they'll pay for the plan and the add-ons, each at its
+// price (SignupLinkAddOn) — at /signup/<token>, optionally with their name
+// and email filled in. Works once, until `expiresAt`: opening it sets
+// `openedAt`, signing up `completedAt` and the `site` made. Deleting the
+// plan or theme deletes its links. See lib/signupLinks.ts.
+model SignupLink {
+  id          String     @id @default(cuid())
+  token       String     @unique
+  planId      String
+  plan        Plan       @relation(fields: [planId], references: [id], onDelete: Cascade)
+  siteThemeId String
+  siteTheme   SiteTheme  @relation(fields: [siteThemeId], references: [id], onDelete: Cascade)
+  planPrice   Decimal    @db.Decimal(10, 2)
+  name        String?
+  email       String?
+  expiresAt   DateTime
+  openedAt    DateTime?
+  completedAt DateTime?
+  siteId      String?    @unique
+  site        Site?      @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  addOns      SignupLinkAddOn[]
+
+  createdAt DateTime @default(now())
+
+  @@index([planId])
+  @@index([siteThemeId])
+}
+
+// An add-on a sign-up link offers, at its price each (`quantity` for
+// EXTRA_PAGE_GROUP; 1 otherwise) — as SiteAddOn.
+model SignupLinkAddOn {
+  linkId       String
+  link         SignupLink @relation(fields: [linkId], references: [id], onDelete: Cascade)
+  addOn        AddOn
+  quantity     Int        @default(1)
+  monthlyPrice Decimal    @db.Decimal(10, 2)
+
+  @@id([linkId, addOn])
 }
