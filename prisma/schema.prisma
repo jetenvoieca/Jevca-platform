@@ -3017,6 +3017,8 @@ model User {
   updatedAt      DateTime  @updatedAt
   // The publishes this login made (2026-10-31) — see SitePublishLog.
   publishLogs    SitePublishLog[]
+  // "Forgot your password?" links sent to it (2026-11-10).
+  passwordResets PasswordReset[]
 
   @@index([artistId])
 }
@@ -3179,4 +3181,19 @@ model SignupLinkAddOn {
   monthlyPrice Decimal    @db.Decimal(10, 2)
 
   @@id([linkId, addOn])
+}
+
+// A "Forgot your password?" link (2026-11-10): emailed to the login's
+// address, it lets them choose a new password once, within an hour. Only
+// a hash of the link's secret is kept. See lib/actions/passwordReset.ts.
+model PasswordReset {
+  id        String    @id @default(cuid())
+  userId    String
+  user      User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash String    @unique
+  expiresAt DateTime
+  usedAt    DateTime?
+  createdAt DateTime  @default(now())
+
+  @@index([userId])
 }

@@ -8,7 +8,10 @@ import {
   SESSION_COOKIE_NAME,
   SESSION_MAX_AGE_SECONDS,
 } from "@/lib/auth";
+import { createHash, randomBytes } from "node:crypto";
+import { Resend } from "resend";
 import { hashPassword, verifyPassword } from "@/lib/passwords";
+import { APP_URL } from "@/lib/appUrl";
 import { passwordProblem } from "@/lib/passwordRules";
 import { getCurrentUser } from "@/lib/currentUser";
 
@@ -157,4 +160,117 @@ export async function changeOwnPassword(
   });
   await startSession(updated);
   return { done: true };
+}
+
+// ---- "Forgot your password?" (2026-11-10) ----
+// Public, like logging in. Asking always gives the same answer, whether
+// or not the email has a login, so it can't be used to find out who has
+// one. The link is emailed, works once and lasts an hour; using it sets
+// the new password, unlocks the login, logs it out everywhere else and
+// logs it in here.
+
+const RESET_MINUTES = 60;
+// Links that may be waiting for one login at once — stops the form being
+// used to flood someone's inbox.
+const RESET_MAX_WAITING = 3;
+
+const hashResetToken = (token: string) => createHash("sha256").update(token).digest("hex");
+
+export type ResetRequestState = { sent?: boolean; error?: string };
+
+export async function requestPasswordReset(
+  _prev: ResetRequestState,
+  formData: FormData,
+): Promise<ResetRequestState> {
+  const email = ((formData.get("email") as string) || "").trim().toLowerCase();
+  if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) return { error: "Enter a valid email address." };
+
+  const user = await db.user.findUnique({ where: { email }, select: { id: true, name: true, active: true } });
+  if (!user || !user.active) return { sent: true };
+  const waiting = await db.passwordReset.count({
+    where: { userId: user.id, usedAt: null, expiresAt: { gt: new Date() } },
+  });
+  if (waiting >= RESET_MAX_WAITING) return { sent: true };
+
+  const apiKey = process.env.RESEND_API_KEY;
+  if (!apiKey) {
+    console.error("Password reset not sent — RESEND_API_KEY is missing.");
+    return { error: "Email can't be sent just now — please try again later." };
+  }
+  const token = randomBytes(32).toString("base64url");
+  await db.passwordReset.create({
+    data: {
+      userId: user.id,
+      tokenHash: hashResetToken(token),
+      expiresAt: new Date(Date.now() + RESET_MINUTES * 60_000),
+    },
+  });
+  const { businessEmailAddress } = await db.platformSettings.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton" },
+    select: { businessEmailAddress: true },
+  });
+  const { error } = await new Resend(apiKey).emails.send({
+    from: `JEVCA Studio <${businessEmailAddress}>`,
+    to: email,
+    subject: "Choose a new password",
+    text: [
+      `Hello ${user.name},`,
+      "",
+      "Someone asked to choose a new password for your JEVCA Studio login. If it was you, open this link within the hour:",
+      "",
+      `${APP_URL}/login/reset/${token}`,
+      "",
+      "If it wasn't you, ignore this email — your password stays as it is.",
+    ].join("\n"),
+  });
+  if (error) {
+    console.error(`Password reset email to ${email} failed: ${error.message}`);
+    return { error: "Email can't be sent just now — please try again later." };
+  }
+  return { sent: true };
+}
+
+// Whether a reset link can still be used (for its page).
+export async function isPasswordResetUsable(token: string): Promise<boolean> {
+  const reset = await db.passwordReset.findUnique({
+    where: { tokenHash: hashResetToken(token) },
+    select: { usedAt: true, expiresAt: true },
+  });
+  return !!reset && !reset.usedAt && reset.expiresAt > new Date();
+}
+
+export async function resetPassword(_prev: LoginState, formData: FormData): Promise<LoginState> {
+  const token = (formData.get("token") as string) || "";
+  const password = (formData.get("password") as string) || "";
+  const again = (formData.get("again") as string) || "";
+  const problem = passwordProblem(password);
+  if (problem) return { error: problem };
+  if (password !== again) return { error: "The two new passwords don't match." };
+
+  const tokenHash = hashResetToken(token);
+  const passwordHash = await hashPassword(password);
+  const user = await db.$transaction(async (tx) => {
+    const { count } = await tx.passwordReset.updateMany({
+      where: { tokenHash, usedAt: null, expiresAt: { gt: new Date() } },
+      data: { usedAt: new Date() },
+    });
+    if (count === 0) return null;
+    const reset = await tx.passwordReset.findUniqueOrThrow({ where: { tokenHash }, select: { userId: true } });
+    return tx.user.update({
+      where: { id: reset.userId },
+      data: {
+        passwordHash,
+        sessionVersion: { increment: 1 },
+        failedLogins: 0,
+        lockedUntil: null,
+        lastLoginAt: new Date(),
+      },
+    });
+  });
+  if (!user) return { error: "This link has expired or been used — ask for a new one." };
+  if (!user.active) return { error: "This login has been turned off." };
+  await startSession(user);
+  redirect("/");
 }

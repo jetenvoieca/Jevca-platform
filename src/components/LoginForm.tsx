@@ -1,5 +1,6 @@
 "use client";
 
+import Link from "next/link";
 import { useActionState } from "react";
 import { login, type LoginState } from "@/lib/actions/auth";
 
@@ -52,6 +53,9 @@ export default function LoginForm({ next }: { next: string }) {
       >
         {isPending ? "Checking…" : "Log in"}
       </button>
+      <Link href="/login/forgot" className="mt-3 block text-center text-sm text-neutral-500 hover:text-neutral-800">
+        Forgot your password?
+      </Link>
     </form>
   );
 }
