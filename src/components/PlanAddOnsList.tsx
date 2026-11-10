@@ -1,26 +1,40 @@
 "use client";
 
-import { ADD_ONS, PLAN_LIMITS, monthlyTotalPence, type AddOnKey, type PlanAddOnPrice, type SiteAddOnChoice } from "@/lib/plans";
+import {
+  ADD_ONS,
+  PLAN_LIMITS,
+  monthlyTotalPence,
+  priceAddOns,
+  type AddOnKey,
+  type PlanAddOnPrice,
+  type SiteAddOnChoice,
+  type SiteAddOnRow,
+} from "@/lib/plans";
 import { formatMoney } from "@/lib/currencies";
 
 // A plan's add-ons, those the site has ticked (an additional group of
 // pages with how many), each with its price, and what the plan and those
 // come to a month (2026-11-10 — shared by the admin's Plan card and the
-// Artist App's Account). `monthlyPrice`: the plan's, or the site's own
-// price for it. `onChange` gets the add-ons in ADD_ONS order.
+// Artist App's Account). `planPrice`: what the site pays for the plan.
+// Add-ons the site has (`kept`) show the price it took them at; others
+// the plan's price now. `onChange` gets the add-ons in ADD_ONS order.
 export default function PlanAddOnsList({
   plan,
-  monthlyPrice,
+  planPrice,
+  kept,
   value,
   onChange,
   disabled,
 }: {
   plan: { currency: string; addOns: PlanAddOnPrice[] };
-  monthlyPrice: string;
+  planPrice: string;
+  kept: SiteAddOnRow[];
   value: SiteAddOnChoice[];
   onChange: (addOns: SiteAddOnChoice[]) => void;
   disabled: boolean;
 }) {
+  const priced = priceAddOns(value, kept, plan.addOns);
+  const priceOf = (key: AddOnKey) => priceAddOns([{ addOn: key, quantity: 1 }], kept, plan.addOns)[0].monthlyPrice;
   const quantityOf = (key: AddOnKey) => value.find((a) => a.addOn === key)?.quantity ?? 0;
   const setQuantity = (key: AddOnKey, quantity: number) => {
     const others = value.filter((a) => a.addOn !== key);
@@ -64,7 +78,7 @@ export default function PlanAddOnsList({
                   />
                 )}
                 <span className="w-20 shrink-0 text-right text-neutral-500">
-                  + {formatMoney(a.monthlyPrice, plan.currency, "when-any")}
+                  + {formatMoney(priceOf(a.addOn), plan.currency, "when-any")}
                   {option.perItem ? " each" : ""}
                 </span>
               </div>
@@ -75,7 +89,7 @@ export default function PlanAddOnsList({
 
       <p className="flex justify-between border-t border-neutral-200 pt-2 font-medium">
         <span>A month</span>
-        <span>{formatMoney(monthlyTotalPence({ monthlyPrice, addOns: plan.addOns }, value, null) / 100, plan.currency)}</span>
+        <span>{formatMoney(monthlyTotalPence(planPrice, priced) / 100, plan.currency)}</span>
       </p>
     </>
   );

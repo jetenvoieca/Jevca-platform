@@ -2,17 +2,17 @@
 
 import { useState, useTransition } from "react";
 import { setSiteSubscription } from "@/lib/actions/plans";
-import type { PlanSummary, SiteSubscription } from "@/lib/plans";
+import { priceAddOns, toPence, type PlanSummary, type SiteSubscription } from "@/lib/plans";
 import PlanAddOnsList from "@/components/PlanAddOnsList";
 import { formatMoney } from "@/lib/currencies";
 
 // The site's subscription (2026-11-09, Craig's request — see
 // lib/plans.ts), on Administration → Clients: its Plan, the Site Theme it
-// uses (one the Plan allows) and the add-ons the Plan offers, ticked, an
-// additional group of pages with how many — and what that comes to a
-// month (PlanAddOnsList). "Own price" (existing customers'; saved when its box is left,
-// kept if the plan changes) replaces the plan's price; add-ons are added
-// on top.
+// uses (one the Plan allows), what it pays for the plan — the plan's price
+// when it joined, kept when that changes (2026-11-10), or its own
+// (existing customers'; saved when its box is left, blank for the plan's
+// price now) — and the add-ons the Plan offers, ticked, each at the price
+// the site took it at, and what that comes to a month (PlanAddOnsList).
 // Shown only: Stripe is still set by hand (Subscription). Each change
 // saves at once.
 export default function PlanCard({
@@ -29,8 +29,8 @@ export default function PlanCard({
   className?: string;
 }) {
   const [value, setValue] = useState(initial);
-  // The own price as typed, saved when its box is left.
-  const [override, setOverride] = useState(initial.monthlyOverride ?? "");
+  // The price for the plan as typed, saved when its box is left.
+  const [price, setPrice] = useState(initial.planPrice ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
   const plan = plans.find((p) => p.id === value.planId) ?? null;
@@ -39,26 +39,38 @@ export default function PlanCard({
   const save = (next: SiteSubscription) => {
     const before = value;
     setValue(next);
+    setPrice(next.planPrice ?? "");
     setError(null);
     startTransition(async () => {
       const result = await setSiteSubscription(siteId, next);
       if ("error" in result) {
         setError(result.error);
         setValue(before);
-        setOverride(before.monthlyOverride ?? "");
+        setPrice(before.planPrice ?? "");
       }
     });
   };
 
+  // A new plan starts at its prices, with no add-ons.
   const choosePlan = (planId: string) => {
     const chosen = plans.find((p) => p.id === planId) ?? null;
     save({
       planId: chosen?.id ?? null,
       siteThemeId: chosen?.themeIds[0] ?? null,
+      planPrice: chosen?.monthlyPrice ?? null,
       addOns: [],
-      monthlyOverride: chosen ? value.monthlyOverride : null,
     });
-    if (!chosen) setOverride("");
+  };
+
+  const savePrice = () => {
+    if (!plan) return;
+    const typed = price.trim() || plan.monthlyPrice;
+    if (toPence(typed) === null) {
+      setError("The price for the plan couldn't be read.");
+      return;
+    }
+    if (typed !== value.planPrice) save({ ...value, planPrice: typed });
+    else setPrice(typed);
   };
 
   const field = "rounded-md border border-neutral-300 px-2 py-1 text-sm";
@@ -96,38 +108,27 @@ export default function PlanCard({
             </label>
 
             <div className="flex items-center gap-2">
-              <label className="flex flex-1 items-center gap-2">
-                <input
-                  type="checkbox"
-                  checked={value.monthlyOverride !== null}
-                  disabled={isPending}
-                  onChange={(e) => {
-                    const next = e.target.checked ? plan.monthlyPrice : null;
-                    setOverride(next ?? "");
-                    save({ ...value, monthlyOverride: next });
-                  }}
-                />
-                Own price for the plan
-              </label>
-              {value.monthlyOverride !== null && (
-                <span className="flex items-center gap-1 text-neutral-500">
-                  {plan.currency}
-                  <input
-                    inputMode="decimal"
-                    value={override}
-                    disabled={isPending}
-                    onChange={(e) => setOverride(e.target.value)}
-                    onBlur={() => {
-                      if (override.trim() !== value.monthlyOverride) save({ ...value, monthlyOverride: override.trim() });
-                    }}
-                    onKeyDown={(e) => {
-                      if (e.key === "Enter") e.currentTarget.blur();
-                    }}
-                    aria-label="Own price for the plan"
-                    className={`${field} w-20 text-right`}
-                  />
+              <span className="flex-1">Price for the plan</span>
+              {value.planPrice !== plan.monthlyPrice && (
+                <span className="text-xs text-neutral-400">
+                  plan now {formatMoney(plan.monthlyPrice, plan.currency, "when-any")}
                 </span>
               )}
+              <span className="flex items-center gap-1 text-neutral-500">
+                {plan.currency}
+                <input
+                  inputMode="decimal"
+                  value={price}
+                  disabled={isPending}
+                  onChange={(e) => setPrice(e.target.value)}
+                  onBlur={savePrice}
+                  onKeyDown={(e) => {
+                    if (e.key === "Enter") e.currentTarget.blur();
+                  }}
+                  aria-label="Price for the plan"
+                  className={`${field} w-20 text-right`}
+                />
+              </span>
             </div>
 
             <p className="text-xs text-neutral-500">
@@ -137,9 +138,10 @@ export default function PlanCard({
 
             <PlanAddOnsList
               plan={plan}
-              monthlyPrice={value.monthlyOverride ?? plan.monthlyPrice}
+              planPrice={value.planPrice ?? plan.monthlyPrice}
+              kept={value.addOns}
               value={value.addOns}
-              onChange={(addOns) => save({ ...value, addOns })}
+              onChange={(addOns) => save({ ...value, addOns: priceAddOns(addOns, value.addOns, plan.addOns) })}
               disabled={isPending}
             />
           </>

@@ -1,6 +1,7 @@
 import { NextRequest } from "next/server";
 import Stripe from "stripe";
-import { getPlatformStripeClient, getPlatformStripeWebhookSecret } from "@/lib/platformStripe";
+import { getPlatformStripeClient, getPlatformStripeWebhookSecrets } from "@/lib/platformStripe";
+import type { StripeMode } from "@/lib/stripe";
 import {
   recordPlatformInvoicePaid,
   recordPlatformInvoiceFailed,
@@ -13,21 +14,30 @@ export async function POST(req: NextRequest) {
   const signature = req.headers.get("stripe-signature");
   const body = await req.text();
 
-  const secret = getPlatformStripeWebhookSecret();
-  if (!secret) {
-    console.error("PLATFORM_STRIPE_WEBHOOK_SECRET not configured — rejecting webhook.");
+  // Tried with each mode's signing secret; the one that matches says
+  // which mode (Test or Live) the event came from.
+  const secrets = getPlatformStripeWebhookSecrets();
+  if (secrets.length === 0) {
+    console.error("No PLATFORM_STRIPE_WEBHOOK_SECRET configured — rejecting webhook.");
     return new Response("Webhook not configured", { status: 500 });
   }
 
-  let event: Stripe.Event;
-  try {
-    const client = getPlatformStripeClient();
-    event = client.webhooks.constructEvent(body, signature!, secret);
-  } catch (err) {
-    console.error("Platform Stripe webhook signature verification failed", err);
+  let event: Stripe.Event | null = null;
+  let mode: StripeMode = "LIVE";
+  for (const s of secrets) {
+    try {
+      event = getPlatformStripeClient(s.mode).webhooks.constructEvent(body, signature!, s.secret);
+      mode = s.mode;
+      break;
+    } catch {
+      // Not this mode's secret — try the next.
+    }
+  }
+  if (!event) {
+    console.error("Platform Stripe webhook signature verification failed");
     return new Response("Invalid signature", { status: 400 });
   }
-  console.log("Platform Stripe webhook verified:", event.type);
+  console.log(`Platform Stripe webhook verified (${mode}):`, event.type);
 
   try {
     switch (event.type) {
@@ -54,7 +64,7 @@ export async function POST(req: NextRequest) {
             ? invoicePayment.invoice
             : invoicePayment.invoice?.id;
         if (invoiceId) {
-          const client = getPlatformStripeClient();
+          const client = getPlatformStripeClient(mode);
           const invoice = await client.invoices.retrieve(invoiceId);
           const customerId =
             typeof invoice.customer === "string" ? invoice.customer : invoice.customer?.id;

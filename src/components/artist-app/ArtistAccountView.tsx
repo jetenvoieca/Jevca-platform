@@ -11,7 +11,7 @@ import {
 } from "@/lib/actions";
 import { setSiteAddOns } from "@/lib/actions/plans";
 import type { ArtistAppPage } from "@/lib/actions/artistApp";
-import type { SiteAccount, SiteAddOnChoice } from "@/lib/plans";
+import { priceAddOns, type SiteAccount, type SiteAddOnChoice, type SiteAddOnRow } from "@/lib/plans";
 import { formatMoney } from "@/lib/currencies";
 import { artistAppPageHref } from "@/lib/artistApp";
 import PlanAddOnsList from "@/components/PlanAddOnsList";
@@ -19,9 +19,9 @@ import { MainPanel, SidePanel } from "@/components/artist-app/ArtistAppPanels";
 
 // The Artist App's Account (2026-11-10, Craig's mockup). On the left the
 // plan and what it includes (Templates → Plans), and the client's Contact
-// Details, each saved when its box is left; on the right the plan — its
-// price (the site's own price, if it has one), theme and pages included,
-// fixed — and its add-ons to tick, kept with Update (the app then follows
+// Details, each saved when its box is left; on the right the plan — what
+// the site pays for it, theme and pages included, fixed — and its add-ons
+// to tick (those it has at the prices it took them at), kept with Update (the app then follows
 // them — see ArtistAppFeatures). Beside them the site's pages, each
 // opening it on Pages. Payments (dates, pause, cancel) come with Stripe.
 
@@ -91,21 +91,22 @@ function PlanChoice({
 }: {
   siteId: string;
   plan: NonNullable<SiteAccount["plan"]>;
-  initial: SiteAddOnChoice[];
+  initial: SiteAddOnRow[];
 }) {
   const router = useRouter();
   const [saved, setSaved] = useState(initial);
-  const [addOns, setAddOns] = useState(initial);
+  const [addOns, setAddOns] = useState<SiteAddOnChoice[]>(initial);
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
   const [isPending, startTransition] = useTransition();
-  const changed = JSON.stringify(addOns) !== JSON.stringify(saved);
+  const choicesOf = (rows: SiteAddOnChoice[]) => JSON.stringify(rows.map((r) => [r.addOn, r.quantity]));
+  const changed = choicesOf(addOns) !== choicesOf(saved);
 
   const update = () => {
     setMessage(null);
     startTransition(async () => {
       const result = await setSiteAddOns(siteId, addOns).catch(() => ({ error: "That wasn't saved — please try again." }));
       if ("error" in result) return setMessage({ error: true, text: result.error });
-      setSaved(addOns);
+      setSaved(priceAddOns(addOns, saved, plan.addOns));
       setMessage({ error: false, text: "Updated" });
       // What the app offers follows the add-ons.
       router.refresh();
@@ -130,7 +131,8 @@ function PlanChoice({
         </p>
         <PlanAddOnsList
           plan={plan}
-          monthlyPrice={plan.monthlyPrice}
+          planPrice={plan.monthlyPrice}
+          kept={saved}
           value={addOns}
           onChange={(next) => {
             setAddOns(next);

@@ -128,7 +128,8 @@ export async function backfillMissingSubscriptionPayments(): Promise<{
   checked: number;
   created: number;
 }> {
-  const client = getPlatformStripeClient();
+  // Billing by hand is all Live (Artist.stripeSubscriptionCustomerId).
+  const client = getPlatformStripeClient("LIVE");
   let checked = 0;
   let created = 0;
   let startingAfter: string | undefined;

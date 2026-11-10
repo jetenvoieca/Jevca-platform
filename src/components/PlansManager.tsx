@@ -2,7 +2,8 @@
 
 import { useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createPlan, deletePlan, updatePlan } from "@/lib/actions/plans";
+import { createPlan, deletePlan, setSignupStripeMode, updatePlan } from "@/lib/actions/plans";
+import type { StripeMode } from "@/lib/stripe";
 import { ADD_ONS, PLAN_LIMITS, type AddOnKey, type PlanSummary } from "@/lib/plans";
 import { CURRENCIES } from "@/lib/currencies";
 import ConfirmDialog from "@/components/ConfirmDialog";
@@ -12,8 +13,10 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 // the left — its name, monthly price, the groups of pages it includes and
 // pages per group, what it includes (one item a line — listed on the
 // Artist App's Account), the Site Themes it allows (the default marked)
-// and the add-ons it offers, each at its monthly price. Save keeps the changes; a
-// site's plan is chosen under Administration → Clients.
+// and the add-ons it offers, each at its monthly price. Save keeps the
+// changes (sites already on it keep the prices they joined at); a site's
+// plan is chosen under Administration → Clients. Above the list: whether
+// sign-ups pay in Stripe's Test or Live mode (2026-11-10).
 
 type Draft = Omit<PlanSummary, "id" | "siteCount">;
 
@@ -30,11 +33,14 @@ const draftOf = (p: PlanSummary): Draft => ({
 
 export default function PlansManager({
   plans,
+  signupMode: initialSignupMode,
   themes,
 }: {
   plans: PlanSummary[];
+  signupMode: StripeMode;
   themes: { id: string; name: string }[];
 }) {
+  const [signupMode, setSignupMode] = useState(initialSignupMode);
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(plans[0]?.id ?? null);
   const selected = plans.find((p) => p.id === selectedId) ?? null;
@@ -247,8 +253,9 @@ export default function PlansManager({
               {selected.siteCount === 0
                 ? "No sites on this plan yet."
                 : `${selected.siteCount} site${selected.siteCount === 1 ? "" : "s"} on this plan.`}{" "}
-              Saving removes add-ons a site has that the plan no longer offers, and moves a site to the default
-              theme if its theme is no longer allowed.
+              New prices are for new sign-ups — sites already on the plan keep the prices they joined at. Saving
+              removes add-ons a site has that the plan no longer offers, and moves a site to the default theme if
+              its theme is no longer allowed.
             </p>
 
             {error && <p className="text-sm text-red-600">{error}</p>}
@@ -268,6 +275,30 @@ export default function PlansManager({
       </section>
 
       <aside className="flex min-h-0 flex-col gap-3">
+        <label className="flex items-center gap-2 text-sm text-neutral-700">
+          <span className="flex-1">Sign-ups pay in</span>
+          <select
+            value={signupMode}
+            disabled={isPending}
+            onChange={(e) => {
+              const mode = e.target.value as StripeMode;
+              const before = signupMode;
+              setSignupMode(mode);
+              setError(null);
+              startTransition(async () => {
+                const result = await setSignupStripeMode(mode);
+                if ("error" in result) {
+                  setSignupMode(before);
+                  setError(result.error);
+                }
+              });
+            }}
+            className={`${field} ${signupMode === "LIVE" ? "border-green-600 text-green-700" : "border-amber-500 text-amber-700"}`}
+          >
+            <option value="TEST">Stripe Test</option>
+            <option value="LIVE">Stripe Live</option>
+          </select>
+        </label>
         <div className="flex gap-2">
           <input
             value={newName}

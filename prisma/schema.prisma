@@ -1411,12 +1411,14 @@ model Site {
   // What the site's subscription is (2026-11-09) — see Plan below: its
   // Plan, the Site Theme it uses (one the Plan allows) and its add-ons.
   // A plan in use can't be deleted; a theme deleted leaves none.
-  // `monthlyOverride`: what the site pays a month for its plan instead of
-  // the plan's price (existing customers' own prices), in the plan's
-  // currency — its add-ons are added on top (Craig, 9 Nov); null = the
-  // plan's price.
-  planId          String?
-  monthlyOverride Decimal?   @db.Decimal(10, 2)
+  // `planPrice`: what the site pays a month for its plan, in the plan's
+  // currency (2026-11-10) — the plan's price when it joined, kept when the
+  // plan's price later changes (Craig: price changes are for new sign-ups
+  // only); the admin can set its own (existing customers' prices). Its
+  // add-ons are added on top, each at its own kept price (SiteAddOn).
+  // Set whenever planId is.
+  planId      String?
+  planPrice   Decimal?   @db.Decimal(10, 2)
   plan        Plan?      @relation(fields: [planId], references: [id], onDelete: Restrict)
   siteThemeId String?
   siteTheme   SiteTheme? @relation(fields: [siteThemeId], references: [id], onDelete: SetNull)
@@ -1737,8 +1739,9 @@ model SiteTheme {
 // default), how many groups of pages it includes (`groupsIncluded`, e.g.
 // Portfolio) and how many pages each group may have (`pagesPerGroup`),
 // and the add-ons it offers, each at its price (PlanAddOn). A site has a
-// Plan and its add-ons (Site.planId, SiteAddOn) and may have its own
-// price (Site.monthlyOverride); the monthly total is shown only for now — Stripe is still set by hand. Managed under
+// Plan and its add-ons (Site.planId, SiteAddOn), each at the price it
+// joined at (Site.planPrice, SiteAddOn.monthlyPrice); the monthly total is
+// shown only for now — Stripe is still set by hand. Managed under
 // Templates → Plans; chosen per site under Administration → Clients.
 // See lib/plans.ts.
 model Plan {
@@ -1796,13 +1799,16 @@ model PlanAddOn {
   @@id([planId, addOn])
 }
 
-// An add-on a site has (`quantity` for EXTRA_PAGE_GROUP; 1 otherwise).
-// Only those its Plan offers — the rest are removed when the Plan changes.
+// An add-on a site has (`quantity` for EXTRA_PAGE_GROUP; 1 otherwise),
+// at `monthlyPrice` each — the plan's price for it when the site took it,
+// kept when that later changes (2026-11-10). Only those its Plan offers —
+// the rest are removed when the Plan changes.
 model SiteAddOn {
-  siteId   String
-  site     Site   @relation(fields: [siteId], references: [id], onDelete: Cascade)
-  addOn    AddOn
-  quantity Int    @default(1)
+  siteId       String
+  site         Site    @relation(fields: [siteId], references: [id], onDelete: Cascade)
+  addOn        AddOn
+  quantity     Int     @default(1)
+  monthlyPrice Decimal @db.Decimal(10, 2)
 
   @@id([siteId, addOn])
 }
@@ -2659,6 +2665,11 @@ model PlatformSettings {
   // The same, for the Inbox's Business mailbox (2026-09-27) — the
   // address new Business messages are sent from.
   businessEmailAddress String @default("craig@jetenvoieca.com")
+
+  // Whether sign-ups pay in Stripe's Test or Live mode (2026-11-10) — the
+  // platform's own account (lib/platformStripe.ts). Test until sign-up has
+  // been tried; switched under Templates → Plans.
+  signupStripeMode StripeMode @default(TEST)
 
   updatedAt DateTime @updatedAt
 }

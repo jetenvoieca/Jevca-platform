@@ -3,6 +3,7 @@
 import { requireAdmin, requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { isCurrency } from "@/lib/currencies";
+import type { StripeMode } from "@/lib/stripe";
 import {
   ADD_ONS,
   PLAN_LIMITS,
@@ -10,8 +11,10 @@ import {
   type AddOnKey,
   type PlanAddOnPrice,
   type PlanSummary,
+  priceAddOns,
   type SiteAccount,
   type SiteAddOnChoice,
+  type SiteAddOnRow,
   type SiteSubscription,
 } from "@/lib/plans";
 
@@ -89,8 +92,9 @@ function inRange(n: number, limits: { min: number; max: number }): boolean {
   return Number.isInteger(n) && n >= limits.min && n <= limits.max;
 }
 
-// Saves a plan. Sites on it lose the add-ons it no longer offers, and a
-// theme it no longer allows is replaced by its default.
+// Saves a plan. Sites on it keep the prices they joined at (new prices
+// are for new sign-ups), lose the add-ons it no longer offers, and a theme
+// it no longer allows is replaced by its default.
 export async function updatePlan(
   id: string,
   input: Omit<PlanSummary, "id" | "siteCount">,
@@ -170,22 +174,26 @@ export async function deletePlan(id: string): Promise<Result> {
   return { ok: true };
 }
 
+// A site's add-ons as kept, in ADD_ONS order.
+const ADD_ON_ROW_SELECT = { addOn: true, quantity: true, monthlyPrice: true } as const;
+
+function toAddOnRows(rows: { addOn: AddOnKey; quantity: number; monthlyPrice: { toFixed: (d: number) => string } }[]): SiteAddOnRow[] {
+  return rows
+    .map((r) => ({ addOn: r.addOn, quantity: r.quantity, monthlyPrice: r.monthlyPrice.toFixed(2) }))
+    .sort((a, b) => ADD_ON_ORDER.get(a.addOn)! - ADD_ON_ORDER.get(b.addOn)!);
+}
+
 export async function getSiteSubscription(siteId: string): Promise<SiteSubscription> {
   await requireAdmin();
   const site = await db.site.findUniqueOrThrow({
     where: { id: siteId },
-    select: {
-      planId: true,
-      siteThemeId: true,
-      monthlyOverride: true,
-      addOns: { select: { addOn: true, quantity: true } },
-    },
+    select: { planId: true, siteThemeId: true, planPrice: true, addOns: { select: ADD_ON_ROW_SELECT } },
   });
   return {
     planId: site.planId,
     siteThemeId: site.siteThemeId,
-    addOns: site.addOns.sort((a, b) => ADD_ON_ORDER.get(a.addOn)! - ADD_ON_ORDER.get(b.addOn)!),
-    monthlyOverride: site.monthlyOverride?.toFixed(2) ?? null,
+    planPrice: site.planPrice?.toFixed(2) ?? null,
+    addOns: toAddOnRows(site.addOns),
   };
 }
 
@@ -209,69 +217,80 @@ function checkAddOns(
   return { addOns };
 }
 
-// Sets a site's Plan, Site Theme (one the Plan allows), add-ons (those it
-// offers) and own monthly price. No plan: none of those either.
-export async function setSiteSubscription(siteId: string, input: SiteSubscription): Promise<Result> {
+// Replaces a site's add-ons with `rows`.
+function writeAddOns(siteId: string, rows: SiteAddOnRow[]) {
+  return [
+    db.siteAddOn.deleteMany({ where: { siteId } }),
+    db.siteAddOn.createMany({
+      data: rows.map((r) => ({ siteId, addOn: r.addOn, quantity: r.quantity, monthlyPrice: toPence(r.monthlyPrice)! / 100 })),
+    }),
+  ];
+}
+
+// Sets a site's Plan, Site Theme (one the Plan allows), what it pays for
+// the plan (blank: the plan's price now) and add-ons (those it offers —
+// those it has keep their prices, new ones at the plan's price now). A
+// new Plan starts afresh at its prices. No plan: none of those either.
+export async function setSiteSubscription(
+  siteId: string,
+  input: { planId: string | null; siteThemeId: string | null; planPrice: string | null; addOns: SiteAddOnChoice[] },
+): Promise<Result> {
   await requireAdmin();
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { id: true } });
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: { planId: true, addOns: { select: ADD_ON_ROW_SELECT } },
+  });
   if (!site) return { error: "Site not found." };
 
   let siteThemeId: string | null = null;
-  let overridePence: number | null = null;
-  const addOns: SiteAddOnChoice[] = [];
+  let planPence: number | null = null;
+  let addOns: SiteAddOnRow[] = [];
   if (input.planId) {
-    if (input.monthlyOverride !== null) {
-      overridePence = toPence(input.monthlyOverride);
-      if (overridePence === null) return { error: "The site's own price couldn't be read." };
-    }
     const plan = await db.plan.findUnique({ where: { id: input.planId }, select: PLAN_SELECT });
     if (!plan) return { error: "That plan wasn't found." };
     const summary = toSummary(plan);
+    const samePlan = site.planId === input.planId;
+    planPence = toPence(samePlan && input.planPrice?.trim() ? input.planPrice : summary.monthlyPrice);
+    if (planPence === null) return { error: "The price for the plan couldn't be read." };
     if (input.siteThemeId && !summary.themeIds.includes(input.siteThemeId)) {
       return { error: "That theme isn't one this plan allows." };
     }
     siteThemeId = input.siteThemeId ?? summary.themeIds[0] ?? null;
     const checked = checkAddOns(summary, input.addOns);
     if ("error" in checked) return checked;
-    addOns.push(...checked.addOns);
+    addOns = priceAddOns(checked.addOns, samePlan ? toAddOnRows(site.addOns) : [], summary.addOns);
   }
 
   await db.$transaction([
     db.site.update({
       where: { id: siteId },
-      data: {
-        planId: input.planId,
-        siteThemeId,
-        monthlyOverride: overridePence === null ? null : overridePence / 100,
-      },
+      data: { planId: input.planId, siteThemeId, planPrice: planPence === null ? null : planPence / 100 },
     }),
-    db.siteAddOn.deleteMany({ where: { siteId } }),
-    db.siteAddOn.createMany({ data: addOns.map((a) => ({ siteId, ...a })) }),
+    ...writeAddOns(siteId, addOns),
   ]);
   return { ok: true };
 }
 
 // A site's plan for the Artist App's Account (2026-11-10) — see
-// SiteAccount in lib/plans.ts. The site's own price, if it has one, is
-// shown as the plan's price.
+// SiteAccount in lib/plans.ts.
 export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
   await requireSiteAccess(siteId);
   const site = await db.site.findUniqueOrThrow({
     where: { id: siteId },
     select: {
-      monthlyOverride: true,
+      planPrice: true,
       siteTheme: { select: { name: true } },
       plan: { select: PLAN_SELECT },
-      addOns: { select: { addOn: true, quantity: true } },
+      addOns: { select: ADD_ON_ROW_SELECT },
     },
   });
-  const addOns = site.addOns.sort((a, b) => ADD_ON_ORDER.get(a.addOn)! - ADD_ON_ORDER.get(b.addOn)!);
+  const addOns = toAddOnRows(site.addOns);
   if (!site.plan) return { plan: null, addOns };
   const plan = toSummary(site.plan);
   return {
     plan: {
       name: plan.name,
-      monthlyPrice: site.monthlyOverride?.toFixed(2) ?? plan.monthlyPrice,
+      monthlyPrice: site.planPrice?.toFixed(2) ?? plan.monthlyPrice,
       currency: plan.currency,
       groupsIncluded: plan.groupsIncluded,
       pagesPerGroup: plan.pagesPerGroup,
@@ -284,17 +303,43 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
 }
 
 // The add-ons the artist chose on the Artist App's Account (2026-11-10):
-// only those the site's plan offers. Its plan, theme and own price stay
-// as the admin set them.
+// only those the site's plan offers — those it has keep their prices, new
+// ones at the plan's price now. Its plan, theme and price for the plan
+// stay as the admin set them.
 export async function setSiteAddOns(siteId: string, input: SiteAddOnChoice[]): Promise<Result> {
   await requireSiteAccess(siteId);
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { plan: { select: PLAN_SELECT } } });
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: { plan: { select: PLAN_SELECT }, addOns: { select: ADD_ON_ROW_SELECT } },
+  });
   if (!site?.plan) return { error: "This site has no plan yet." };
-  const checked = checkAddOns(toSummary(site.plan), input);
+  const summary = toSummary(site.plan);
+  const checked = checkAddOns(summary, input);
   if ("error" in checked) return checked;
-  await db.$transaction([
-    db.siteAddOn.deleteMany({ where: { siteId } }),
-    db.siteAddOn.createMany({ data: checked.addOns.map((a) => ({ siteId, ...a })) }),
-  ]);
+  await db.$transaction(writeAddOns(siteId, priceAddOns(checked.addOns, toAddOnRows(site.addOns), summary.addOns)));
+  return { ok: true };
+}
+
+// Whether sign-ups pay in Stripe's Test or Live mode (2026-11-10) — see
+// PlatformSettings.signupStripeMode.
+export async function getSignupStripeMode(): Promise<StripeMode> {
+  await requireAdmin();
+  const settings = await db.platformSettings.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton" },
+    select: { signupStripeMode: true },
+  });
+  return settings.signupStripeMode;
+}
+
+export async function setSignupStripeMode(mode: StripeMode): Promise<Result> {
+  await requireAdmin();
+  if (mode !== "TEST" && mode !== "LIVE") return { error: "That mode isn't known." };
+  await db.platformSettings.upsert({
+    where: { id: "singleton" },
+    update: { signupStripeMode: mode },
+    create: { id: "singleton", signupStripeMode: mode },
+  });
   return { ok: true };
 }

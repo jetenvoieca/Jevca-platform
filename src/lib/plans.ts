@@ -42,16 +42,20 @@ export type PlanSummary = {
   siteCount: number;
 };
 
+// An add-on as chosen (on the Plan card or the Account).
 export type SiteAddOnChoice = { addOn: AddOnKey; quantity: number };
 
-// A site's subscription: its Plan, Site Theme and add-ons, and its own
-// price for the plan if it has one (a decimal, e.g. "15.00"; replaces the
-// plan's price — add-ons are still added).
+// An add-on a site has, at the price it took it at (decimal, e.g. "5.00",
+// each) — kept when the plan's price for it later changes.
+export type SiteAddOnRow = SiteAddOnChoice & { monthlyPrice: string };
+
+// A site's subscription: its Plan, Site Theme, what it pays for the plan
+// (the plan's price when it joined, or its own) and its add-ons.
 export type SiteSubscription = {
   planId: string | null;
   siteThemeId: string | null;
-  addOns: SiteAddOnChoice[];
-  monthlyOverride: string | null;
+  planPrice: string | null;
+  addOns: SiteAddOnRow[];
 };
 
 // A decimal amount ("19.00", "5") in pence, or null if it isn't one.
@@ -62,25 +66,32 @@ export function toPence(value: string): number | null {
   return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
 }
 
-// What a site pays a month on `plan` with `addOns`, in pence: the plan's
-// price, or the site's own price for it (`monthlyOverride`), plus its
-// add-ons — those the plan doesn't offer count for nothing.
-export function monthlyTotalPence(
-  plan: Pick<PlanSummary, "monthlyPrice" | "addOns">,
-  addOns: SiteAddOnChoice[],
-  monthlyOverride: string | null,
-): number {
-  const prices = new Map(plan.addOns.map((a) => [a.addOn, toPence(a.monthlyPrice) ?? 0]));
-  return addOns.reduce(
-    (sum, a) => sum + (prices.get(a.addOn) ?? 0) * a.quantity,
-    toPence(monthlyOverride ?? plan.monthlyPrice) ?? 0,
-  );
+// Chosen add-ons with their prices: those the site already has at the
+// price it took them at (`kept`), new ones at the plan's price now.
+export function priceAddOns(
+  choices: SiteAddOnChoice[],
+  kept: SiteAddOnRow[],
+  planAddOns: PlanAddOnPrice[],
+): SiteAddOnRow[] {
+  return choices.map((c) => ({
+    ...c,
+    monthlyPrice:
+      kept.find((k) => k.addOn === c.addOn)?.monthlyPrice ??
+      planAddOns.find((a) => a.addOn === c.addOn)?.monthlyPrice ??
+      "0.00",
+  }));
 }
 
-// A site's plan as the Artist App's Account shows it (2026-11-10): its
-// price (the site's own price for it, if it has one), what it includes,
-// the theme the site uses, and the add-ons it offers with those the site
-// has.
+// What a site pays a month, in pence: its price for the plan plus each
+// add-on at its price, times how many.
+export function monthlyTotalPence(planPrice: string, addOns: SiteAddOnRow[]): number {
+  return addOns.reduce((sum, a) => sum + (toPence(a.monthlyPrice) ?? 0) * a.quantity, toPence(planPrice) ?? 0);
+}
+
+// A site's plan as the Artist App's Account shows it (2026-11-10): what
+// the site pays for it, what it includes, the theme the site uses, and the
+// add-ons it offers at their prices now, with those the site has at the
+// prices it took them at.
 export type SiteAccountPlan = {
   name: string;
   monthlyPrice: string;
@@ -94,7 +105,7 @@ export type SiteAccountPlan = {
 
 export type SiteAccount = {
   plan: SiteAccountPlan | null;
-  addOns: SiteAddOnChoice[];
+  addOns: SiteAddOnRow[];
 };
 
 // What a site's Plan and add-ons give it in the Artist App (2026-11-09):
