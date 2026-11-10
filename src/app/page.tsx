@@ -8,7 +8,7 @@ import { getRecentSites } from "@/lib/recentSites";
 import { SITES_STATUS_FILTER_COOKIE, normalizeSitesStatusFilter } from "@/lib/sitesStatusFilter";
 import { redirect } from "next/navigation";
 import { getCurrentUser } from "@/lib/currentUser";
-import { cleanMenuAccess, siteLandingHref } from "@/lib/siteMenuAccess";
+import { artistAppHref } from "@/lib/artistApp";
 
 export const dynamic = "force-dynamic";
 
@@ -20,17 +20,17 @@ export default async function SitesDirectoryPage({
   searchParams: Promise<SearchParams>;
 }) {
   // An artist login (2026-10-26) never sees the Sites list: they go to
-  // their first site's first ticked menu item.
+  // their first site in the Artist App (2026-11-10, Craig — every client
+  // login lands there).
   const user = await getCurrentUser();
   if (!user) redirect("/login");
   if (user.role === "ARTIST") {
     const site = await db.site.findFirst({
       where: { artistId: user.artistId!, status: { not: "ARCHIVED" } },
       orderBy: { name: "asc" },
-      select: { id: true, artist: { select: { menuAccess: true } } },
+      select: { id: true },
     });
-    const landing = site ? siteLandingHref(site.id, cleanMenuAccess(site.artist.menuAccess)) : null;
-    if (landing) redirect(landing);
+    if (site) redirect(artistAppHref(site.id));
     return (
       <main className="mx-auto max-w-md px-6 py-16 text-center">
         <p className="mb-6 text-sm text-neutral-600">Nothing has been set up for you here yet.</p>

@@ -211,8 +211,7 @@ export function buildSiteNavEntries({
     },
     // The Artist App (2026-11-08, Craig's mockup) — last, in its own
     // colours; opens full screen on its own address (lib/artistApp.ts).
-    // Admin only for now: its address isn't one of the site's menu items,
-    // so an artist login never sees it.
+    // Shown to client logins too (2026-11-10), whatever is ticked.
     {
       label: "Artist App",
       href: artistAppHref(siteId),
@@ -222,7 +221,7 @@ export function buildSiteNavEntries({
     },
   ];
   const siteEntries = entries.flatMap((entry): AppShellNavEntry[] => {
-    if (!("section" in entry)) return may(entry.href) ? [entry] : [];
+    if (!("section" in entry)) return entry.href === artistAppHref(siteId) || may(entry.href) ? [entry] : [];
     const children = entry.children.filter((c) => may(c.href));
     return children.length ? [{ ...entry, children }] : [];
   });

@@ -8,7 +8,7 @@ import {
   artistAppHref,
   artistAppPreviewHref,
 } from "@/lib/artistApp";
-import { siteNavHref } from "@/lib/siteMenuAccess";
+import { logout } from "@/lib/actions/auth";
 import { publishedHomePath } from "@/lib/siteSnapshot";
 import EyeIcon from "@/components/EyeIcon";
 import PublishButton from "@/components/PublishButton";
@@ -22,9 +22,10 @@ import PublishedSiteLink from "@/components/PublishedSiteLink";
 // The Artist App's frame (Craig's mockups): one grey rounded frame
 // holding the screen's two panels and, on the right, the app's buttons —
 // its navigation. Buttons without a screen yet are placeholders. Above
-// them (2026-11-08): "← Admin" back to the site in the admin (admin only
-// for now, like the app), and the admin's icons — the eye (the chosen
-// page's preview, on Arrange Pages), publish and the published site.
+// them (2026-11-08): "← Admin" back to the site in the admin (when the
+// login may reach it — 2026-11-10), Log out for a client login, and the
+// admin's icons — the eye (the chosen page's preview, on Arrange Pages),
+// publish and the published site.
 // Buttons (2026-11-09, Craig's mockup): capitals, centred, 4px corners;
 // Pages, CV, Exhibition, Concierge, Account (Consignment dropped).
 
@@ -34,11 +35,16 @@ const CONCIERGE_COLOR = "#FAE8C3";
 export default function ArtistAppFrame({
   siteId,
   lastPublishedAt,
+  adminHref,
+  canLogOut,
   children,
 }: {
   siteId: string;
   // ISO date, or null if never published.
   lastPublishedAt: string | null;
+  // Where "← Admin" goes; null hides it.
+  adminHref: string | null;
+  canLogOut: boolean;
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
@@ -58,13 +64,20 @@ export default function ArtistAppFrame({
         {/* Scrolls on its own when it doesn't fit (the iPad). */}
         <nav className="flex shrink-0 flex-col gap-3 sm:order-first sm:flex-row sm:items-center sm:overflow-x-auto lg:order-none lg:w-[200px] lg:flex-col lg:items-stretch lg:overflow-y-auto lg:overflow-x-hidden">
           <div className="flex shrink-0 items-center gap-1">
-            <Link
-              href={siteNavHref(siteId, "artworks")}
-              prefetch={false}
-              className="mr-auto px-1 text-sm text-neutral-500 hover:text-neutral-800"
-            >
-              ← Admin
-            </Link>
+            <div className="mr-auto flex items-center gap-2">
+              {adminHref && (
+                <Link href={adminHref} prefetch={false} className="px-1 text-sm text-neutral-500 hover:text-neutral-800">
+                  ← Admin
+                </Link>
+              )}
+              {canLogOut && (
+                <form action={logout}>
+                  <button type="submit" className="px-1 text-sm text-neutral-500 hover:text-neutral-800">
+                    Log out
+                  </button>
+                </form>
+              )}
+            </div>
             {chosenPage && (
               <Link
                 href={artistAppPreviewHref(siteId, chosenPage)}

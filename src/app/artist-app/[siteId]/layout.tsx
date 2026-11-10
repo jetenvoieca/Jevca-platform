@@ -21,9 +21,10 @@ export const viewport: Viewport = {
   viewportFit: "cover",
 };
 
-// The Artist App (lib/artistApp.ts) — full screen, admin only for now.
-// Its screens are framed by (screens)/layout.tsx; a page's preview
-// (preview/[pageId]) takes the whole screen.
+// The Artist App (lib/artistApp.ts) — full screen; the admin, or
+// (2026-11-10) a client login for its own sites. Its screens are framed
+// by (screens)/layout.tsx; a page's preview (preview/[pageId]) takes the
+// whole screen.
 export default async function ArtistAppLayout({
   children,
   params,
@@ -34,10 +35,13 @@ export default async function ArtistAppLayout({
   const { siteId } = await params;
   const user = await getCurrentUser();
   if (!user) redirect("/login");
-  if (user.role !== "ADMIN") redirect("/");
 
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { artist: { select: { kind: true } } } });
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: { artistId: true, artist: { select: { kind: true } } },
+  });
   if (!site) notFound();
+  if (user.role !== "ADMIN" && user.artistId !== site.artistId) redirect("/");
 
   // Shared pieces (e.g. the media picker) word themselves for the
   // client's type, as in the admin — see ClientWordsProvider. What the app

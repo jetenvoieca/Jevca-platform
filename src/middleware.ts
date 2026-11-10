@@ -105,8 +105,9 @@ const PUBLIC_PATH_PREFIXES = [
 // own site) (2026-10-26): their sites' pages (the site's layout keeps
 // them to their own sites and ticked menu items; /sites/new is admin
 // only), published sites, their own login, and the app's routes (each
-// checks who's asking itself).
-const ARTIST_PATH_PREFIXES = ["/sites", "/site-preview", "/my-login", "/api"];
+// checks who's asking itself) — and (2026-11-10) the Artist App, whose
+// layout keeps them to their own sites.
+const ARTIST_PATH_PREFIXES = ["/sites", "/site-preview", "/my-login", "/api", "/artist-app"];
 
 export async function middleware(request: NextRequest) {
   const { pathname, search } = request.nextUrl;
