@@ -1,6 +1,7 @@
 import { notFound } from "next/navigation";
 import { db } from "@/lib/db";
 import { getSalesForArtist } from "@/lib/actions/sales";
+import { listLocationCustomers } from "@/lib/actions/locations";
 import SalesView from "@/components/SalesView";
 
 // Missing here until 2026-08-16, unlike Artworks/Media/Hopper/Bucket,
@@ -34,13 +35,17 @@ export default async function SalesPage({ params }: { params: Promise<{ id: stri
     );
   }
 
-  const sales = await getSalesForArtist(site.artistId);
+  const [sales, locations] = await Promise.all([
+    getSalesForArtist(site.artistId),
+    listLocationCustomers(site.artistId),
+  ]);
 
   return (
     <SalesView
       siteId={id}
       artistId={site.artistId}
       sales={sales}
+      locations={locations.map((l) => ({ customerId: l.id, name: l.name }))}
     />
   );
 }

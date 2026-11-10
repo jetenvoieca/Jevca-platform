@@ -1,12 +1,13 @@
 "use client";
 
-import { Fragment, useState, useMemo } from "react";
+import { Fragment, useState, useMemo, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { formatDate, ukYearMonth } from "@/lib/formatDate";
 import { CURRENCIES, type Currency, formatMoney } from "@/lib/currencies";
 import { SaleStatusBadge } from "@/components/GallerySaleCard";
 import SaleModal, { type SaleModalTarget } from "@/components/SaleModal";
-import type { SaleRow } from "@/lib/actions/sales";
+import { attachSaleToLocation, type SaleRow } from "@/lib/actions/sales";
+import { createLocation } from "@/lib/actions/locations";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
 // Sale date periods: all time, this (UK calendar) year, or one quarter
@@ -38,6 +39,9 @@ function inPeriod(sale: SaleRow, period: Period, year: number): boolean {
   return period === `Q${quarter}`;
 }
 
+// The "Attach to…" choice's "+ Add new…" option — never a customer id.
+const ADD_NEW = "__add_new__";
+
 type Sums = Record<Currency, { amount: number; net: number }>;
 
 function emptySums(): Sums {
@@ -47,21 +51,52 @@ function emptySums(): Sums {
 // One site's Sales list. Clicking a row opens the shared SaleModal —
 // the same modal Consolidated Sales and the Inbox use, so a sale looks
 // and behaves identically wherever it's opened. Every sale is listed,
-// cancelled ones included; amounts sit in one column per currency.
+// cancelled ones included; amounts sit in one column per currency. A
+// sale with no customer (e.g. its location was deleted) can be attached
+// to a location from its Location cell (2026-11-10).
 export default function SalesView({
   siteId,
   artistId,
   sales,
+  locations,
 }: {
   siteId: string;
   artistId: string;
   sales: SaleRow[];
+  // The artist's Locations, for "Attach to…".
+  locations: { customerId: string; name: string }[];
 }) {
   const words = useClientWords();
   const [period, setPeriod] = useState<Period>("YEAR");
   const [currencyView, setCurrencyView] = useState<CurrencyView>("EUR");
   const [target, setTarget] = useState<SaleModalTarget | null>(null);
   const router = useRouter();
+  const [attaching, startAttach] = useTransition();
+
+  // Attach a sale to the location chosen — or to a new one, named and
+  // typed the same way as the Artwork Catalogue's Location "+ Add new…".
+  const attach = (purchaseId: string, choice: string) => {
+    if (!choice) return;
+    startAttach(async () => {
+      let customerId = choice;
+      if (choice === ADD_NEW) {
+        const name = window.prompt(`Add a new ${words.location}:`)?.trim();
+        if (!name) return;
+        const isGallery = window.confirm(
+          `Is "${name}" a ${words.location} you consign to?\n\nOK = ${words.location}\nCancel = Own (e.g. your studio)`
+        );
+        const created = await createLocation(artistId, siteId, name, isGallery ? "GALLERY" : "OWN");
+        if ("error" in created) {
+          alert(created.error);
+          return;
+        }
+        customerId = created.customerId;
+      }
+      const result = await attachSaleToLocation(purchaseId, customerId);
+      if ("error" in result) alert(result.error);
+      router.refresh();
+    });
+  };
 
   const currentYear = ukYearMonth(new Date())!.year;
 
@@ -153,6 +188,7 @@ export default function SalesView({
               <th className="px-3 py-2 font-normal">Date</th>
               <th className="px-3 py-2 font-normal">{words.item}</th>
               <th className="px-3 py-2 font-normal">Buyer</th>
+              <th className="px-3 py-2 font-normal">Location</th>
               <th className="px-3 py-2 font-normal">Type</th>
               {/* Each currency's amount and net side by side (2026-11-05). */}
               {shownCurrencies.map((c) => (
@@ -168,7 +204,7 @@ export default function SalesView({
             {filtered.length === 0 && (
               <tr>
                 <td
-                  colSpan={5 + shownCurrencies.length * 2}
+                  colSpan={6 + shownCurrencies.length * 2}
                   className="px-3 py-6 text-center text-sm text-neutral-400"
                 >
                   No sales in this period.
@@ -206,6 +242,25 @@ export default function SalesView({
                 <td className="max-w-[12rem] truncate px-3 py-1.5 text-neutral-600">
                   {s.buyerName || s.buyerEmail}
                 </td>
+                <td className="max-w-[12rem] truncate px-3 py-1.5 text-neutral-600" onClick={(e) => s.canAttach && e.stopPropagation()}>
+                  {s.location ??
+                    (s.canAttach && (
+                      <select
+                        value=""
+                        disabled={attaching}
+                        onChange={(e) => attach(s.purchaseId, e.target.value)}
+                        className="rounded border border-neutral-300 bg-white px-2 py-0.5 text-xs text-neutral-600"
+                      >
+                        <option value="">Attach to…</option>
+                        {locations.map((l) => (
+                          <option key={l.customerId} value={l.customerId}>
+                            {l.name}
+                          </option>
+                        ))}
+                        <option value={ADD_NEW}>+ Add new…</option>
+                      </select>
+                    ))}
+                </td>
                 <td className="px-3 py-1.5 text-neutral-500">
                   {s.type === "FULL" ? "Full" : "Instalments"}
                 </td>
@@ -228,7 +283,7 @@ export default function SalesView({
                   key={label}
                   className={label === "Total" ? "font-semibold text-neutral-900" : "text-neutral-600"}
                 >
-                  <td colSpan={4} className="px-3 py-1.5 text-right">
+                  <td colSpan={5} className="px-3 py-1.5 text-right">
                     {label}
                   </td>
                   {shownCurrencies.map((c) => (

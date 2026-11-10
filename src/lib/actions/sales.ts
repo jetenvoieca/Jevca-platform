@@ -24,6 +24,11 @@ export type SaleRow = {
   overdue: boolean;
   createdAt: string;
   closedAt: string | null;
+  // The location the sale was made at (its customer's Location), if any.
+  location: string | null;
+  // No customer at all — e.g. its location was deleted (2026-11-10) — so
+  // it can be attached to a location (attachSaleToLocation).
+  canAttach: boolean;
 };
 
 // Every Purchase across the artist's whole catalogue (same scoping as the
@@ -37,6 +42,7 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
     include: {
       artwork: { include: { mainImage: true, artist: { select: { invoiceOverdueDays: true } } } },
       invoice: overdueInvoiceSelect,
+      customer: { select: { location: { select: { name: true } } } },
     },
     relationLoadStrategy: "query",
     orderBy: { createdAt: "desc" },
@@ -57,7 +63,36 @@ export async function getSalesForArtist(artistId: string): Promise<SaleRow[]> {
     overdue: isSaleOverdue(p, p.artwork.artist.invoiceOverdueDays),
     createdAt: p.createdAt.toISOString(),
     closedAt: p.closedAt ? p.closedAt.toISOString() : null,
+    location: p.customer?.location?.name ?? null,
+    canAttach: p.customerId === null,
   }));
+}
+
+// Attach a sale with no customer to one of the artist's Locations
+// (2026-11-10, Craig's request — sales left without one when their
+// location was deleted), from the Sales list. Its framing / delivery
+// charges with no customer go with it. A sale already linked to a
+// customer isn't changed. Its buyer details, commission and invoices
+// stay as they were.
+export async function attachSaleToLocation(
+  purchaseId: string,
+  customerId: string
+): Promise<{ ok: true } | { error: string }> {
+  const sale = await db.purchase.findUnique({
+    where: { id: purchaseId },
+    select: { customerId: true, artwork: { select: { artistId: true } } },
+  });
+  if (!sale) return { error: "Sale not found." };
+  const { artistId } = sale.artwork;
+  await requireArtistAccess(artistId);
+  if (sale.customerId) return { error: "This sale is already linked to a customer." };
+  const location = await db.location.findFirst({ where: { customerId, artistId }, select: { id: true } });
+  if (!location) return { error: "Location not found." };
+  await db.purchase.updateMany({
+    where: { OR: [{ id: purchaseId }, { parentPurchaseId: purchaseId }], customerId: null },
+    data: { customerId },
+  });
+  return { ok: true };
 }
 
 // Sales reset — a full, permanent wipe of an artist's sales data, added
