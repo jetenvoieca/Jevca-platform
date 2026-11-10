@@ -1,6 +1,6 @@
 "use client";
 
-import { useState, useTransition } from "react";
+import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPlan, deletePlan, setSignupStripeMode, updatePlan } from "@/lib/actions/plans";
 import type { StripeMode } from "@/lib/stripe";
@@ -13,8 +13,10 @@ import ConfirmDialog from "@/components/ConfirmDialog";
 // the left — its name, monthly price, the groups of pages it includes and
 // pages per group, what it includes (one item a line — listed on the
 // Artist App's Account), the Site Themes it allows (the default marked)
-// and the add-ons it offers, each at its monthly price. Save keeps the
-// changes (sites already on it keep the prices they joined at); a site's
+// and the add-ons it offers, each at its monthly price. Changes save as
+// they're made (2026-11-10, Craig — the Save button below the fold was
+// missed): ticks, choices and buttons at once, typed boxes when left.
+// Sites already on it keep the prices they joined at; a site's
 // plan is chosen under Administration → Clients. Above the list: whether
 // sign-ups pay in Stripe's Test or Live mode (2026-11-10).
 
@@ -46,7 +48,9 @@ export default function PlansManager({
   const selected = plans.find((p) => p.id === selectedId) ?? null;
   const [draft, setDraft] = useState<Draft | null>(selected ? draftOf(selected) : null);
   const [error, setError] = useState<string | null>(null);
-  const [saved, setSaved] = useState(false);
+  const [status, setStatus] = useState<"saving" | "saved" | null>(null);
+  // Saves run one after another, so an earlier one never lands last.
+  const saving = useRef<Promise<void>>(Promise.resolve());
   const [newName, setNewName] = useState("");
   const [confirmingDelete, setConfirmingDelete] = useState(false);
   const [isPending, startTransition] = useTransition();
@@ -55,12 +59,37 @@ export default function PlansManager({
     setSelectedId(plan.id);
     setDraft(draftOf(plan));
     setError(null);
-    setSaved(false);
+    setStatus(null);
   };
 
-  const change = (patch: Partial<Draft>) => {
-    setDraft((d) => (d ? { ...d, ...patch } : d));
-    setSaved(false);
+  const save = (next: Draft) => {
+    if (!selected) return;
+    const id = selected.id;
+    setError(null);
+    setStatus("saving");
+    saving.current = saving.current.then(async () => {
+      const result = await updatePlan(id, next).catch(() => ({ error: "That wasn't saved — please try again." }));
+      if ("error" in result) {
+        setError(result.error);
+        setStatus(null);
+        return;
+      }
+      setStatus("saved");
+      router.refresh();
+    });
+  };
+
+  // A change to the plan: saved at once, or for a typed box (`typing`)
+  // when it's left (saveTyped).
+  const change = (patch: Partial<Draft>, typing = false) => {
+    if (!draft) return;
+    const next = { ...draft, ...patch };
+    setDraft(next);
+    if (typing) setStatus(null);
+    else save(next);
+  };
+  const saveTyped = () => {
+    if (draft && status === null) save(draft);
   };
 
   // Themes: ticked ones allowed; the default is first.
@@ -70,22 +99,11 @@ export default function PlansManager({
 
   // Add-ons: ticked ones offered, at their price; kept in ADD_ONS order.
   const priceOf = (key: AddOnKey) => draft?.addOns.find((a) => a.addOn === key)?.monthlyPrice;
-  const setAddOn = (key: AddOnKey, monthlyPrice: string | null) => {
+  const setAddOn = (key: AddOnKey, monthlyPrice: string | null, typing = false) => {
     if (!draft) return;
     const others = draft.addOns.filter((a) => a.addOn !== key);
     const next = monthlyPrice === null ? others : [...others, { addOn: key, monthlyPrice }];
-    change({ addOns: ADD_ONS.flatMap((o) => next.filter((a) => a.addOn === o.key)) });
-  };
-
-  const save = () => {
-    if (!selected || !draft) return;
-    setError(null);
-    startTransition(async () => {
-      const result = await updatePlan(selected.id, draft);
-      if ("error" in result) return setError(result.error);
-      setSaved(true);
-      router.refresh();
-    });
+    change({ addOns: ADD_ONS.flatMap((o) => next.filter((a) => a.addOn === o.key)) }, typing);
   };
 
   const create = () => {
@@ -134,9 +152,23 @@ export default function PlansManager({
           </>
         ) : (
           <div className="flex max-w-2xl flex-col gap-6">
+            <div className="flex h-5 items-center justify-end text-sm">
+              {error ? (
+                <span className="text-red-600">{error}</span>
+              ) : status === "saving" ? (
+                <span className="text-neutral-400">Saving…</span>
+              ) : status === "saved" ? (
+                <span className="text-green-700">Saved</span>
+              ) : null}
+            </div>
             <div className="grid grid-cols-[190px_1fr] items-center gap-x-3 gap-y-3">
               <label className="text-sm text-neutral-700">Name</label>
-              <input value={draft.name} onChange={(e) => change({ name: e.target.value })} className={field} />
+              <input
+                value={draft.name}
+                onChange={(e) => change({ name: e.target.value }, true)}
+                onBlur={saveTyped}
+                className={field}
+              />
               <label className="text-sm text-neutral-700">Monthly price</label>
               <div className="flex gap-2">
                 <select value={draft.currency} onChange={(e) => change({ currency: e.target.value })} className={field}>
@@ -149,7 +181,8 @@ export default function PlansManager({
                 <input
                   inputMode="decimal"
                   value={draft.monthlyPrice}
-                  onChange={(e) => change({ monthlyPrice: e.target.value })}
+                  onChange={(e) => change({ monthlyPrice: e.target.value }, true)}
+                  onBlur={saveTyped}
                   className={`${field} w-28`}
                 />
               </div>
@@ -159,7 +192,8 @@ export default function PlansManager({
                 min={PLAN_LIMITS.groupsIncluded.min}
                 max={PLAN_LIMITS.groupsIncluded.max}
                 value={draft.groupsIncluded}
-                onChange={(e) => change({ groupsIncluded: Number(e.target.value) })}
+                onChange={(e) => change({ groupsIncluded: Number(e.target.value) }, true)}
+                onBlur={saveTyped}
                 className={`${field} w-28`}
               />
               <label className="text-sm text-neutral-700">Pages in each group</label>
@@ -168,7 +202,8 @@ export default function PlansManager({
                 min={PLAN_LIMITS.pagesPerGroup.min}
                 max={PLAN_LIMITS.pagesPerGroup.max}
                 value={draft.pagesPerGroup}
-                onChange={(e) => change({ pagesPerGroup: Number(e.target.value) })}
+                onChange={(e) => change({ pagesPerGroup: Number(e.target.value) }, true)}
+                onBlur={saveTyped}
                 className={`${field} w-28`}
               />
             </div>
@@ -178,7 +213,8 @@ export default function PlansManager({
               <p className="mb-2 text-xs text-neutral-500">One item a line — listed on the Artist App&apos;s Account.</p>
               <textarea
                 value={draft.included}
-                onChange={(e) => change({ included: e.target.value })}
+                onChange={(e) => change({ included: e.target.value }, true)}
+                onBlur={saveTyped}
                 rows={9}
                 maxLength={PLAN_LIMITS.included.maxLength}
                 className={`${field} w-full`}
@@ -236,7 +272,8 @@ export default function PlansManager({
                           <input
                             inputMode="decimal"
                             value={price}
-                            onChange={(e) => setAddOn(o.key, e.target.value)}
+                            onChange={(e) => setAddOn(o.key, e.target.value, true)}
+                            onBlur={saveTyped}
                             aria-label={`${o.label} monthly price`}
                             className={`${field} w-24`}
                           />
@@ -253,23 +290,10 @@ export default function PlansManager({
               {selected.siteCount === 0
                 ? "No sites on this plan yet."
                 : `${selected.siteCount} site${selected.siteCount === 1 ? "" : "s"} on this plan.`}{" "}
-              New prices are for new sign-ups — sites already on the plan keep the prices they joined at. Saving
-              removes add-ons a site has that the plan no longer offers, and moves a site to the default theme if
-              its theme is no longer allowed.
+              Changes save as you make them. New prices are for new sign-ups — sites already on the plan keep the
+              prices they joined at. Unticking an add-on removes it from sites that have it, and unticking a theme
+              moves a site using it to the default theme.
             </p>
-
-            {error && <p className="text-sm text-red-600">{error}</p>}
-            <div className="flex items-center gap-3">
-              <button
-                type="button"
-                onClick={save}
-                disabled={isPending}
-                className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-50"
-              >
-                {isPending ? "Saving…" : "Save"}
-              </button>
-              {saved && <span className="text-sm text-green-700">Saved</span>}
-            </div>
           </div>
         )}
       </section>
