@@ -4,6 +4,7 @@ import { getPlatformStripeClient } from "@/lib/platformStripe";
 import type { StripeMode } from "@/lib/stripe";
 import { generateUniqueEmailSlug } from "@/lib/emailSlug";
 import { applyThemeToSite } from "@/lib/siteThemeApply";
+import { cleanThemeEntries } from "@/lib/siteThemes";
 import { ADD_ONS, monthlyTotalPence } from "@/lib/plans";
 import { formatMoney } from "@/lib/currencies";
 import { APP_URL } from "@/lib/appUrl";
@@ -13,7 +14,10 @@ import { APP_URL } from "@/lib/appUrl";
 // what the person gave on their link (SignupLink), the client (Artist),
 // their site — on the link's plan and theme, at the link's prices, billed
 // from its new Stripe subscription — its pages from the theme, and their
-// login. Then a welcome email to them, an email to Craig and an alert on
+// login. A new client has no curations, so when the theme has curation
+// pages (e.g. a portfolio) one empty curation, "First page", is made for
+// it to show (Craig, 10 Nov) — the artist renames it and adds more pages
+// from it in the Artist App. Then a welcome email to them, an email to Craig and an alert on
 // the Dashboard. Plain server code, called only by the webhook.
 //
 // Safe to receive more than once: the link is claimed as completed in the
@@ -35,8 +39,11 @@ const LINK_SELECT = {
   signupPhone: true,
   passwordHash: true,
   plan: { select: { name: true, currency: true } },
+  siteTheme: { select: { entries: true } },
   addOns: { select: { addOn: true, quantity: true, monthlyPrice: true } },
 } as const;
+
+const FIRST_CURATION_NAME = "First page";
 
 export async function completeSignup(sessionId: string, mode: StripeMode): Promise<void> {
   const link = await db.signupLink.findUnique({ where: { stripeCheckoutSessionId: sessionId }, select: LINK_SELECT });
@@ -79,6 +86,9 @@ export async function completeSignup(sessionId: string, mode: StripeMode): Promi
       data: { name, kind: "ARTIST", email, phone: link.signupPhone, emailSlug },
       select: { id: true },
     });
+    if (cleanThemeEntries(link.siteTheme.entries).some((e) => e.kind === "CURATIONS")) {
+      await tx.curation.create({ data: { artistId: artist.id, name: FIRST_CURATION_NAME } });
+    }
     const site = await tx.site.create({
       data: {
         name,
