@@ -99,7 +99,9 @@ export default function ArtistAppFrame({
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col sm:overflow-y-auto">
-              <div ref={slots.side.setNode} className="flex min-h-0 flex-1 flex-col" />
+              {/* Takes the room only when a screen uses it — empty, it pushed the
+                  pages list to the foot (2026-11-11). */}
+              <div ref={slots.side.setNode} className={slots.side.claimed ? "flex min-h-0 flex-1 flex-col" : ""} />
               {!slots.side.claimed && <PageLinks siteId={siteId} pages={pages} />}
             </div>
 
