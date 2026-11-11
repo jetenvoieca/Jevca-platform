@@ -45,6 +45,10 @@ export type CurationWork = {
   availability: string;
   offeredPrice: string | null;
   priceCurrency: string;
+  // Shown under the name on the Curations page with the price
+  // (2026-11-11, Craig — many works share a name).
+  type: string | null;
+  edition: string | null;
   // The work's main image in this curation: a small thumbnail for
   // tiles, and a larger version (2026-10-05) for full-screen display
   // such as Sliding doors.
@@ -241,6 +245,8 @@ export async function getCuration(curationId: string, artistId: string): Promise
               availability: true,
               offeredPrice: true,
               priceCurrency: true,
+              type: true,
+              edition: true,
               ...TILE_ARTWORK_IMAGES,
             },
           },
@@ -262,6 +268,8 @@ export async function getCuration(curationId: string, artistId: string): Promise
       availability: item.artwork.availability,
       offeredPrice: item.artwork.offeredPrice != null ? item.artwork.offeredPrice.toString() : null,
       priceCurrency: item.artwork.priceCurrency,
+      type: item.artwork.type,
+      edition: item.artwork.edition,
       ...tileUrls(item),
     })),
   };

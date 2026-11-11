@@ -514,7 +514,15 @@ export default function CurationsView({
                           <BaseStar isBase={w.isBase} />#{w.catalogueNumber}
                         </span>
                       </p>
-                      {price && <p className="text-sm text-neutral-400">{price}</p>}
+                      {/* Type, then edition and price where there are
+                          (2026-11-11, as the artwork picker). */}
+                      <p className="truncate text-sm text-neutral-400">{w.type || "—"}</p>
+                      {(w.edition || price) && (
+                        <p className="flex gap-2 text-sm text-neutral-400">
+                          {w.edition && <span className="truncate">Ed. {w.edition}</span>}
+                          {price && <span className="ml-auto shrink-0">{price}</span>}
+                        </p>
+                      )}
                       <button
                         type="button"
                         onClick={(e) => {
