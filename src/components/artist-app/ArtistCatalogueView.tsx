@@ -3,7 +3,8 @@
 import Link from "next/link";
 import type { ComponentProps } from "react";
 import ArtworksCatalogueView from "@/app/sites/[id]/artworks/ArtworksCatalogueView";
-import { BandTools, PanelHeading, SidePanel } from "@/components/artist-app/ArtistAppPanels";
+import { BandTools, PanelHeading } from "@/components/artist-app/ArtistAppPanels";
+import ArtManagerFilters from "@/components/artist-app/ArtManagerFilters";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
 // The Art manager's catalogue (2026-11-11, Craig's screenshots): the
@@ -15,7 +16,7 @@ export default function ArtistCatalogueView(props: ComponentProps<typeof Artwork
   return (
     <ArtworksCatalogueView
       {...props}
-      appSlots={({ filters, tools, addHref }) => (
+      appSlots={({ tools, addHref, name, names, chooseName }) => (
         <>
           <div className="pt-4">
             <PanelHeading
@@ -33,9 +34,14 @@ export default function ArtistCatalogueView(props: ComponentProps<typeof Artwork
             </PanelHeading>
           </div>
           <BandTools>{tools}</BandTools>
-          <SidePanel>
-            <div className="flex min-h-0 flex-1 flex-col gap-3 pt-12">{filters}</div>
-          </SidePanel>
+          <ArtManagerFilters
+            siteId={props.siteId}
+            locations={props.settings.locations}
+            location=""
+            names={names}
+            name={name}
+            onName={chooseName}
+          />
         </>
       )}
     />

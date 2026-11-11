@@ -24,10 +24,11 @@ export const ARTIST_APP_SHOWS_PRESENTATION_MEDIUM = false;
 // and components/artist-app/ArtistAppFeatures.tsx.
 
 // Its screens: Manage Works (the start), Arrange Pages, Account
-// and with Art Manager the Art manager ("artworks") and its Add Artworks.
+// and with Art Manager the Art manager ("artworks"), its Add Artworks
+// and a location.
 export function artistAppHref(
   siteId: string,
-  screen: "" | "pages" | "account" | "artworks" | "artworks/add" = "",
+  screen: "" | "pages" | "account" | "artworks" | "artworks/add" | "artworks/locations" = "",
 ): string {
   return `/artist-app/${siteId}${screen ? `/${screen}` : ""}`;
 }

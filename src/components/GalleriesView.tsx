@@ -75,6 +75,7 @@ export default function GalleriesView({
   vatRate,
   galleries,
   settings,
+  embedded,
 }: {
   siteId: string;
   artistId: string;
@@ -92,6 +93,10 @@ export default function GalleriesView({
   // paid" Method dropdown's payment methods (GallerySaleCard), and
   // (2026-10-27) what a work's Catalogue window needs.
   settings: ArtworkSettings;
+  // The Artist App's Art manager (2026-11-11, Craig's request): one
+  // location (from the address's ?location=), without the list of
+  // locations or "← Locations"; Close, or deleting it, calls onClose.
+  embedded?: { onClose: () => void };
 }) {
   const words = useClientWords();
   const [q, setQ] = useState("");
@@ -209,6 +214,7 @@ export default function GalleriesView({
   // Returns to the gallery list (below xl only — ignored at xl and
   // above, where the list column is always visible regardless).
   const backToList = () => {
+    if (embedded) return embedded.onClose();
     setSelectedId(null);
     setSelectedDetail(null);
     setSelectedWorkId(null);
@@ -599,7 +605,9 @@ export default function GalleriesView({
             <button
               type="button"
               onClick={backToList}
-              className="shrink-0 rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50 xl:hidden"
+              className={`shrink-0 rounded-md border border-neutral-300 px-2 py-[4px] text-xs hover:bg-neutral-50 xl:hidden ${
+                embedded ? "hidden" : ""
+              }`}
             >
               ← Locations
             </button>
@@ -1122,8 +1130,8 @@ export default function GalleriesView({
           badge next to each name (see LocationTypeBadge above) tells
           them apart. */}
       <div
-        className={`h-full w-full shrink-0 flex-col overflow-hidden xl:flex xl:w-[300px] xl:border-l xl:border-neutral-200 ${
-          mobileStep === "list" ? "flex" : "hidden"
+        className={`h-full w-full shrink-0 flex-col overflow-hidden xl:w-[300px] xl:border-l xl:border-neutral-200 ${
+          embedded ? "hidden" : `xl:flex ${mobileStep === "list" ? "flex" : "hidden"}`
         }`}
       >
         <div className="border-b border-neutral-200 p-4">

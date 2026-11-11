@@ -22,7 +22,6 @@ import SoldFlag from "@/components/SoldFlag";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import ArtworkFilterBar from "@/components/ArtworkFilterBar";
 import AddIconButton from "@/components/AddIconButton";
-import PanelSelect from "@/components/PanelSelect";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import GridLayoutButton, { useGridLayout } from "@/components/GridLayoutButton";
@@ -138,9 +137,15 @@ export default function ArtworksCatalogueView({
   isAdmin?: boolean;
   // The Artist App's Art manager (2026-11-11, Craig's screenshots): in
   // place of the title row and filter row, the app places the parts —
-  // Galleries / locations and Artwork names, the export / import menu
-  // and layout button, and where Add goes.
-  appSlots?: (parts: { filters: React.ReactNode; tools: React.ReactNode; addHref: string }) => React.ReactNode;
+  // the export / import menu and layout button, where Add goes, and the
+  // Name filter (its own Galleries / locations opens the location).
+  appSlots?: (parts: {
+    tools: React.ReactNode;
+    addHref: string;
+    name: string;
+    names: ArtworkNameCount[];
+    chooseName: (name: string) => void;
+  }) => React.ReactNode;
 }) {
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const gridLayout = useGridLayout(LAYOUT_STORAGE_KEY);
@@ -598,34 +603,15 @@ export default function ArtworksCatalogueView({
                 {layoutButton}
               </>
             ),
-            filters: (
-            <>
-              <PanelSelect
-                value={location}
-                placeholder="Galleries / locations"
-                options={settings.locations.map((l) => ({ value: l.name, label: l.name }))}
-                onChange={(v) => {
-                  setLocation(v);
-                  applyFilters({ location: v });
-                }}
-              />
-              <PanelSelect
-                value={name}
-                placeholder="Artwork names"
-                options={[
-                  ...(name && !names.some((n) => n.name === name) ? [{ value: name, label: name }] : []),
-                  ...names.map((n) => ({ value: n.name, label: `${n.name} (${n.count})` })),
-                ]}
-                onChange={(v) => {
-                  // A name shows every work of that name — the gallery
-                  // chosen is cleared (2026-11-11, Craig).
-                  setName(v);
-                  setLocation("");
-                  applyFilters({ name: v, location: "" });
-                }}
-              />
-            </>
-            ),
+            name,
+            names,
+            chooseName: (v: string) => {
+              // A name shows every work of that name — the gallery
+              // chosen is cleared (2026-11-11, Craig).
+              setName(v);
+              setLocation("");
+              applyFilters({ name: v, location: "" });
+            },
           })
         ) : (
         <>
