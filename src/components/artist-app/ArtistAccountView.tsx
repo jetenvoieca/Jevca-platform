@@ -1,7 +1,6 @@
 "use client";
 
 import { useState, useTransition } from "react";
-import Link from "next/link";
 import { useRouter } from "next/navigation";
 import {
   updateArtistContact,
@@ -10,20 +9,18 @@ import {
   type ArtistProfileTextField,
 } from "@/lib/actions";
 import { setSiteAddOns } from "@/lib/actions/plans";
-import type { ArtistAppPage } from "@/lib/actions/artistApp";
 import { priceAddOns, type SiteAccount, type SiteAddOnChoice, type SiteAddOnRow } from "@/lib/plans";
 import { formatMoney } from "@/lib/currencies";
-import { artistAppPageHref } from "@/lib/artistApp";
 import PlanAddOnsList from "@/components/PlanAddOnsList";
-import { MainPanel, SidePanel } from "@/components/artist-app/ArtistAppPanels";
+import { MainPanel } from "@/components/artist-app/ArtistAppPanels";
 
 // The Artist App's Account (2026-11-10, Craig's mockup). On the left the
 // plan and what it includes (Administration → Plans), and the client's Contact
 // Details, each saved when its box is left; on the right the plan — what
 // the site pays for it, theme and pages included, fixed — and its add-ons
 // to tick (those it has at the prices it took them at), kept with Update (the app then follows
-// them — see ArtistAppFeatures). Beside them the site's pages, each
-// opening it on Pages. Payments (dates, pause, cancel) come with Stripe.
+// them — see ArtistAppFeatures). The whole width, no pages list
+// (2026-11-11, Craig). Payments (dates, pause, cancel) come with Stripe.
 
 type Contact = {
   id: string;
@@ -41,18 +38,14 @@ export default function ArtistAccountView({
   siteId,
   account,
   contact,
-  pages,
 }: {
   siteId: string;
   account: SiteAccount;
   contact: Contact;
-  // Arranged (arrangePages).
-  pages: ArtistAppPage[];
 }) {
   const { plan } = account;
   return (
-    <>
-      <MainPanel heading="Account">
+    <MainPanel heading="Account">
         <div className="grid gap-6 lg:grid-cols-2">
           <div className="flex flex-col gap-6">
             <section className={BOX}>
@@ -75,11 +68,7 @@ export default function ArtistAccountView({
             )}
           </div>
         </div>
-      </MainPanel>
-      <SidePanel>
-        <PageLinks siteId={siteId} pages={pages} />
-      </SidePanel>
-    </>
+    </MainPanel>
   );
 }
 
@@ -200,40 +189,5 @@ function ContactDetails({ contact }: { contact: Contact }) {
       {row("TikTok", contact.tiktokHandle, (v) => saveText("tiktokHandle", v, contact.tiktokHandle))}
       {error && <p className="text-sm text-red-600">{error}</p>}
     </section>
-  );
-}
-
-// The site's Live and Hidden pages, as on Pages; each opens it there.
-function PageLinks({ siteId, pages }: { siteId: string; pages: ArtistAppPage[] }) {
-  const titleOf = (id: string) => pages.find((p) => p.id === id)?.title ?? "";
-  return (
-    <>
-      {[true, false].map((visible) => {
-        const listed = pages.filter((p) => p.visible === visible);
-        return (
-          <div key={String(visible)} className="flex flex-col gap-1.5 pt-5 pb-8">
-            <h3 className="mb-2 text-center text-lg text-neutral-800">{visible ? "Live Pages" : "Hidden Pages"}</h3>
-            {listed.map((p) => {
-              const parentHere = !!p.parentId && listed.some((q) => q.id === p.parentId);
-              return (
-                <Link
-                  key={p.id}
-                  href={artistAppPageHref(siteId, p.id)}
-                  prefetch={false}
-                  className={`flex items-baseline justify-between gap-2 rounded-sm border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-800 hover:bg-neutral-50 ${
-                    p.parentId ? "ml-6" : ""
-                  }`}
-                >
-                  <span className="min-w-0 truncate">{p.title}</span>
-                  {p.parentId && !parentHere && (
-                    <span className="shrink-0 text-xs text-neutral-400">under {titleOf(p.parentId)}</span>
-                  )}
-                </Link>
-              );
-            })}
-          </div>
-        );
-      })}
-    </>
   );
 }
