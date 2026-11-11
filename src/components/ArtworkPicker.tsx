@@ -12,6 +12,7 @@ import { listArtworkNames, type ArtworkNameCount } from "@/lib/actions/artworks"
 import { useClientWords } from "@/components/ClientWordsProvider";
 import AddIconButton from "@/components/AddIconButton";
 import { FILTER_NONE } from "@/lib/artworkFilters";
+import { formatMoney } from "@/lib/currencies";
 import BaseStar from "@/components/BaseStar";
 
 export default function ArtworkPicker({
@@ -211,6 +212,8 @@ export default function ArtworkPicker({
           type: null,
           imageUrl: null,
           presentationPrice: null,
+          priceCurrency: "GBP",
+          edition: null,
           availability: "AVAILABLE",
         };
         setArtworks((prev) => [a, ...prev]);
@@ -381,6 +384,15 @@ export default function ArtworkPicker({
                       </span>
                     </p>
                     <p className="truncate text-xs text-neutral-500">{a.type || "—"}</p>
+                    {/* Edition and price where there are (2026-11-11). */}
+                    {(a.edition || a.presentationPrice) && (
+                      <p className="flex gap-2 text-xs text-neutral-500">
+                        {a.edition && <span className="truncate">Ed. {a.edition}</span>}
+                        {a.presentationPrice && (
+                          <span className="ml-auto shrink-0">{formatMoney(a.presentationPrice, a.priceCurrency)}</span>
+                        )}
+                      </p>
+                    )}
                   </div>
                 </button>
               );

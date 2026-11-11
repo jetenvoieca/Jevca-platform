@@ -75,6 +75,10 @@ export type PickerArtwork = {
   type: string | null;
   imageUrl: string | null;
   presentationPrice: string | null;
+  // With the price and edition shown on the tile (2026-11-11, Craig —
+  // many works share a name).
+  priceCurrency: string;
+  edition: string | null;
   availability: string;
 };
 
@@ -107,6 +111,8 @@ export async function getArtworksForArtist(
         isBase: true,
         type: true,
         presentationPrice: true,
+        priceCurrency: true,
+        edition: true,
         availability: true,
         mainImage: { select: { url: true, thumbnailKey: true } },
       },
