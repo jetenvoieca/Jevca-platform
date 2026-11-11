@@ -617,8 +617,11 @@ export default function ArtworksCatalogueView({
                   ...names.map((n) => ({ value: n.name, label: `${n.name} (${n.count})` })),
                 ]}
                 onChange={(v) => {
+                  // A name shows every work of that name — the gallery
+                  // chosen is cleared (2026-11-11, Craig).
                   setName(v);
-                  applyFilters({ name: v });
+                  setLocation("");
+                  applyFilters({ name: v, location: "" });
                 }}
               />
             </>

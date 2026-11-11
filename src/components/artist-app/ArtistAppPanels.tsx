@@ -93,7 +93,7 @@ function InSlot({ which, children }: { which: keyof Slots; children: ReactNode }
 export function SidePanel({ children }: { children: ReactNode }) {
   return (
     <InSlot which="side">
-      <div className="flex flex-1 flex-col gap-3">{children}</div>
+      <div className="flex min-h-0 flex-1 flex-col gap-3">{children}</div>
     </InSlot>
   );
 }

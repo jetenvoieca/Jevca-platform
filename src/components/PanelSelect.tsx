@@ -2,8 +2,10 @@
 
 import { useEffect, useRef, useState } from "react";
 
-// A dropdown whose list opens in place below it, as wide as the box and
-// scrolling within its own height — so it stays inside the panel it's in
+// A dropdown whose list opens in place below it, as wide as the box,
+// taking the rest of the panel's height and scrolling within it — so it
+// stays inside the panel it's in (the panel's column must be a flex
+// column down to it, each with min-h-0)
 // (2026-11-11, Craig: the Art manager's filters — a browser's own list
 // spills over the page). Tapping outside closes it.
 export type PanelSelectOption = { value: string; label: string };
@@ -37,15 +39,15 @@ export default function PanelSelect({
     setOpen(false);
     if (v !== value) onChange(v);
   };
-  const row = "block w-full truncate px-3 py-2 text-left text-base";
+  const row = "block w-full truncate px-3 py-1 text-left text-[15px] leading-snug";
 
   return (
-    <div ref={ref} className="min-w-0">
+    <div ref={ref} className={`flex min-h-0 min-w-0 flex-col ${open ? "flex-1" : ""}`}>
       <button
         type="button"
         onClick={() => setOpen((o) => !o)}
         aria-expanded={open}
-        className="flex w-full min-w-0 items-center gap-2 border border-neutral-300 bg-white px-3 py-2.5 text-left text-lg font-light text-neutral-600"
+        className="flex w-full min-w-0 shrink-0 items-center gap-2 border border-neutral-300 bg-white px-3 py-2.5 text-left text-lg font-light text-neutral-600"
       >
         <span className="min-w-0 flex-1 truncate">{chosen ? chosen.label : placeholder}</span>
         <span aria-hidden className="shrink-0 text-sm text-neutral-400">
@@ -53,7 +55,10 @@ export default function PanelSelect({
         </span>
       </button>
       {open && (
-        <div role="listbox" className="max-h-80 overflow-y-auto border border-t-0 border-neutral-300 bg-white">
+        <div
+          role="listbox"
+          className="min-h-0 flex-1 overflow-y-auto border border-t-0 border-neutral-300 bg-white py-1 max-sm:max-h-80"
+        >
           <button type="button" onClick={() => choose("")} className={`${row} text-neutral-400 hover:bg-neutral-50`}>
             {placeholder}
           </button>

@@ -99,7 +99,7 @@ export default function ArtistAppFrame({
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col sm:overflow-y-auto">
-              <div ref={slots.side.setNode} className="flex flex-1 flex-col" />
+              <div ref={slots.side.setNode} className="flex min-h-0 flex-1 flex-col" />
               {!slots.side.claimed && <PageLinks siteId={siteId} pages={pages} />}
             </div>
 
