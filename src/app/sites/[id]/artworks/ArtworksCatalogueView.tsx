@@ -41,6 +41,11 @@ type Filters = {
 
 const LAYOUT_STORAGE_KEY = "jevca:artworks-density";
 
+// The Art manager's two dropdowns (sideFilters) — full width, as Craig's
+// screenshot.
+const SIDE_FILTER =
+  "w-full min-w-0 truncate border border-neutral-300 bg-white px-3 py-2.5 text-lg font-light text-neutral-600";
+
 // Availability now has three real values — AVAILABLE, RESERVED ("Sold -
 // Not Paid"), SOLD (2026-09-20 rebuild, see the "Availability model"
 // note in lib/actions/payments.ts). This is the one place that maps the
@@ -97,6 +102,7 @@ export default function ArtworksCatalogueView({
   initialSelected,
   settings,
   isAdmin = false,
+  sideFilters,
 }: {
   siteId: string;
   // Where this view's own in-page links (currently just "+ Add New" ->
@@ -134,6 +140,11 @@ export default function ArtworksCatalogueView({
   settings: ArtworkSettings;
   // Admin only: Link derivatives in the export/import menu (2026-11-05).
   isAdmin?: boolean;
+  // The Artist App's Art manager (2026-11-11, Craig's screenshot): no
+  // title, add or export/import row, nor filter row — only Galleries /
+  // locations and Artwork names, which this places (e.g. in the app's
+  // side panel).
+  sideFilters?: (filters: React.ReactNode) => React.ReactNode;
 }) {
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const gridLayout = useGridLayout(LAYOUT_STORAGE_KEY);
@@ -509,6 +520,44 @@ export default function ArtworksCatalogueView({
           a modal (see below), so the grid runs the full width and the
           header no longer needs to leave space for it. */}
       <div className="shrink-0 px-6 pt-4">
+        {sideFilters ? (
+          sideFilters(
+            <>
+              <select
+                value={location}
+                onChange={(e) => {
+                  setLocation(e.target.value);
+                  applyFilters({ location: e.target.value });
+                }}
+                className={SIDE_FILTER}
+              >
+                <option value="">Galleries / locations</option>
+                {settings.locations.map((l) => (
+                  <option key={l.name} value={l.name}>
+                    {l.name}
+                  </option>
+                ))}
+              </select>
+              <select
+                value={name}
+                onChange={(e) => {
+                  setName(e.target.value);
+                  applyFilters({ name: e.target.value });
+                }}
+                className={SIDE_FILTER}
+              >
+                <option value="">Artwork names</option>
+                {name && !names.some((n) => n.name === name) && <option value={name}>{name}</option>}
+                {names.map((n) => (
+                  <option key={n.name} value={n.name}>
+                    {n.name} ({n.count})
+                  </option>
+                ))}
+              </select>
+            </>
+          )
+        ) : (
+        <>
         {/* Row 1: the title, then the export/import menu and the layout
             button (2026-10-17, direct request — icons in place of PDF,
             CSV, Tile/List and the density numbers, all rarely used).
@@ -640,6 +689,8 @@ export default function ArtworksCatalogueView({
               }}
             />
           </div>
+        </>
+        )}
 
           <p className="mb-3 text-sm text-neutral-400">
             {artworks.length} of {total} work{total === 1 ? "" : "s"} · {soldCount} sold

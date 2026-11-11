@@ -24,9 +24,10 @@ import { useSideSlot } from "@/components/artist-app/ArtistAppPanels";
 // reach it), Log out for a client login, and the admin's icons (the eye
 // for the chosen page's preview on Pages, publish, the published site);
 // then the screen's side contents (SidePanel) or else the site's pages,
-// each opening it on Pages — so they stay beside Account and Art manager;
-// and at the foot the app's buttons: Art manager (the Artwork Catalogue,
-// with Art Manager), Concierge (a placeholder) and Account.
+// each opening it on Pages — so they stay beside Account; and at the foot
+// the app's buttons: Art manager (the Artwork Catalogue, with Art Manager —
+// reading "Website" while it's open, back to Pages: 2026-11-11),
+// Concierge (a placeholder) and Account.
 // Medium screens and up the two side by side; a phone stacked.
 
 const BUTTON_COLOR = "#FBF7EE";
@@ -101,11 +102,12 @@ export default function ArtistAppFrame({
             </div>
 
             <nav className="flex shrink-0 flex-col gap-2">
-              {catalogue && (
-                <AppButton href={catalogueHref} active={pathname === catalogueHref || pathname.startsWith(`${catalogueHref}/`)}>
-                  Art manager
-                </AppButton>
-              )}
+              {catalogue &&
+                (pathname === catalogueHref ? (
+                  <AppButton href={artistAppHref(siteId, "pages")}>Website</AppButton>
+                ) : (
+                  <AppButton href={catalogueHref}>Art manager</AppButton>
+                ))}
               {ARTIST_APP_SHOWS_MANAGE_WORKS && (
                 <AppButton href={artistAppHref(siteId)} active={pathname === artistAppHref(siteId)}>
                   Manage Works
@@ -171,9 +173,9 @@ function AppButton({
   color?: string;
   children: React.ReactNode;
 }) {
-  // As Craig's screenshot (2026-11-11): words as typed, on the left,
-  // rounded corners.
-  const className = `flex h-16 shrink-0 items-center whitespace-nowrap rounded-xl border px-6 text-2xl font-light text-neutral-600 lg:h-[72px] lg:text-3xl ${
+  // As Craig's screenshots (2026-11-11): words as typed, on the left,
+  // rounded corners, about six times as wide as high.
+  const className = `flex h-11 shrink-0 items-center whitespace-nowrap rounded-xl border px-5 text-lg font-light text-neutral-600 lg:h-[54px] lg:text-[22px] ${
     active ? "border-neutral-500" : "border-neutral-300"
   }`;
   if (!href) {

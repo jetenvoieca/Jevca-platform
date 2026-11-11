@@ -3,12 +3,13 @@ import { listArtworks, listArtworkNames, getArtworkDetailForClient } from "@/lib
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 import { listCurations } from "@/lib/actions/curations";
 import { getCurrentUser } from "@/lib/currentUser";
+import type { ComponentProps, ComponentType } from "react";
 import ArtworksCatalogueView from "@/app/sites/[id]/artworks/ArtworksCatalogueView";
 
 // The Artwork Catalogue's data and view, shared by the admin's page
-// (/sites/[id]/artworks) and the Artist App's Catalogue (2026-11-10, with
-// Art Manager) — `basePath` keeps its "Add" link inside whichever it's in.
-// Callers check access.
+// (/sites/[id]/artworks) and the Artist App's Art manager (2026-11-10,
+// with Art Manager — which shows it through its own `View`, placing the
+// filters in the app's side panel). Callers check access.
 
 export type CatalogueSearchParams = {
   // One exact artwork name — the Name dropdown (2026-10-13).
@@ -36,11 +37,11 @@ const PAGE_SIZE = 60;
 export default async function ArtworkCatalogueScreen({
   siteId: id,
   sp,
-  basePath,
+  View = ArtworksCatalogueView,
 }: {
   siteId: string;
   sp: CatalogueSearchParams;
-  basePath?: string;
+  View?: ComponentType<ComponentProps<typeof ArtworksCatalogueView>>;
 }) {
   const site = await db.site.findUnique({
     where: { id },
@@ -69,9 +70,8 @@ export default async function ArtworkCatalogueScreen({
   const selected = selectedRaw && selectedRaw.artistId === artistId ? selectedRaw : null;
 
   return (
-    <ArtworksCatalogueView
+    <View
       siteId={id}
-      basePath={basePath}
       artistId={artistId}
       artistName={site!.artist.name}
       artworks={rows}
