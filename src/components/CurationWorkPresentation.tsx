@@ -12,6 +12,7 @@ import {
   updateArtworkName,
   updateArtworkPresentationMedium,
   updateArtworkPrice,
+  setArtworkShowSoldFlag,
 } from "@/lib/actions/artworks";
 import { CURRENCIES } from "@/lib/currencies";
 import { isValidInstalmentCount, splitIntoInstalments } from "@/lib/saleMath";
@@ -244,6 +245,35 @@ export default function CurationWorkPresentation({
         />
 
         <div className="flex flex-col gap-2.5">
+          {/* Sold (2026-11-11, Craig's request): said here, with whether
+              the website shows its SOLD flag. */}
+          {data.sold && (
+            <div className={`${PANEL} flex items-center gap-3`}>
+              <span className="rounded bg-red-600 px-2 py-0.5 text-xs font-bold uppercase tracking-wide text-white">
+                Sold
+              </span>
+              <label className="ml-auto flex cursor-pointer items-center gap-2 text-sm text-neutral-700">
+                <input
+                  type="checkbox"
+                  checked={data.showSoldFlag !== false}
+                  onChange={async (e) => {
+                    const show = e.target.checked;
+                    setData({ ...data, showSoldFlag: show });
+                    setError(null);
+                    try {
+                      await setArtworkShowSoldFlag(artworkId, show);
+                      onArtworkChanged();
+                    } catch {
+                      setData({ ...data, showSoldFlag: !show });
+                      setError("That wasn't saved — please try again.");
+                    }
+                  }}
+                  className="h-4 w-4"
+                />
+                Show sold flag on the website
+              </label>
+            </div>
+          )}
           <div className={PANEL}>
             <h3 className={PANEL_TITLE}>Name</h3>
             <input

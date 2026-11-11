@@ -692,6 +692,12 @@ export async function updateCatalogue(
   return { ok: true };
 }
 
+// Show sold flag (2026-11-11): whether the website flags this sold work.
+export async function setArtworkShowSoldFlag(id: string, show: boolean): Promise<void> {
+  await artworkOwner(id);
+  await db.artwork.update({ where: { id }, data: { showSoldFlag: show } });
+}
+
 // Marks a work as a Base work (2026-11-11 — the Artist App's Make Edition,
 // before its edition is made).
 export async function setArtworkBase(id: string): Promise<void> {

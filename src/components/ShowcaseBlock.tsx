@@ -6,7 +6,7 @@ import type { PageTextStyle, ShowcaseSettings } from "@/lib/pageStyleLayout";
 import type { SiteWork } from "@/lib/siteWorks";
 import { useSiteData } from "@/lib/siteData";
 import { useSitePhone } from "@/lib/useSitePhone";
-import { isSold } from "@/lib/artworkFilters";
+import { showsSoldFlag } from "@/lib/artworkFilters";
 import { bodyTextCss } from "@/components/textStyleCss";
 import { PAGE_BACKGROUND_CLASS, pageBackgroundStyle } from "@/components/pageMargins";
 
@@ -256,7 +256,7 @@ function ShowcaseWork({
         [data.edition, data.type].filter(Boolean).join(" - "),
         data.medium ?? "",
         data.size ?? "",
-        isSold(work.availability) ? "Sold" : "",
+        showsSoldFlag(work) ? "Sold" : "",
       ].filter(Boolean)
     : [];
 

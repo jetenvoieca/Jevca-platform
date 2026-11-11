@@ -20,6 +20,13 @@ export function isSold(availability: string | undefined): boolean {
   return SOLD_AVAILABILITIES.includes(availability as Availability);
 }
 
+// The SOLD flag on the website (2026-11-11): a sold work, unless its
+// "Show sold flag" is off. Absent from sites published before then —
+// flagged as before.
+export function showsSoldFlag(work: { availability: string; showSoldFlag?: boolean }): boolean {
+  return isSold(work.availability) && work.showSoldFlag !== false;
+}
+
 function availabilitiesFor(filter: string): Availability[] {
   return filter === "SOLD" ? SOLD_AVAILABILITIES : [filter as Availability];
 }

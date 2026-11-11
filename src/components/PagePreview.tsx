@@ -82,7 +82,7 @@ import { createPortal } from "react-dom";
 import CanvasPlayer from "@/components/CanvasPlayer";
 import FadeImage from "@/components/FadeImage";
 import SoldFlag from "@/components/SoldFlag";
-import { isSold } from "@/lib/artworkFilters";
+import { showsSoldFlag } from "@/lib/artworkFilters";
 import LineView from "@/components/LineView";
 import PageHeadingView from "@/components/PageHeadingView";
 import { readHeadingText, shownHeading, type HeadingNames } from "@/lib/pageHeading";
@@ -378,7 +378,7 @@ export function blockFiller({
         picture = {
           media: { kind: "PHOTO", url, posterUrl: null },
           alt: work.catalogueName,
-          sold: isSold(work.availability),
+          sold: showsSoldFlag(work),
         };
         open = () => onOpen(work.artworkId);
       }
@@ -418,7 +418,7 @@ export function blockFiller({
           className="relative block w-full overflow-hidden rounded hover:opacity-90"
         >
           <FadeImage src={firstUrl} alt={first.catalogueName} className="w-full" />
-          {isSold(first.availability) && <SoldFlag />}
+          {showsSoldFlag(first) && <SoldFlag />}
         </button>
       );
     }
@@ -430,7 +430,7 @@ export function blockFiller({
             url: w.imageUrl,
             title: w.catalogueName,
             price: w.offeredPrice != null ? formatMoney(Number(w.offeredPrice), w.priceCurrency, "when-any") : null,
-            sold: isSold(w.availability),
+            sold: showsSoldFlag(w),
           }))}
           spacing={layout.gridSpacing}
           perRow={block.perRow ?? DEFAULT_GALLERY_PER_ROW}
@@ -833,7 +833,7 @@ function PlainPage({ curation, onOpen }: { curation: CurationDetail; onOpen: (ar
                       No image
                     </div>
                   )}
-                  {isSold(w.availability) && <SoldFlag />}
+                  {showsSoldFlag(w) && <SoldFlag />}
                 </div>
                 <span className="mt-1.5 block truncate text-sm text-neutral-800">{w.catalogueName}</span>
               </button>

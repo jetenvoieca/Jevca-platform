@@ -7,6 +7,7 @@ import { publicMediaUrl } from "@/lib/r2";
 import { artworkDetailLines } from "@/lib/artworkDetails";
 import { ARTWORK_IMAGE_SELECT, toArtworkImage, type ArtworkImage } from "@/lib/artworkImages";
 import { CURATION_SECTION_TYPES } from "@/lib/curationSections";
+import { isSold } from "@/lib/artworkFilters";
 
 // Curations (2026-09-24) — named, ordered selections of an artist's
 // artworks. See the note on Curation in schema.prisma.
@@ -43,6 +44,9 @@ export type CurationWork = {
   // For the SOLD flag (2026-10-26) on the Curations page, the website
   // and presentations — see isSold in lib/artworkFilters.ts.
   availability: string;
+  // The website's SOLD flag on (see showsSoldFlag) — absent from sites
+  // published before 2026-11-11.
+  showSoldFlag?: boolean;
   offeredPrice: string | null;
   priceCurrency: string;
   // Shown under the name on the Curations page with the price
@@ -105,6 +109,10 @@ export type CurationWorkPresentation = {
   size: string | null;
   viewingLocation: string | null;
   available: boolean;
+  // Sold, and whether the website flags it (2026-11-11 — the window's
+  // "Show sold flag"). Absent from sites published before then.
+  sold?: boolean;
+  showSoldFlag?: boolean;
   releaseMessage: string;
   enquiryEmail: string | null;
   artistFirstName?: string;
@@ -243,6 +251,7 @@ export async function getCuration(curationId: string, artistId: string): Promise
               catalogueNumber: true,
               isBase: true,
               availability: true,
+              showSoldFlag: true,
               offeredPrice: true,
               priceCurrency: true,
               type: true,
@@ -266,6 +275,7 @@ export async function getCuration(curationId: string, artistId: string): Promise
       catalogueNumber: item.artwork.catalogueNumber,
       isBase: item.artwork.isBase,
       availability: item.artwork.availability,
+      showSoldFlag: item.artwork.showSoldFlag,
       offeredPrice: item.artwork.offeredPrice != null ? item.artwork.offeredPrice.toString() : null,
       priceCurrency: item.artwork.priceCurrency,
       type: item.artwork.type,
@@ -442,6 +452,7 @@ export async function getCurationWorkPresentation(
           edition: true,
           viewingLocation: true,
           availability: true,
+          showSoldFlag: true,
           offeredPrice: true,
           priceCurrency: true,
           mainImage: { select: ARTWORK_IMAGE_SELECT },
@@ -482,6 +493,8 @@ export async function getCurationWorkPresentation(
     size: artwork.size,
     viewingLocation: artwork.viewingLocation,
     available: artwork.availability === "AVAILABLE",
+    sold: isSold(artwork.availability),
+    showSoldFlag: artwork.showSoldFlag,
     releaseMessage: artwork.artist.defaultReleaseMessage,
     // The artist's own address, so enquiries arrive in the Inbox.
     enquiryEmail: artwork.artist.emailSlug ? `${artwork.artist.emailSlug}@${EMAIL_DOMAIN}` : artwork.artist.email,

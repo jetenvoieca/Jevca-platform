@@ -1949,6 +1949,11 @@ model Artwork {
   // star before the catalogue number (see BaseStar).
   isBase Boolean @default(false)
 
+  // Show sold flag (2026-11-11, Craig's request): whether a sold work's
+  // SOLD flag shows on the website (see showsSoldFlag). Switched in its
+  // Presentation window; the admin's own screens always flag it.
+  showSoldFlag Boolean @default(true)
+
   saleTerms SaleTerms?
   purchases Purchase[]
   // Every Curation this artwork is in (2026-09-24) — see CurationItem.

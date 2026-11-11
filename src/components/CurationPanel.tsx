@@ -9,7 +9,7 @@ import CurationSectionView from "@/components/CurationSectionView";
 import CurationWorkView from "@/components/CurationWorkView";
 import FadeImage from "@/components/FadeImage";
 import SoldFlag from "@/components/SoldFlag";
-import { isSold } from "@/lib/artworkFilters";
+import { showsSoldFlag } from "@/lib/artworkFilters";
 
 // How the grid's images fly in (2026-10-06): from this far below,
 // slightly smaller, over this long, each one in a row a little after the
@@ -123,7 +123,7 @@ export default function CurationPanel({
                 ) : (
                   <div className="aspect-square w-full rounded-md bg-neutral-100" />
                 )}
-                {isSold(work.availability) && <SoldFlag />}
+                {showsSoldFlag(work) && <SoldFlag />}
               </button>
               <button
                 type="button"
@@ -161,7 +161,7 @@ export default function CurationPanel({
                         ) : (
                           <div className="aspect-square w-full bg-neutral-100" />
                         )}
-                        {isSold(w.availability) && <SoldFlag />}
+                        {showsSoldFlag(w) && <SoldFlag />}
                       </button>
                     </FlyIn>
                   ))}
