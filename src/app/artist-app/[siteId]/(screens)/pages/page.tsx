@@ -21,7 +21,28 @@ export default async function ArtistPagesPage({
 }) {
   const { siteId } = await params;
   const { page } = await searchParams;
-  const site = await db.site.findUnique({ where: { id: siteId }, select: { artistId: true } });
+  const site = await db.site.findUnique({
+    where: { id: siteId },
+    select: {
+      artistId: true,
+      // The client's Profile, for a Profile page's Profile tile.
+      artist: {
+        select: {
+          id: true,
+          name: true,
+          email: true,
+          phone: true,
+          addressLine1: true,
+          city: true,
+          postcode: true,
+          country: true,
+          instagramHandle: true,
+          facebookUrl: true,
+          logoUrl: true,
+        },
+      },
+    },
+  });
   const pages = arrangePages(await listArtistAppPages(siteId));
   const chosen = pages.find((p) => p.id === page) ?? pages[0];
   const firstId = chosen ? pageToOpen(pages, chosen.id) : null;
@@ -38,6 +59,7 @@ export default async function ArtistPagesPage({
       firstPageId={firstId}
       firstContent={content}
       galleries={galleries.map((g) => ({ id: g.id, name: g.name }))}
+      profile={site!.artist}
     />
   );
 }

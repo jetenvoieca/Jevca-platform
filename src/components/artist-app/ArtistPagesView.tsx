@@ -27,6 +27,7 @@ import { arrangePages, movePage, pageToOpen, type PageDrop } from "@/lib/artistA
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
+import ArtistProfileModal, { type ArtistProfile } from "@/components/artist-app/ArtistProfileModal";
 import ExhibitionModal from "@/components/ExhibitionModal";
 import ContactPanel from "@/components/ContactPanel";
 import ArtworkPicker from "@/components/ArtworkPicker";
@@ -78,6 +79,7 @@ export default function ArtistPagesView({
   firstPageId,
   firstContent,
   galleries,
+  profile,
 }: {
   siteId: string;
   artistId: string;
@@ -87,6 +89,9 @@ export default function ArtistPagesView({
   firstContent: ArtistAppPageContent | null;
   // For the Galleries entry's window.
   galleries: GalleryOption[];
+  // The client's Profile (contact, address, logo) — its tile ends a
+  // Profile page's entries (2026-11-11, from the CV screen, removed).
+  profile: ArtistProfile;
 }) {
   const features = useArtistAppFeatures();
   const [pages, setPages] = useState(initialPages);
@@ -101,6 +106,7 @@ export default function ArtistPagesView({
   // (its order or listing may differ).
   const [presenting, setPresenting] = useState<SiteWork | null>(null);
   const [openStory, setOpenStory] = useState<ProfileStoryRow | null>(null);
+  const [profileOpen, setProfileOpen] = useState(false);
   const [openExhibitionId, setOpenExhibitionId] = useState<string | null>(null);
   const exhibitionChanged = useRef(false);
   const [error, setError] = useState<string | null>(null);
@@ -223,7 +229,12 @@ export default function ArtistPagesView({
           {loading ? (
             <p className="text-center text-neutral-400">Loading…</p>
           ) : !selected || !content ? null : content.kind === "stories" ? (
-            <PageStories stories={content.stories} onOpen={setOpenStory} />
+            <PageStories
+              stories={content.stories}
+              logoUrl={profile.logoUrl}
+              onOpen={setOpenStory}
+              onOpenProfile={() => setProfileOpen(true)}
+            />
           ) : content.kind === "exhibitions" ? (
             <PageExhibitions exhibitions={content.exhibitions} onOpen={setOpenExhibitionId} />
           ) : content.kind === "contact" ? (
@@ -323,6 +334,7 @@ export default function ArtistPagesView({
           basic
         />
       )}
+      {profileOpen && <ArtistProfileModal artist={profile} onClose={() => setProfileOpen(false)} />}
       {openStory && selected && (
         <ProfileStoryModal
           key={openStory.id}
@@ -750,9 +762,19 @@ function AddWorks({
   );
 }
 
-// The Profile entries a page's Profile stories show, in their order.
-function PageStories({ stories, onOpen }: { stories: ProfileStoryRow[]; onOpen: (s: ProfileStoryRow) => void }) {
-  if (stories.length === 0) return <p className="text-center text-neutral-400">Nothing on this page yet</p>;
+// The Profile entries a page's Profile stories show, in their order, then
+// the client's Profile (its logo) — tap for its window.
+function PageStories({
+  stories,
+  logoUrl,
+  onOpen,
+  onOpenProfile,
+}: {
+  stories: ProfileStoryRow[];
+  logoUrl: string | null;
+  onOpen: (s: ProfileStoryRow) => void;
+  onOpenProfile: () => void;
+}) {
   return (
     <WorkGrid>
       {stories.map((s) => (
@@ -764,6 +786,15 @@ function PageStories({ stories, onOpen }: { stories: ProfileStoryRow[]; onOpen: 
           onClick={() => onOpen(s)}
         />
       ))}
+      <button type="button" onClick={onOpenProfile} className="block min-w-0 text-left">
+        <div className="flex aspect-square w-full items-center justify-center rounded-sm border border-neutral-300 p-4">
+          {logoUrl && (
+            // eslint-disable-next-line @next/next/no-img-element
+            <img src={logoUrl} alt="" className="max-h-full max-w-full object-contain" />
+          )}
+        </div>
+        <p className="mt-2 truncate text-sm font-semibold text-neutral-800">Profile</p>
+      </button>
     </WorkGrid>
   );
 }

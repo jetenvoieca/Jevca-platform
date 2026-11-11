@@ -19,7 +19,7 @@ import { createProfileStory, reorderProfileStories, type ProfileStoryRow } from 
 // dragged or deleted; a picture is chosen in their window (an empty box
 // until then). Galleries (2026-11-03) also lists galleries — chosen from
 // the artist's Locations of type Gallery and put in order in its window
-// (ProfileStoryModal, shared with the Artist App's Update CV).
+// (ProfileStoryModal, shared with the Artist App's Pages).
 
 export default function ProfileCatalogueView({
   artistId,

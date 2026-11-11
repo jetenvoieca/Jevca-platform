@@ -28,7 +28,8 @@ import { useArtistAppFeatures } from "@/components/artist-app/ArtistAppFeatures"
 // admin's icons — the eye (the chosen page's preview, on Arrange Pages),
 // publish and the published site.
 // Buttons (2026-11-09, Craig's mockup): capitals, centred, 4px corners;
-// Pages, CV, Concierge, Account (Exhibition placeholder removed 2026-11-11) (Consignment dropped); with
+// Pages, Concierge, Account (Exhibition placeholder and CV — its Profile
+// now on a Profile page — removed 2026-11-11) (Consignment dropped); with
 // Art Manager (2026-11-10) Catalogue first — the admin's Artwork Catalogue.
 
 const BUTTON_COLOR = "#FBF7EE";
@@ -59,7 +60,6 @@ export default function ArtistAppFrame({
     ...(catalogue ? [{ label: "Catalogue", href: catalogueHref }] : []),
     ...(ARTIST_APP_SHOWS_MANAGE_WORKS ? [{ label: "Manage Works", href: artistAppHref(siteId) }] : []),
     { label: "Pages", href: artistAppHref(siteId, "pages") },
-    { label: "CV", href: artistAppHref(siteId, "cv") },
   ];
 
   return (

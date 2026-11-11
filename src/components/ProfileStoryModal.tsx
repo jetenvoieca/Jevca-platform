@@ -13,7 +13,7 @@ import {
 } from "@/lib/actions/profileStories";
 
 // A Profile Catalogue entry's window (2026-10-26; moved here 2026-11-08
-// to be shared by the Profile Catalogue and the Artist App's Update CV):
+// to be shared by the Profile Catalogue and the Artist App's Pages):
 // its picture (click for full size) or video (plays in place), Caption
 // and Story, each saved when the box is left; Delete for a story. The
 // picture is optional — Remove picture leaves it text only. The

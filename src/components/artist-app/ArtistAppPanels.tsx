@@ -7,7 +7,7 @@ import { PlayMark } from "@/components/SectionMediaView";
 // tile.
 
 // With `heading`, opens with that heading (and `aside` beside it, e.g. a
-// button); otherwise the screen places its own PanelHeadings.
+// button).
 export function MainPanel({
   heading,
   aside,
@@ -25,7 +25,7 @@ export function MainPanel({
   );
 }
 
-export function PanelHeading({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
+function PanelHeading({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
   return (
     <div className="mb-8 flex items-stretch justify-center gap-3">
       <h2 className="w-fit min-w-0 border border-neutral-200 px-6 py-1.5 text-center text-2xl text-neutral-800 lg:min-w-72">
