@@ -22,6 +22,7 @@ import SoldFlag from "@/components/SoldFlag";
 import ExportPdfDialog from "@/components/ExportPdfDialog";
 import ArtworkFilterBar from "@/components/ArtworkFilterBar";
 import AddIconButton from "@/components/AddIconButton";
+import PanelSelect from "@/components/PanelSelect";
 import { useBackdropClose } from "@/lib/useBackdropClose";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import GridLayoutButton, { useGridLayout } from "@/components/GridLayoutButton";
@@ -40,11 +41,6 @@ type Filters = {
 };
 
 const LAYOUT_STORAGE_KEY = "jevca:artworks-density";
-
-// The Art manager's two dropdowns (appSlots) — full width, as Craig's
-// screenshot.
-const SIDE_FILTER =
-  "w-full min-w-0 truncate border border-neutral-300 bg-white px-3 py-2.5 text-lg font-light text-neutral-600";
 
 // Availability now has three real values — AVAILABLE, RESERVED ("Sold -
 // Not Paid"), SOLD (2026-09-20 rebuild, see the "Availability model"
@@ -604,37 +600,27 @@ export default function ArtworksCatalogueView({
             ),
             filters: (
             <>
-              <select
+              <PanelSelect
                 value={location}
-                onChange={(e) => {
-                  setLocation(e.target.value);
-                  applyFilters({ location: e.target.value });
+                placeholder="Galleries / locations"
+                options={settings.locations.map((l) => ({ value: l.name, label: l.name }))}
+                onChange={(v) => {
+                  setLocation(v);
+                  applyFilters({ location: v });
                 }}
-                className={SIDE_FILTER}
-              >
-                <option value="">Galleries / locations</option>
-                {settings.locations.map((l) => (
-                  <option key={l.name} value={l.name}>
-                    {l.name}
-                  </option>
-                ))}
-              </select>
-              <select
+              />
+              <PanelSelect
                 value={name}
-                onChange={(e) => {
-                  setName(e.target.value);
-                  applyFilters({ name: e.target.value });
+                placeholder="Artwork names"
+                options={[
+                  ...(name && !names.some((n) => n.name === name) ? [{ value: name, label: name }] : []),
+                  ...names.map((n) => ({ value: n.name, label: `${n.name} (${n.count})` })),
+                ]}
+                onChange={(v) => {
+                  setName(v);
+                  applyFilters({ name: v });
                 }}
-                className={SIDE_FILTER}
-              >
-                <option value="">Artwork names</option>
-                {name && !names.some((n) => n.name === name) && <option value={name}>{name}</option>}
-                {names.map((n) => (
-                  <option key={n.name} value={n.name}>
-                    {n.name} ({n.count})
-                  </option>
-                ))}
-              </select>
+              />
             </>
             ),
           })
