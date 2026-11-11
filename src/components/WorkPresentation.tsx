@@ -326,7 +326,10 @@ export default function WorkPresentation({
               )}
             </>
           ) : (
-            labels.sold && (
+            // Not said for a sold work whose "Show sold flag" is off
+            // (2026-11-11, Craig).
+            labels.sold &&
+            !(data.sold && data.showSoldFlag === false) && (
               <p className="uppercase tracking-[0.2em]" style={{ color: colours.muted, fontSize: small }}>
                 {labels.sold}
               </p>
