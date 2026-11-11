@@ -1238,6 +1238,7 @@ export default function GalleriesView({
             closeWork();
             if (selectedId) refreshGalleryDetail(selectedId);
           }}
+          simple={!!embedded}
         />
       )}
 

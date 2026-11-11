@@ -7,6 +7,7 @@ import {
   deleteArtwork,
   deleteArtworkIfBlank,
   setArtworkMainImage,
+  setArtworkBase,
 } from "@/lib/actions/artworks";
 import type { LocationSummary } from "@/lib/actions/locations";
 import { computeReferencePrice } from "@/lib/pricing";
@@ -90,6 +91,7 @@ export default function ArtworkDetailPanel({
   onDuplicated,
   onDataChanged,
   showCloseButton = true,
+  simple = false,
 }: {
   siteId: string;
   // The site's admin path, or the preview's — where the image "+ Add"
@@ -129,9 +131,15 @@ export default function ArtworkDetailPanel({
   // everywhere else (e.g. Section editor), where this panel is the only
   // thing showing and closing it is the only way back.
   showCloseButton?: boolean;
+  // The Artist App's simpler window (2026-11-11, Craig's mockup): no
+  // Studio notes; Edition only for an edition Type; "Make Edition" (marks
+  // this a Base work, then makes the edition as Make Derivative does).
+  simple?: boolean;
 }) {
   const [isPending, startTransition] = useTransition();
   const [saved, setSaved] = useState(false);
+  // A save refused (an edition number taken or too high, 2026-11-11).
+  const [saveError, setSaveError] = useState<string | null>(null);
   // The Base box (2026-11-01), so the header's star follows it at once.
   const [isBase, setIsBase] = useState(artwork.isBase);
   // Make Derivative's and View Derivatives' windows (2026-11-05).
@@ -203,8 +211,13 @@ export default function ArtworkDetailPanel({
   const autosaveCatalogue = (form: HTMLFormElement) => {
     const formData = new FormData(form);
     if (!(formData.get("catalogueName") as string)?.trim()) return;
+    setSaveError(null);
     startTransition(async () => {
-      await updateCatalogue(artwork.id, siteId, formData);
+      const result = await updateCatalogue(artwork.id, siteId, formData);
+      if ("error" in result) {
+        setSaveError(result.error);
+        return;
+      }
       setSaved(true);
       if (onDataChanged) onDataChanged();
       else router.refresh();
@@ -236,6 +249,17 @@ export default function ArtworkDetailPanel({
       const result = await setArtworkMainImage(artwork.id, imageId);
       if ("error" in result) setPictureError(result.error);
       else onDataChanged?.();
+    });
+  };
+
+  // Make Edition (the Artist App's): this becomes a Base work, then the
+  // Make Derivative window opens for the edition.
+  const makeEdition = () => {
+    if (isBase) return setDerivativeWindow("make");
+    startTransition(async () => {
+      await setArtworkBase(artwork.id);
+      setIsBase(true);
+      setDerivativeWindow("make");
     });
   };
 
@@ -420,6 +444,24 @@ export default function ArtworkDetailPanel({
             artistId={artistId}
             siteId={siteId}
             onLocationAdded={(location) => setLocationsByName((prev) => new Map(prev).set(location.name, location))}
+            simple={
+              simple
+                ? {
+                    // Not on a work made from another (an edition of an
+                    // edition).
+                    actions: !artwork.derivedFromCatalogueNumber && (
+                      <button
+                        type="button"
+                        onClick={makeEdition}
+                        disabled={isPending}
+                        className={`shrink-0 border border-neutral-300 px-4 text-base font-light text-neutral-600 hover:bg-neutral-50 disabled:opacity-50 ${FIELD_HEIGHT}`}
+                      >
+                        Make Edition
+                      </button>
+                    ),
+                  }
+                : undefined
+            }
           >
             {/* Reference and Offered price as one compact pair
                 (2026-09-11, direct request — "put reference price
@@ -492,6 +534,7 @@ export default function ArtworkDetailPanel({
             </div>
           </ArtworkCatalogueFields>
         <div className="flex items-center gap-3">
+          {saveError && <span className="text-sm text-red-600">{saveError} Not saved.</span>}
           {saved && <span className="text-sm text-green-600">Saved</span>}
         </div>
       </form>

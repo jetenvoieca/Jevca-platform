@@ -822,6 +822,7 @@ export default function ArtworksCatalogueView({
               onDuplicated={handleDuplicated}
               onDataChanged={refreshSelected}
               showCloseButton={true}
+              simple={!!appSlots}
             />
           </div>
         </div>

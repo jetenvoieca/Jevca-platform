@@ -153,6 +153,7 @@ export default function ArtworkCatalogueFields({
   artistId,
   siteId,
   onLocationAdded,
+  simple,
 }: {
   settings: Pick<ArtworkSettings, "artworkTypes" | "mediumPresets" | "sizePresets" | "locations">;
   values: ArtworkFacetValues;
@@ -198,6 +199,10 @@ export default function ArtworkCatalogueFields({
   siteId: string;
   // Told about a Location just added, for a caller keeping its own list.
   onLocationAdded?: (location: LocationSummary) => void;
+  // The Artist App's simpler window (2026-11-11, Craig's mockup): Edition
+  // only for an edition Type, and in place of Studio notes `simple`'s
+  // button(s) under Medium — its date, notes and Base kept as they are.
+  simple?: { actions: React.ReactNode };
 }) {
   const [typeValue, setTypeValue] = useState(values.type);
   const [sizeValue, setSizeValue] = useState(values.size);
@@ -324,6 +329,9 @@ export default function ArtworkCatalogueFields({
               Craig's mockup) and isn't an open one; any value on record is
               kept either way. Its number of how many (2026-11-06, Craig's
               mockup — see lib/derivatives.ts). */}
+          {simple && !isEditionType ? (
+            <input type="hidden" name="edition" value={values.edition} />
+          ) : (
           <div>
             <label className={`${labelCls} ${isEditionType ? "" : "text-neutral-400"}`}>Edition</label>
             {isEditionType ? (
@@ -338,6 +346,7 @@ export default function ArtworkCatalogueFields({
               </>
             )}
           </div>
+          )}
           <div>
             <label className={labelCls}>Size</label>
             <select
@@ -444,8 +453,17 @@ export default function ArtworkCatalogueFields({
           <option value={ADD_NEW}>+ Add new…</option>
         </select>
       </div>
-      {/* Studio notes (2026-11-01, Craig's mockup): the heading with Date
-          beside it; then Base and the details panel's buttons; then Notes. */}
+      {simple ? (
+        <>
+          <input type="hidden" name="date" value={values.date} />
+          <input type="hidden" name="studioNotes" value={values.studioNotes} />
+          {values.isBase !== undefined && <input type="hidden" name="isBase" value={values.isBase ? "on" : ""} />}
+          <div className="flex gap-3">{simple.actions}</div>
+          {studioError && <p className="text-xs text-red-600">{studioError}</p>}
+        </>
+      ) : (
+      /* Studio notes (2026-11-01, Craig's mockup): the heading with Date
+         beside it; then Base and the details panel's buttons; then Notes. */
       <div className="rounded-md border border-neutral-200 p-3">
         <div className="mb-3 flex items-center gap-4">
           <p className="flex-1 text-sm font-medium text-neutral-700">
@@ -492,6 +510,7 @@ export default function ArtworkCatalogueFields({
           className={inputCls}
         />
       </div>
+      )}
     </>
   );
 }

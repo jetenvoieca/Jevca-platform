@@ -594,8 +594,8 @@ export async function updateCatalogue(
   id: string,
   siteId: string,
   formData: FormData
-): Promise<void> {
-  await artworkOwner(id);
+): Promise<{ ok: true } | { error: string }> {
+  const { artistId } = await artworkOwner(id);
   const catalogueName = (formData.get("catalogueName") as string)?.trim();
   const dateRaw = (formData.get("date") as string)?.trim();
   const type = (formData.get("type") as string)?.trim() || null;
@@ -620,8 +620,30 @@ export async function updateCatalogue(
   // updateArtworkPresentationMedium.)
   const current = await db.artwork.findUnique({
     where: { id },
-    select: { catalogueName: true, viewingLocation: true },
+    select: { catalogueName: true, viewingLocation: true, derivedFromId: true },
   });
+
+  // A numbered edition (2026-11-11, Craig): its number no more than the
+  // edition's size, and not one another work of the same edition has —
+  // the same Base work's derivatives of that Type, or for a work not
+  // made from one, works of the same name and Type. Nothing is saved
+  // otherwise.
+  const numbered = parseEdition(edition);
+  if (numbered && type) {
+    if (numbered.number > numbered.size) return { error: `Its number can't be more than ${numbered.size}.` };
+    const others = await db.artwork.findMany({
+      where: {
+        artistId,
+        id: { not: id },
+        type,
+        ...(current?.derivedFromId ? { derivedFromId: current.derivedFromId } : { derivedFromId: null, catalogueName }),
+      },
+      select: { edition: true },
+    });
+    if (others.some((o) => parseEdition(o.edition)?.number === numbered.number)) {
+      return { error: `Number ${numbered.number} of this edition is already in the catalogue.` };
+    }
+  }
 
   const presentationUpdate: {
     viewingLocation?: string;
@@ -667,6 +689,14 @@ export async function updateCatalogue(
   if (catalogueName && current && catalogueName !== current.catalogueName) {
     await retireArtworkPaymentLinks(id);
   }
+  return { ok: true };
+}
+
+// Marks a work as a Base work (2026-11-11 — the Artist App's Make Edition,
+// before its edition is made).
+export async function setArtworkBase(id: string): Promise<void> {
+  await artworkOwner(id);
+  await db.artwork.update({ where: { id }, data: { isBase: true } });
 }
 
 // Just the work's Location (2026-11-05 — set from View Derivatives on a

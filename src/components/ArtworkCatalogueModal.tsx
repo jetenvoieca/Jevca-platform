@@ -18,6 +18,7 @@ export default function ArtworkCatalogueModal({
   onClose,
   onChanged,
   onDeleted,
+  simple,
 }: {
   siteId: string;
   artistId: string;
@@ -26,6 +27,8 @@ export default function ArtworkCatalogueModal({
   onClose: () => void;
   onChanged?: (artwork: ArtworkDetail) => void;
   onDeleted: () => void;
+  // The Artist App's simpler window (see ArtworkDetailPanel).
+  simple?: boolean;
 }) {
   const [detail, setDetail] = useState(artwork);
   const backdrop = useBackdropClose(onClose);
@@ -51,6 +54,7 @@ export default function ArtworkCatalogueModal({
           onDuplicated={onClose}
           onDataChanged={refresh}
           showCloseButton={true}
+          simple={simple}
         />
       </div>
     </div>
