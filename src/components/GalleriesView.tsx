@@ -1323,6 +1323,7 @@ export default function GalleriesView({
                           }}
                           vatRate={vatRate}
                           onRecorded={afterSaleRecorded}
+                          actionSlot={actionSlot}
                         />
                       )
                     )}
@@ -1330,8 +1331,8 @@ export default function GalleriesView({
                 </div>
 
                 {/* The action column. A consigned sale's card fills it;
-                    otherwise (the Record Sale form, a Studio sale) it holds
-                    just View Catalogue. */}
+                    otherwise it holds View Catalogue, and for the Record
+                    Sale form its Record Sale at the foot (2026-11-11). */}
                 <div
                   ref={setActionSlot}
                   className={`${ACTION_PANEL_LOOK} m-3 flex shrink-0 flex-wrap justify-center gap-2 p-3 sm:ml-0 sm:flex-col sm:flex-nowrap sm:justify-start`}

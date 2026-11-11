@@ -1,12 +1,13 @@
 "use client";
 
 import { useState, useTransition } from "react";
+import { createPortal } from "react-dom";
 import { startGallerySale } from "@/lib/actions/payments";
 import type { LocationType } from "@/lib/actions/locations";
 import type { ArtworkDetail } from "@/components/ArtworkDetailPanel";
 import { netOwed } from "@/lib/saleMath";
 import { CURRENCIES, formatMoney } from "@/lib/currencies";
-import { ACTION_BUTTON_LOOK } from "@/components/ActionPanel";
+import { ActionButton } from "@/components/ActionPanel";
 import { useClientWords } from "@/components/ClientWordsProvider";
 
 // The blank Record Sale form for a work at a location (Locations page) —
@@ -33,6 +34,7 @@ export default function RecordSaleForm({
   location,
   vatRate,
   onRecorded,
+  actionSlot,
 }: {
   siteId: string;
   artwork: ArtworkDetail;
@@ -48,6 +50,9 @@ export default function RecordSaleForm({
   // The client's VAT rate (Settings → Financial), null if not set.
   vatRate: number | null;
   onRecorded: () => void;
+  // The window's action column (2026-11-11, Craig's screenshot): Record
+  // Sale sits at its foot, under View Catalogue.
+  actionSlot: HTMLElement | null;
 }) {
   const words = useClientWords();
   const isOwn = location.type === "OWN";
@@ -298,14 +303,15 @@ export default function RecordSaleForm({
 
       {error && <p className="text-xs text-red-600">{error}</p>}
 
-      <button
-        type="button"
-        onClick={record}
-        disabled={pending || !totalAmount.trim()}
-        className={`mt-3 w-full rounded-md px-3 py-2 ${ACTION_BUTTON_LOOK}`}
-      >
-        Record Sale
-      </button>
+      {actionSlot &&
+        createPortal(
+          <div className="sm:mt-auto">
+            <ActionButton onClick={record} disabled={pending || !totalAmount.trim()}>
+              Record Sale
+            </ActionButton>
+          </div>,
+          actionSlot,
+        )}
     </div>
   );
 }
