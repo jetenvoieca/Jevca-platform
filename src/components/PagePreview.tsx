@@ -48,6 +48,7 @@ import {
 } from "@/components/pageMargins";
 import {
   alignedInsideClass,
+  balancePerRow,
   perRowClass,
   perRowStyle,
   rowBlockClass,
@@ -869,7 +870,8 @@ type GridImage = {
 };
 
 // Images in order, the Gallery's number across on a desktop and on a
-// phone, spaced as the style's grid spacing. With `onOpen`, clicking one
+// phone with the rows balanced (balancePerRow), spaced as the style's
+// grid spacing. With `onOpen`, clicking one
 // opens it. With `names` (2026-10-22), each work's name under it in that
 // look. `tiles` (2026-10-22): names on one line, the hover zoom and veil
 // with the price, the outline round `outlinedId` (the work showing in
@@ -895,7 +897,7 @@ function ImageGrid({
 }) {
   const plainHover = !tiles.zoom && !tiles.veil;
   return (
-    <div className={perRowClass()} style={perRowStyle(perRow, spacing)}>
+    <div className={perRowClass()} style={perRowStyle(balancePerRow(perRow, images.length), spacing)}>
       {images.map((img) => {
         const outline = tiles.heroOutline && img.id === outlinedId ? tiles.heroOutline : null;
         const inside = (

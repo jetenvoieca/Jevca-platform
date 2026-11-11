@@ -71,6 +71,18 @@ export function perRowClass(device?: PreviewDevice): string {
   return "grid grid-cols-[repeat(auto-fill,minmax(var(--per-row-track),1fr))] gap-y-[var(--grid-vp)] site:gap-y-[var(--grid-v)]";
 }
 
+// Balanced rows (2026-11-11, Craig — every gallery): no more across than
+// the style's number, but as few rows as that allows with them as even
+// as can be — 6 works at 4 across show 3 + 3, 5 show 3 + 2, 7 show 4 + 3.
+export function balancedAcross(across: number, count: number): number {
+  if (count <= 0 || across <= 0) return across;
+  return Math.ceil(count / Math.ceil(count / across));
+}
+
+export function balancePerRow<T extends { desktop: number; phone: number }>(perRow: T, count: number): T {
+  return { ...perRow, desktop: balancedAcross(perRow.desktop, count), phone: balancedAcross(perRow.phone, count) };
+}
+
 // The numbers across and the grid's spacing. `--per-row-track` is the
 // narrowest a tile may be: the larger of `smallest` and the width that
 // fits exactly `desktop` across, but no wider than fits `phone` across
