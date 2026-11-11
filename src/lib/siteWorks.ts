@@ -50,10 +50,14 @@ export function pageShownWorks(page: SiteWorksPage, curations: Record<string, Cu
   if (page.style?.type !== "BLOCK_BUILD") return tag(curation.id, curation.works);
 
   const blocks = new Map(page.style.layout.blocks.map((b) => [b.id, b.type]));
-  return page.components.flatMap((content) => {
+  const all = page.components.flatMap((content) => {
     const type = blocks.get(content.blockId);
     if (!type || content.source !== "WORKS" || !contentFits(type, "WORKS")) return [];
     const shown = arrangeItems(pageWorks(curation.works, content), (w) => w.artworkId, content);
     return tag(curation.id, type === "image" || type === "picturewords" ? shown.slice(0, 1) : shown);
   });
+  // Each work once, where it first shows — e.g. a Hero and a Gallery of
+  // the same curation (2026-11-11: the Artist App listed them twice).
+  const seen = new Set<string>();
+  return all.filter((w) => !seen.has(w.artworkId) && !!seen.add(w.artworkId));
 }
