@@ -8,6 +8,7 @@ import {
   type PickerArtwork as PickedArtwork,
 } from "@/lib/actions/media";
 import { getArtworkSettings } from "@/lib/actions/artworkSettings";
+import { listArtworkNames, type ArtworkNameCount } from "@/lib/actions/artworks";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import AddIconButton from "@/components/AddIconButton";
 import { FILTER_NONE } from "@/lib/artworkFilters";
@@ -45,7 +46,8 @@ export default function ArtworkPicker({
   // already exist in the catalogue.
   allowCreate?: boolean;
   // The Location and Type filters (off in the Artist App's Portfolio
-  // level, 2026-11-09).
+  // level, 2026-11-09). The Name dropdown (2026-11-11, Craig — as the
+  // Artwork Catalogue's) is always there.
   showFilters?: boolean;
   // Something more in the picker's header, after the search and filters
   // (2026-11-09 — the Artist App's "Add new work"); given a way to close
@@ -65,6 +67,8 @@ export default function ArtworkPicker({
   // Location and Type filters (2026-10-04) — the same lists the Artwork
   // Catalogue's own filters offer, loaded the first time the picker
   // opens.
+  const [name, setName] = useState("");
+  const [names, setNames] = useState<ArtworkNameCount[] | null>(null);
   const [location, setLocation] = useState("");
   const [type, setType] = useState("");
   const [filterOptions, setFilterOptions] = useState<{
@@ -86,12 +90,13 @@ export default function ArtworkPicker({
   // Each new search counts up, so an older search's answer arriving late
   // (or a page loading for it) can't replace the newer results.
   const requestRef = useRef(0);
-  const filtersRef = useRef({ q: "", location: "", type: "" });
+  const filtersRef = useRef({ q: "", name: "", location: "", type: "" });
 
   const fetchPage = (offset: number) => {
     const f = filtersRef.current;
     return getArtworksForArtist(artistId, {
       q: f.q || undefined,
+      name: f.name || undefined,
       location: f.location || undefined,
       type: f.type || undefined,
       excludeIds,
@@ -100,8 +105,8 @@ export default function ArtworkPicker({
     });
   };
 
-  const load = (q: string, loc = location, t = type) => {
-    filtersRef.current = { q, location: loc, type: t };
+  const load = (q: string, loc = location, t = type, n = name) => {
+    filtersRef.current = { q, name: n, location: loc, type: t };
     const request = ++requestRef.current;
     startTransition(async () => {
       const page = await fetchPage(0);
@@ -150,6 +155,7 @@ export default function ArtworkPicker({
     setOpen(true);
     setSelected([]);
     load(query);
+    if (!names) listArtworkNames(artistId).then(setNames);
     if (showFilters && !filterOptions) {
       getArtworkSettings(artistId).then((s) =>
         setFilterOptions({ locations: s.locations.map((l) => l.name), types: s.artworkTypes })
@@ -252,6 +258,21 @@ export default function ArtworkPicker({
             autoFocus
             className="w-56 rounded-md border border-neutral-300 px-3 py-2 text-sm"
           />
+          <select
+            value={name}
+            onChange={(e) => {
+              setName(e.target.value);
+              load(query, location, type, e.target.value);
+            }}
+            className="w-48 min-w-0 truncate rounded-md border border-neutral-300 px-2 py-2 text-sm"
+          >
+            <option value="">All names</option>
+            {names?.map((n) => (
+              <option key={n.name} value={n.name}>
+                {n.name} ({n.count})
+              </option>
+            ))}
+          </select>
           {showFilters && (
             <>
               <select
@@ -372,7 +393,7 @@ export default function ArtworkPicker({
           )}
           {artworks.length === 0 && !isPending && (
             <p className="py-12 text-center text-sm text-neutral-400">
-              {query || location || type
+              {query || name || location || type
                 ? `No ${words.items.toLowerCase()} match these filters.`
                 : allowCreate
                   ? `No ${words.items.toLowerCase()} yet — type a name above to create one.`

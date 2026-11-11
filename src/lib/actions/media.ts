@@ -82,7 +82,7 @@ const PICKER_PAGE_SIZE = 60;
 
 export async function getArtworksForArtist(
   artistId: string,
-  filters: Pick<ArtworkFilterInput, "q" | "location" | "type"> & {
+  filters: Pick<ArtworkFilterInput, "q" | "name" | "location" | "type"> & {
     excludeIds?: string[];
     // Only works still for sale (2026-10-20 — Locations' Add works).
     availableOnly?: boolean;
