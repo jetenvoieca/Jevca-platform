@@ -6,31 +6,28 @@ import {
   ARTIST_APP_FONT,
   ARTIST_APP_SHOWS_MANAGE_WORKS,
   artistAppHref,
+  artistAppPageHref,
   artistAppPreviewHref,
 } from "@/lib/artistApp";
+import type { ArtistAppPage } from "@/lib/actions/artistApp";
 import { logout } from "@/lib/actions/auth";
 import { publishedHomePath } from "@/lib/siteSnapshot";
 import EyeIcon from "@/components/EyeIcon";
 import PublishButton from "@/components/PublishButton";
 import PublishedSiteLink from "@/components/PublishedSiteLink";
 import { useArtistAppFeatures } from "@/components/artist-app/ArtistAppFeatures";
+import { useSideSlot } from "@/components/artist-app/ArtistAppPanels";
 
-// Sizes (2026-11-09, Craig — half a laptop screen): wide (lg) as the
-// mockups, buttons on the right; medium (sm–lg) the buttons as a row
-// along the top, smaller, with the two panels side by side below; a phone
-// everything stacked.
-//
-// The Artist App's frame (Craig's mockups): one grey rounded frame
-// holding the screen's two panels and, on the right, the app's buttons —
-// its navigation. Buttons without a screen yet are placeholders. Above
-// them (2026-11-08): "← Admin" back to the site in the admin (when the
-// login may reach it — 2026-11-10), Log out for a client login, and the
-// admin's icons — the eye (the chosen page's preview, on Arrange Pages),
-// publish and the published site.
-// Buttons (2026-11-09, Craig's mockup): capitals, centred, 4px corners;
-// Pages, Concierge, Account (Exhibition placeholder and CV — its Profile
-// now on a Profile page — removed 2026-11-11) (Consignment dropped); with
-// Art Manager (2026-11-10) Catalogue first — the admin's Artwork Catalogue.
+// The Artist App's frame (Craig's mockups; rearranged 2026-11-11 to his
+// screenshot): one grey rounded frame holding the screen's panel and, on
+// the right, one white panel — at its top "← Admin" (when the login may
+// reach it), Log out for a client login, and the admin's icons (the eye
+// for the chosen page's preview on Pages, publish, the published site);
+// then the screen's side contents (SidePanel) or else the site's pages,
+// each opening it on Pages — so they stay beside Account and Art manager;
+// and at the foot the app's buttons: Art manager (the Artwork Catalogue,
+// with Art Manager), Concierge (a placeholder) and Account.
+// Medium screens and up the two side by side; a phone stacked.
 
 const BUTTON_COLOR = "#FBF7EE";
 const CONCIERGE_COLOR = "#FAE8C3";
@@ -40,6 +37,7 @@ export default function ArtistAppFrame({
   lastPublishedAt,
   adminHref,
   canLogOut,
+  pages,
   children,
 }: {
   siteId: string;
@@ -48,71 +46,116 @@ export default function ArtistAppFrame({
   // Where "← Admin" goes; null hides it.
   adminHref: string | null;
   canLogOut: boolean;
+  // The site's pages, arranged (arrangePages).
+  pages: ArtistAppPage[];
   children: React.ReactNode;
 }) {
   const pathname = usePathname();
   const searchParams = useSearchParams();
-  // Arrange Pages keeps its chosen page in the address (`page`).
+  // Pages keeps its chosen page in the address (`page`).
   const chosenPage = pathname === artistAppHref(siteId, "pages") ? searchParams.get("page") : null;
   const { catalogue } = useArtistAppFeatures();
+  const side = useSideSlot();
   const catalogueHref = artistAppHref(siteId, "artworks");
-  const screens = [
-    ...(catalogue ? [{ label: "Catalogue", href: catalogueHref }] : []),
-    ...(ARTIST_APP_SHOWS_MANAGE_WORKS ? [{ label: "Manage Works", href: artistAppHref(siteId) }] : []),
-    { label: "Pages", href: artistAppHref(siteId, "pages") },
-  ];
+  const accountHref = artistAppHref(siteId, "account");
 
   return (
-    <div className="h-dvh bg-white p-4 lg:p-6" style={{ fontFamily: ARTIST_APP_FONT }}>
-      <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[28px] bg-[#F2F2F2] p-4 sm:overflow-hidden lg:flex-row">
-        <div className="flex flex-col gap-4 sm:min-h-0 sm:flex-1 sm:flex-row">{children}</div>
-        {/* Scrolls on its own when it doesn't fit (the iPad). */}
-        <nav className="flex shrink-0 flex-col gap-3 sm:order-first sm:flex-row sm:items-center sm:overflow-x-auto lg:order-none lg:w-[200px] lg:flex-col lg:items-stretch lg:overflow-y-auto lg:overflow-x-hidden">
-          <div className="flex shrink-0 items-center gap-1">
-            <div className="mr-auto flex items-center gap-2">
-              {adminHref && (
-                <Link href={adminHref} prefetch={false} className="px-1 text-sm text-neutral-500 hover:text-neutral-800">
-                  ← Admin
+    <side.Provider value={side.value}>
+      <div className="h-dvh bg-white p-4 lg:p-6" style={{ fontFamily: ARTIST_APP_FONT }}>
+        <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[28px] bg-[#F2F2F2] p-4 sm:flex-row sm:overflow-hidden">
+          <div className="flex flex-col gap-4 sm:min-h-0 sm:min-w-0 sm:flex-1">{children}</div>
+          <aside className="flex shrink-0 flex-col gap-3 rounded-lg border border-neutral-300 bg-white p-3 sm:w-[260px] lg:w-[340px]">
+            <div className="flex shrink-0 items-center gap-1 rounded-md bg-[#F2F2F2] px-3 py-2">
+              <div className="mr-auto flex items-center gap-2">
+                {adminHref && (
+                  <Link href={adminHref} prefetch={false} className="px-1 text-sm text-neutral-500 hover:text-neutral-800">
+                    ← Admin
+                  </Link>
+                )}
+                {canLogOut && (
+                  <form action={logout}>
+                    <button type="submit" className="px-1 text-sm text-neutral-500 hover:text-neutral-800">
+                      Log out
+                    </button>
+                  </form>
+                )}
+              </div>
+              {chosenPage && (
+                <Link
+                  href={artistAppPreviewHref(siteId, chosenPage)}
+                  prefetch={false}
+                  title="Preview this page"
+                  aria-label="Preview this page"
+                  className="inline-flex shrink-0 rounded-full p-0.5 hover:bg-white"
+                >
+                  <EyeIcon />
                 </Link>
               )}
-              {canLogOut && (
-                <form action={logout}>
-                  <button type="submit" className="px-1 text-sm text-neutral-500 hover:text-neutral-800">
-                    Log out
-                  </button>
-                </form>
-              )}
+              <PublishButton siteId={siteId} lastPublishedAt={lastPublishedAt} />
+              <PublishedSiteLink href={publishedHomePath(siteId)} />
             </div>
-            {chosenPage && (
-              <Link
-                href={artistAppPreviewHref(siteId, chosenPage)}
-                prefetch={false}
-                title="Preview this page"
-                aria-label="Preview this page"
-                className="inline-flex shrink-0 rounded-full p-0.5 hover:bg-white"
-              >
-                <EyeIcon />
-              </Link>
-            )}
-            <PublishButton siteId={siteId} lastPublishedAt={lastPublishedAt} />
-            <PublishedSiteLink href={publishedHomePath(siteId)} />
-          </div>
-          {screens.map((s) => (
-            <AppButton
-              key={s.label}
-              href={s.href}
-              active={pathname === s.href || (s.href === catalogueHref && pathname.startsWith(`${s.href}/`))}
-            >
-              {s.label}
-            </AppButton>
-          ))}
-          <AppButton color={CONCIERGE_COLOR}>Concierge</AppButton>
-          <AppButton href={artistAppHref(siteId, "account")} active={pathname === artistAppHref(siteId, "account")}>
-            Account
-          </AppButton>
-        </nav>
+
+            <div className="flex min-h-0 flex-1 flex-col sm:overflow-y-auto">
+              <div ref={side.setNode} className="flex flex-1 flex-col" />
+              {!side.claimed && <PageLinks siteId={siteId} pages={pages} />}
+            </div>
+
+            <nav className="flex shrink-0 flex-col gap-2">
+              {catalogue && (
+                <AppButton href={catalogueHref} active={pathname === catalogueHref || pathname.startsWith(`${catalogueHref}/`)}>
+                  Art manager
+                </AppButton>
+              )}
+              {ARTIST_APP_SHOWS_MANAGE_WORKS && (
+                <AppButton href={artistAppHref(siteId)} active={pathname === artistAppHref(siteId)}>
+                  Manage Works
+                </AppButton>
+              )}
+              <AppButton color={CONCIERGE_COLOR}>Concierge</AppButton>
+              <AppButton href={accountHref} active={pathname === accountHref}>
+                Account
+              </AppButton>
+            </nav>
+          </aside>
+        </div>
       </div>
-    </div>
+    </side.Provider>
+  );
+}
+
+// The site's Live and Hidden pages, as on Pages (Live without a heading,
+// as Craig's screenshot); each opens it there.
+function PageLinks({ siteId, pages }: { siteId: string; pages: ArtistAppPage[] }) {
+  const titleOf = (id: string) => pages.find((p) => p.id === id)?.title ?? "";
+  return (
+    <>
+      {[true, false].map((visible) => {
+        const listed = pages.filter((p) => p.visible === visible);
+        return (
+          <div key={String(visible)} className={`flex flex-col gap-1.5 ${visible ? "pb-8" : "pt-5"}`}>
+            {!visible && <h3 className="mb-2 text-center text-lg text-neutral-800">Hidden Pages</h3>}
+            {listed.map((p) => {
+              const parentHere = !!p.parentId && listed.some((q) => q.id === p.parentId);
+              return (
+                <Link
+                  key={p.id}
+                  href={artistAppPageHref(siteId, p.id)}
+                  prefetch={false}
+                  className={`flex items-baseline justify-between gap-2 rounded-sm border border-neutral-200 bg-white px-4 py-2 text-sm text-neutral-800 hover:bg-neutral-50 ${
+                    p.parentId ? "ml-6" : ""
+                  }`}
+                >
+                  <span className="min-w-0 truncate">{p.title}</span>
+                  {p.parentId && !parentHere && (
+                    <span className="shrink-0 text-xs text-neutral-400">under {titleOf(p.parentId)}</span>
+                  )}
+                </Link>
+              );
+            })}
+          </div>
+        );
+      })}
+    </>
   );
 }
 
@@ -128,7 +171,9 @@ function AppButton({
   color?: string;
   children: React.ReactNode;
 }) {
-  const className = `flex h-24 shrink-0 items-center justify-center whitespace-nowrap rounded-[4px] border px-5 text-center text-2xl font-light uppercase text-neutral-600 sm:h-12 sm:px-4 sm:text-lg lg:h-24 lg:px-5 lg:text-2xl ${
+  // As Craig's screenshot (2026-11-11): words as typed, on the left,
+  // rounded corners.
+  const className = `flex h-16 shrink-0 items-center whitespace-nowrap rounded-xl border px-6 text-2xl font-light text-neutral-600 lg:h-[72px] lg:text-3xl ${
     active ? "border-neutral-500" : "border-neutral-300"
   }`;
   if (!href) {

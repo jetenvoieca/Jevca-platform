@@ -23,6 +23,7 @@ import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import { exhibitionDates } from "@/lib/exhibitionDates";
 import { reorderPages } from "@/lib/actions/pages";
 import { setPageComponentItems } from "@/lib/actions/pageComponents";
+import { useRouter } from "next/navigation";
 import { arrangePages, movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
@@ -94,6 +95,7 @@ export default function ArtistPagesView({
   profile: ArtistProfile;
 }) {
   const features = useArtistAppFeatures();
+  const router = useRouter();
   const [pages, setPages] = useState(initialPages);
   const [selectedId, setSelectedId] = useState(firstPageId);
   const [content, setContent] = useState(firstContent);
@@ -149,6 +151,8 @@ export default function ArtistPagesView({
         next.filter((p) => p.visible).map((p) => p.id),
         next.filter((p) => !p.visible).map((p) => p.id),
       );
+      // The frame's list of pages (beside Account, Art manager) follows.
+      router.refresh();
     } catch {
       setPages(before);
       setError("The pages' new order wasn't saved.");
@@ -296,6 +300,7 @@ export default function ArtistPagesView({
                           onAdded={(page) => {
                             setPages((prev) => arrangePages([...prev, page]));
                             selectPage(page.id);
+                            router.refresh();
                           }}
                         />
                       )}
@@ -394,7 +399,8 @@ export default function ArtistPagesView({
   );
 }
 
-// Live or Hidden: its heading and its pages; dropping a page on its
+// Live or Hidden (only Hidden headed — Craig's screenshot, 2026-11-11)
+// and its pages; dropping a page on its
 // empty space puts it at the end. Hidden sits straight under Live
 // (Craig, 8 Nov) and takes the rest of the panel; Live keeps a little
 // space below its pages to drop onto.
@@ -403,11 +409,11 @@ function PageList({ visible, children }: { visible: boolean; children: React.Rea
   return (
     <div
       ref={drop.setNodeRef}
-      className={`flex flex-col gap-1.5 rounded-sm pt-5 ${visible ? "flex-none pb-8" : "min-h-48 flex-[1_0_auto]"} ${
+      className={`flex flex-col gap-1.5 rounded-sm ${visible ? "flex-none pb-8" : "min-h-48 flex-[1_0_auto] pt-5"} ${
         drop.isOver ? "bg-neutral-50" : ""
       }`}
     >
-      <h3 className="mb-2 text-center text-lg text-neutral-800">{visible ? "Live Pages" : "Hidden Pages"}</h3>
+      {!visible && <h3 className="mb-2 text-center text-lg text-neutral-800">Hidden Pages</h3>}
       {children}
     </div>
   );

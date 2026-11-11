@@ -1,4 +1,16 @@
-import { forwardRef, type HTMLAttributes, type ReactNode } from "react";
+"use client";
+
+import {
+  createContext,
+  forwardRef,
+  useContext,
+  useEffect,
+  useMemo,
+  useState,
+  type HTMLAttributes,
+  type ReactNode,
+} from "react";
+import { createPortal } from "react-dom";
 import BaseStar from "@/components/BaseStar";
 import { PlayMark } from "@/components/SectionMediaView";
 
@@ -36,12 +48,38 @@ function PanelHeading({ aside, children }: { aside?: ReactNode; children: ReactN
   );
 }
 
-export function SidePanel({ children }: { children: ReactNode }) {
-  return (
-    <section className="flex shrink-0 flex-col gap-3 rounded-lg border border-neutral-300 bg-white p-3 sm:w-[240px] sm:overflow-y-auto lg:w-[340px]">
-      {children}
-    </section>
+// The frame's right-hand panel (2026-11-11, Craig's screenshot) holds the
+// admin icons, then a screen's side contents, then the app's buttons. A
+// screen puts its contents there with <SidePanel>; while none does, the
+// frame shows the site's pages (see ArtistAppFrame).
+type SideSlot = { node: HTMLElement | null; claim: () => () => void };
+const SideSlotContext = createContext<SideSlot | null>(null);
+
+// For the frame: `Slot` goes where the contents go; `claimed` says whether
+// a screen has put any there.
+export function useSideSlot() {
+  const [node, setNode] = useState<HTMLElement | null>(null);
+  const [claims, setClaims] = useState(0);
+  const value = useMemo<SideSlot>(
+    () => ({
+      node,
+      claim: () => {
+        setClaims((c) => c + 1);
+        return () => setClaims((c) => c - 1);
+      },
+    }),
+    [node],
   );
+  const Provider = SideSlotContext.Provider;
+  return { value, Provider, setNode, claimed: claims > 0 };
+}
+
+export function SidePanel({ children }: { children: ReactNode }) {
+  const slot = useContext(SideSlotContext);
+  const claim = slot?.claim;
+  useEffect(() => claim?.(), [claim]);
+  if (!slot?.node) return null;
+  return createPortal(<div className="flex flex-1 flex-col gap-3">{children}</div>, slot.node);
 }
 
 export function WorkGrid({ children }: { children: ReactNode }) {
