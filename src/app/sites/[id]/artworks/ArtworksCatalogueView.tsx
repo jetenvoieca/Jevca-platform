@@ -41,7 +41,7 @@ type Filters = {
 
 const LAYOUT_STORAGE_KEY = "jevca:artworks-density";
 
-// The Art manager's two dropdowns (sideFilters) — full width, as Craig's
+// The Art manager's two dropdowns (appSlots) — full width, as Craig's
 // screenshot.
 const SIDE_FILTER =
   "w-full min-w-0 truncate border border-neutral-300 bg-white px-3 py-2.5 text-lg font-light text-neutral-600";
@@ -102,7 +102,7 @@ export default function ArtworksCatalogueView({
   initialSelected,
   settings,
   isAdmin = false,
-  sideFilters,
+  appSlots,
 }: {
   siteId: string;
   // Where this view's own in-page links (currently just "+ Add New" ->
@@ -140,11 +140,11 @@ export default function ArtworksCatalogueView({
   settings: ArtworkSettings;
   // Admin only: Link derivatives in the export/import menu (2026-11-05).
   isAdmin?: boolean;
-  // The Artist App's Art manager (2026-11-11, Craig's screenshot): no
-  // title, add or export/import row, nor filter row — only Galleries /
-  // locations and Artwork names, which this places (e.g. in the app's
-  // side panel).
-  sideFilters?: (filters: React.ReactNode) => React.ReactNode;
+  // The Artist App's Art manager (2026-11-11, Craig's screenshots): in
+  // place of the title row and filter row, the app places the parts —
+  // Galleries / locations and Artwork names, the export / import menu
+  // and layout button, and where Add goes.
+  appSlots?: (parts: { filters: React.ReactNode; tools: React.ReactNode; addHref: string }) => React.ReactNode;
 }) {
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const gridLayout = useGridLayout(LAYOUT_STORAGE_KEY);
@@ -497,6 +497,79 @@ export default function ArtworksCatalogueView({
   // the evaluation reduced-menu shell when rendered there.
   const addHref = `${resolvedBasePath}/artworks/add`;
 
+  // The export / import menu and the layout button — in the title row, or
+  // in the Artist App's top band (appSlots), there in its navy.
+  const toolTone = appSlots ? "border-[#2c3e6b] text-[#2c3e6b]" : "border-neutral-300 text-neutral-700";
+  // Export / import (2026-10-17, direct request — one icon in place of
+  // PDF and CSV): a small menu of the choices. Closed by a transparent
+  // click-catcher behind it.
+  const fileMenu = (
+    <div className="relative">
+      <button
+        type="button"
+        onClick={() => setShowFileMenu((v) => !v)}
+        title="Export or import"
+        aria-label="Export or import"
+        className={`flex items-center rounded-md border px-2.5 py-[4.8px] hover:bg-neutral-50 ${toolTone}`}
+      >
+        <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
+          <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
+          <path d="M2.5 11v2.5h11V11" strokeLinecap="round" strokeLinejoin="round" />
+        </svg>
+      </button>
+      {showFileMenu && (
+        <>
+          <div className="fixed inset-0 z-40" onClick={() => setShowFileMenu(false)} />
+          <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg">
+            <button
+              type="button"
+              onClick={() => {
+                setShowFileMenu(false);
+                setShowExportDialog(true);
+              }}
+              className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
+            >
+              Export PDF
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowFileMenu(false);
+                window.open(buildCsvExportUrl(), "_blank");
+              }}
+              className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
+            >
+              Export CSV
+            </button>
+            <button
+              type="button"
+              onClick={() => {
+                setShowFileMenu(false);
+                setShowImport(true);
+              }}
+              className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50 border-t border-neutral-100"
+            >
+              Import CSV
+            </button>
+            {isAdmin && (
+              <button
+                type="button"
+                onClick={() => {
+                  setShowFileMenu(false);
+                  setShowLinkDerivatives(true);
+                }}
+                className="block w-full border-t border-neutral-100 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
+              >
+                Link derivatives…
+              </button>
+            )}
+          </div>
+        </>
+      )}
+    </div>
+  );
+  const layoutButton = <GridLayoutButton layout={gridLayout} onClick={gridLayout.next} toneClass={toolTone} />;
+
   const loadMoreRow = hasMore && (
     <div ref={sentinelRef} className="mt-4 flex h-8 items-center justify-center">
       {loadingMore ? (
@@ -520,8 +593,16 @@ export default function ArtworksCatalogueView({
           a modal (see below), so the grid runs the full width and the
           header no longer needs to leave space for it. */}
       <div className="shrink-0 px-6 pt-4">
-        {sideFilters ? (
-          sideFilters(
+        {appSlots ? (
+          appSlots({
+            addHref,
+            tools: (
+              <>
+                {fileMenu}
+                {layoutButton}
+              </>
+            ),
+            filters: (
             <>
               <select
                 value={location}
@@ -555,7 +636,8 @@ export default function ArtworksCatalogueView({
                 ))}
               </select>
             </>
-          )
+            ),
+          })
         ) : (
         <>
         {/* Row 1: the title, then the export/import menu and the layout
@@ -571,74 +653,8 @@ export default function ArtworksCatalogueView({
           </div>
 
             <div className="flex items-center gap-3">
-              {/* Export / import (2026-10-17, direct request — one icon in
-                  place of PDF and CSV): a small menu of the choices.
-                  Closed by a transparent click-catcher behind it. */}
-              <div className="relative">
-                <button
-                  type="button"
-                  onClick={() => setShowFileMenu((v) => !v)}
-                  title="Export or import"
-                  aria-label="Export or import"
-                  className="flex items-center rounded-md border border-neutral-300 px-2.5 py-[4.8px] text-neutral-700 hover:bg-neutral-50"
-                >
-                  <svg viewBox="0 0 16 16" className="h-4 w-4" fill="none" stroke="currentColor" strokeWidth={1.5} aria-hidden>
-                    <path d="M8 2v8M4.5 6.5 8 10l3.5-3.5" strokeLinecap="round" strokeLinejoin="round" />
-                    <path d="M2.5 11v2.5h11V11" strokeLinecap="round" strokeLinejoin="round" />
-                  </svg>
-                </button>
-                {showFileMenu && (
-                  <>
-                    <div className="fixed inset-0 z-40" onClick={() => setShowFileMenu(false)} />
-                    <div className="absolute right-0 top-full z-50 mt-1 w-44 overflow-hidden rounded-md border border-neutral-200 bg-white py-1 shadow-lg">
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowFileMenu(false);
-                          setShowExportDialog(true);
-                        }}
-                        className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
-                      >
-                        Export PDF
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowFileMenu(false);
-                          window.open(buildCsvExportUrl(), "_blank");
-                        }}
-                        className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
-                      >
-                        Export CSV
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          setShowFileMenu(false);
-                          setShowImport(true);
-                        }}
-                        className="block w-full px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50 border-t border-neutral-100"
-                      >
-                        Import CSV
-                      </button>
-                      {isAdmin && (
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setShowFileMenu(false);
-                            setShowLinkDerivatives(true);
-                          }}
-                          className="block w-full border-t border-neutral-100 px-3 py-[6.4px] text-left text-sm hover:bg-neutral-50"
-                        >
-                          Link derivatives…
-                        </button>
-                      )}
-                    </div>
-                  </>
-                )}
-              </div>
-
-              <GridLayoutButton layout={gridLayout} onClick={gridLayout.next} />
+              {fileMenu}
+              {layoutButton}
             </div>
           </div>
 

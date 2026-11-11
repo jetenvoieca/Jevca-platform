@@ -37,7 +37,7 @@ export function MainPanel({
   );
 }
 
-function PanelHeading({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
+export function PanelHeading({ aside, children }: { aside?: ReactNode; children: ReactNode }) {
   return (
     <div className="mb-8 flex items-stretch justify-center gap-3">
       <h2 className="w-fit min-w-0 border border-neutral-200 px-6 py-1.5 text-center text-2xl text-neutral-800 lg:min-w-72">
@@ -48,19 +48,19 @@ function PanelHeading({ aside, children }: { aside?: ReactNode; children: ReactN
   );
 }
 
-// The frame's right-hand panel (2026-11-11, Craig's screenshot) holds the
-// admin icons, then a screen's side contents, then the app's buttons. A
-// screen puts its contents there with <SidePanel>; while none does, the
-// frame shows the site's pages (see ArtistAppFrame).
-type SideSlot = { node: HTMLElement | null; claim: () => () => void };
-const SideSlotContext = createContext<SideSlot | null>(null);
+// The frame's right-hand panel (2026-11-11, Craig's screenshots) holds
+// the top band of icons, then a screen's side contents, then the app's
+// buttons. A screen puts contents in the panel with <SidePanel> — while
+// none does, the frame shows the site's pages (see ArtistAppFrame) — and
+// its own tools in the band, before publish, with <BandTools>.
+type Slot = { node: HTMLElement | null; claim: () => () => void };
+type Slots = { side: Slot; band: Slot };
+const SlotsContext = createContext<Slots | null>(null);
 
-// For the frame: `Slot` goes where the contents go; `claimed` says whether
-// a screen has put any there.
-export function useSideSlot() {
+function useSlot() {
   const [node, setNode] = useState<HTMLElement | null>(null);
   const [claims, setClaims] = useState(0);
-  const value = useMemo<SideSlot>(
+  const slot = useMemo<Slot>(
     () => ({
       node,
       claim: () => {
@@ -70,16 +70,36 @@ export function useSideSlot() {
     }),
     [node],
   );
-  const Provider = SideSlotContext.Provider;
-  return { value, Provider, setNode, claimed: claims > 0 };
+  return { slot, setNode, claimed: claims > 0 };
 }
 
-export function SidePanel({ children }: { children: ReactNode }) {
-  const slot = useContext(SideSlotContext);
+// For the frame: where each goes (`setNode`), and whether a screen has
+// put side contents in the panel.
+export function useFrameSlots() {
+  const side = useSlot();
+  const band = useSlot();
+  const value = useMemo<Slots>(() => ({ side: side.slot, band: band.slot }), [side.slot, band.slot]);
+  return { value, Provider: SlotsContext.Provider, side, band };
+}
+
+function InSlot({ which, children }: { which: keyof Slots; children: ReactNode }) {
+  const slot = useContext(SlotsContext)?.[which];
   const claim = slot?.claim;
   useEffect(() => claim?.(), [claim]);
   if (!slot?.node) return null;
-  return createPortal(<div className="flex flex-1 flex-col gap-3">{children}</div>, slot.node);
+  return createPortal(children, slot.node);
+}
+
+export function SidePanel({ children }: { children: ReactNode }) {
+  return (
+    <InSlot which="side">
+      <div className="flex flex-1 flex-col gap-3">{children}</div>
+    </InSlot>
+  );
+}
+
+export function BandTools({ children }: { children: ReactNode }) {
+  return <InSlot which="band">{children}</InSlot>;
 }
 
 export function WorkGrid({ children }: { children: ReactNode }) {

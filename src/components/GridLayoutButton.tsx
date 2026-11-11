@@ -49,9 +49,12 @@ export function useGridLayout(storageKey: string) {
 export default function GridLayoutButton({
   layout,
   onClick,
+  toneClass = "border-neutral-300 text-neutral-700",
 }: {
   layout: GridLayout;
   onClick: () => void;
+  // Border and icon colour (the Artist App's navy — 2026-11-11).
+  toneClass?: string;
 }) {
   return (
     <button
@@ -59,7 +62,7 @@ export default function GridLayoutButton({
       onClick={onClick}
       title={layout.view === "list" ? "List — click for tiles" : `${layout.perRow} to a row — click to change`}
       aria-label="Change layout"
-      className="flex items-center gap-1.5 rounded-md border border-neutral-300 px-2.5 py-[4.8px] text-sm text-neutral-700 hover:bg-neutral-50"
+      className={`flex items-center gap-1.5 rounded-md border px-2.5 py-[4.8px] text-sm hover:bg-neutral-50 ${toneClass}`}
     >
       {layout.view === "list" ? (
         <svg viewBox="0 0 16 16" className="h-4 w-4" fill="currentColor" aria-hidden>

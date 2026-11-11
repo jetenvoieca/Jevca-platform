@@ -16,13 +16,14 @@ import EyeIcon from "@/components/EyeIcon";
 import PublishButton from "@/components/PublishButton";
 import PublishedSiteLink from "@/components/PublishedSiteLink";
 import { useArtistAppFeatures } from "@/components/artist-app/ArtistAppFeatures";
-import { useSideSlot } from "@/components/artist-app/ArtistAppPanels";
+import { useFrameSlots } from "@/components/artist-app/ArtistAppPanels";
 
 // The Artist App's frame (Craig's mockups; rearranged 2026-11-11 to his
 // screenshot): one grey rounded frame holding the screen's panel and, on
 // the right, one white panel — at its top "← Admin" (when the login may
-// reach it), Log out for a client login, and the admin's icons (the eye
-// for the chosen page's preview on Pages, publish, the published site);
+// reach it), Log out for a client login, and the icons (the eye for the
+// chosen page's preview on Pages, a screen's own tools — BandTools —
+// publish, the published site);
 // then the screen's side contents (SidePanel) or else the site's pages,
 // each opening it on Pages — so they stay beside Account; and at the foot
 // the app's buttons: Art manager (the Artwork Catalogue, with Art Manager —
@@ -56,12 +57,12 @@ export default function ArtistAppFrame({
   // Pages keeps its chosen page in the address (`page`).
   const chosenPage = pathname === artistAppHref(siteId, "pages") ? searchParams.get("page") : null;
   const { catalogue } = useArtistAppFeatures();
-  const side = useSideSlot();
+  const slots = useFrameSlots();
   const catalogueHref = artistAppHref(siteId, "artworks");
   const accountHref = artistAppHref(siteId, "account");
 
   return (
-    <side.Provider value={side.value}>
+    <slots.Provider value={slots.value}>
       <div className="h-dvh bg-white p-4 lg:p-6" style={{ fontFamily: ARTIST_APP_FONT }}>
         <div className="flex h-full flex-col gap-4 overflow-y-auto rounded-[28px] bg-[#F2F2F2] p-4 sm:flex-row sm:overflow-hidden">
           <div className="flex flex-col gap-4 sm:min-h-0 sm:min-w-0 sm:flex-1">{children}</div>
@@ -92,18 +93,19 @@ export default function ArtistAppFrame({
                   <EyeIcon />
                 </Link>
               )}
+              <div ref={slots.band.setNode} className="flex items-center gap-1.5" />
               <PublishButton siteId={siteId} lastPublishedAt={lastPublishedAt} />
               <PublishedSiteLink href={publishedHomePath(siteId)} />
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col sm:overflow-y-auto">
-              <div ref={side.setNode} className="flex flex-1 flex-col" />
-              {!side.claimed && <PageLinks siteId={siteId} pages={pages} />}
+              <div ref={slots.side.setNode} className="flex flex-1 flex-col" />
+              {!slots.side.claimed && <PageLinks siteId={siteId} pages={pages} />}
             </div>
 
             <nav className="flex shrink-0 flex-col gap-2">
               {catalogue &&
-                (pathname === catalogueHref ? (
+                (pathname === catalogueHref || pathname.startsWith(`${catalogueHref}/`) ? (
                   <AppButton href={artistAppHref(siteId, "pages")}>Website</AppButton>
                 ) : (
                   <AppButton href={catalogueHref}>Art manager</AppButton>
@@ -121,7 +123,7 @@ export default function ArtistAppFrame({
           </aside>
         </div>
       </div>
-    </side.Provider>
+    </slots.Provider>
   );
 }
 

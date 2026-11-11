@@ -37,10 +37,13 @@ const PAGE_SIZE = 60;
 export default async function ArtworkCatalogueScreen({
   siteId: id,
   sp,
+  basePath,
   View = ArtworksCatalogueView,
 }: {
   siteId: string;
   sp: CatalogueSearchParams;
+  // Where its Add goes (see ArtworksCatalogueView).
+  basePath?: string;
   View?: ComponentType<ComponentProps<typeof ArtworksCatalogueView>>;
 }) {
   const site = await db.site.findUnique({
@@ -72,6 +75,7 @@ export default async function ArtworkCatalogueScreen({
   return (
     <View
       siteId={id}
+      basePath={basePath}
       artistId={artistId}
       artistName={site!.artist.name}
       artworks={rows}

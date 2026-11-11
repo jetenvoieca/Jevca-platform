@@ -22,7 +22,7 @@ export default async function ArtistCataloguePage({
   if (!(await readSiteFeatures(siteId)).catalogue) redirect(artistAppHref(siteId, "pages"));
   return (
     <div className="min-h-0 flex-1 overflow-y-auto rounded-2xl bg-white">
-      <ArtworkCatalogueScreen siteId={siteId} sp={await searchParams} View={ArtistCatalogueView} />
+      <ArtworkCatalogueScreen siteId={siteId} sp={await searchParams} basePath={artistAppHref(siteId)} View={ArtistCatalogueView} />
     </div>
   );
 }
