@@ -35,7 +35,9 @@ export async function listMedia(artistId: string, filters: ListFilters) {
 
   const where = {
     artistId,
-    status: { not: "ARCHIVED" as const },
+    // Not archived, nor still waiting in the Hopper (2026-11-11, Craig —
+    // only processed items are in the Media Catalogue).
+    status: { notIn: ["ARCHIVED" as const, "HOPPER" as const] },
     ...(purpose === "marketing" ? { mainImageOfArtwork: { is: null } } : {}),
     ...(kind ? { kind } : {}),
     ...(tag ? { tags: { has: tag } } : {}),
