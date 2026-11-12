@@ -7,12 +7,14 @@ import type { SiteWork } from "@/lib/siteWorks";
 import { useSiteData } from "@/lib/siteData";
 import { useSitePhone } from "@/lib/useSitePhone";
 import { showsSoldFlag } from "@/lib/artworkFilters";
+import { arrangeItems, readShowcaseShuffle, type ComponentContent } from "@/lib/pageComponents";
 import { bodyTextCss } from "@/components/textStyleCss";
 import { PAGE_BACKGROUND_CLASS, pageBackgroundStyle } from "@/components/pageMargins";
 
 // A Showcase on a page (2026-11-02, the ISYT sites' showcase pages — see
 // ShowcaseSettings in lib/pageStyleLayout.ts): every work the site shows
-// (siteData.listSiteWorks), shuffled once each visit and paired in that
+// (siteData.listSiteWorks), shuffled once each visit — or in the order
+// set in the Artist App with Shuffle off (2026-11-12) — and paired in that
 // order (with an odd number the last pairs with the first). Each side is
 // a door: the front pair sits over the next one, in the page's own
 // background so the next doesn't show through, and slides off its side
@@ -45,6 +47,7 @@ export default function ShowcaseBlock({
   textStyle,
   contentWidth,
   background,
+  content,
   onOpen,
 }: {
   settings: ShowcaseSettings;
@@ -52,6 +55,9 @@ export default function ShowcaseBlock({
   contentWidth: number;
   // The page's background on a desktop and on a phone (null = white).
   background: { desktop: string | null; phone: string | null };
+  // Its component (2026-11-12): the order set in the Artist App, and
+  // whether it shuffles (readShowcaseShuffle) — none, shuffled.
+  content?: ComponentContent;
   onOpen: (artworkId: string, curationId: string) => void;
 }) {
   const siteData = useSiteData();
@@ -68,14 +74,18 @@ export default function ShowcaseBlock({
     let current = true;
     siteData.listSiteWorks().then((all) => {
       if (!current) return;
-      setWorks(shuffled(all));
+      setWorks(
+        readShowcaseShuffle(content?.text)
+          ? shuffled(all)
+          : arrangeItems(all, (w) => w.artworkId, { hiddenIds: [], orderIds: content?.orderIds ?? [] }),
+      );
       setIndex(0);
       setOpening(false);
     });
     return () => {
       current = false;
     };
-  }, [siteData]);
+  }, [siteData, content]);
 
   // The works shown together: pairs, or one at a time on a phone.
   const pairs = useMemo(() => {

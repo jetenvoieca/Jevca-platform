@@ -125,6 +125,22 @@ export function contentKindOf(
 // Works or Supporting Media as one page shows them: those removed on the
 // page left out; those in the chosen order first, in that order; then any
 // others (e.g. added to the curation since) in the curation's order.
+// A Showcase's settings (2026-11-12, Craig — ordered in the Artist App):
+// kept as JSON in its component's text, its order in orderIds (artwork
+// ids). Shuffled each visit unless `shuffle` is off; works not in the
+// order (new ones) come after it.
+export function readShowcaseShuffle(text: string | null | undefined): boolean {
+  try {
+    return (JSON.parse(text ?? "") as { shuffle?: unknown }).shuffle !== false;
+  } catch {
+    return true;
+  }
+}
+
+export function writeShowcaseShuffle(shuffle: boolean): string {
+  return JSON.stringify({ shuffle });
+}
+
 export function arrangeItems<T>(
   items: T[],
   idOf: (item: T) => string,

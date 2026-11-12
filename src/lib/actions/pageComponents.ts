@@ -9,7 +9,9 @@ import {
   isTypedContent,
   maxTypedLength,
   readHeroText,
+  readShowcaseShuffle,
   writeHeroText,
+  writeShowcaseShuffle,
   type ComponentContent,
   type ContentKind,
   type PageFill,
@@ -283,6 +285,33 @@ export async function setPageComponentItems(
     },
   });
   if (updated.count === 0) return { error: "That component doesn't hold works or images." };
+  return { ok: true };
+}
+
+// A Showcase's order and Shuffle (2026-11-12 — the Artist App): kept in
+// its component (see readShowcaseShuffle); either may be left out to keep
+// what it has.
+export async function setShowcase(
+  siteId: string,
+  pageId: string,
+  blockId: string,
+  change: { orderIds?: string[]; shuffle?: boolean },
+): Promise<Result> {
+  await requireSiteAccess(siteId);
+  const found = await pageBlock(siteId, pageId, blockId);
+  if ("error" in found) return found;
+  if (found.block.type !== "showcase") return { error: "That component isn't a Showcase." };
+  const current = await db.pageComponentContent.findUnique({
+    where: { pageId_blockId: { pageId, blockId } },
+    select: { text: true, orderIds: true },
+  });
+  const text = writeShowcaseShuffle(change.shuffle ?? readShowcaseShuffle(current?.text));
+  const orderIds = change.orderIds ? [...new Set(change.orderIds)] : (current?.orderIds ?? []);
+  await db.pageComponentContent.upsert({
+    where: { pageId_blockId: { pageId, blockId } },
+    create: { pageId, blockId, source: "TYPED", text, orderIds },
+    update: { source: "TYPED", sectionId: null, text, orderIds },
+  });
   return { ok: true };
 }
 

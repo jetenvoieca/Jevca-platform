@@ -9,7 +9,7 @@ import { listPageStyles } from "@/lib/actions/pageStyles";
 import { listLiveSiteWorks } from "@/lib/actions/siteSnapshot";
 import { listShownExhibitions, type ExhibitionRow } from "@/lib/actions/exhibitions";
 import { listProfileStories, type ProfileStoryRow } from "@/lib/actions/profileStories";
-import { arrangeItems, contentFits, pageWorks } from "@/lib/pageComponents";
+import { arrangeItems, contentFits, pageWorks, readShowcaseShuffle } from "@/lib/pageComponents";
 import { readPageStories } from "@/lib/pageStories";
 import { readContactPanel, type ContactPanelSettings } from "@/lib/contactPanel";
 import { readLocations, type LocationSummary } from "@/lib/artworkSettingsData";
@@ -147,6 +147,9 @@ export type ArtistAppPageContent =
       works: SiteWork[];
       // The component, the works it leaves out, and the curation it shows.
       arrange: { blockId: string; hiddenIds: string[]; curationId: string } | null;
+      // A Showcase page (2026-11-12): its component and whether it
+      // shuffles; `works` in its order.
+      showcase?: { blockId: string; shuffle: boolean };
     }
   | { kind: "stories"; stories: ProfileStoryRow[] }
   | { kind: "exhibitions"; exhibitions: ExhibitionRow[]; locations: LocationSummary[] }
@@ -166,8 +169,16 @@ export async function getArtistAppPageContent(siteId: string, pageId: string): P
 
   const style = (await listPageStyles()).find((s) => s.id === page.pageStyleId) ?? null;
   const blocks = style?.type === "BLOCK_BUILD" ? style.layout.blocks : [];
-  if (blocks.some((b) => b.type === "showcase")) {
-    return { kind: "showcase", works: await listLiveSiteWorks(siteId), arrange: null };
+  const showcaseBlock = blocks.find((b) => b.type === "showcase");
+  if (showcaseBlock) {
+    const [all, components] = await Promise.all([listLiveSiteWorks(siteId), getPageComponents(siteId, pageId)]);
+    const content = components.find((c) => c.blockId === showcaseBlock.id);
+    return {
+      kind: "showcase",
+      works: content ? arrangeItems(all, (w) => w.artworkId, { hiddenIds: [], orderIds: content.orderIds }) : all,
+      arrange: null,
+      showcase: { blockId: showcaseBlock.id, shuffle: readShowcaseShuffle(content?.text) },
+    };
   }
 
   const isCanvas = style?.type === "CANVAS";

@@ -22,7 +22,7 @@ import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import { exhibitionDates } from "@/lib/exhibitionDates";
 import { reorderPages } from "@/lib/actions/pages";
-import { setPageComponentItems } from "@/lib/actions/pageComponents";
+import { setPageComponentItems, setShowcase } from "@/lib/actions/pageComponents";
 import { useRouter } from "next/navigation";
 import { arrangePages, movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
@@ -585,17 +585,23 @@ function PageWorks({
 }) {
   const [works, setWorks] = useState(data.works);
   const arrange = data.arrange;
+  // A Showcase page (2026-11-12, Craig): its works dragged into order,
+  // used on the website when Shuffle is off.
+  const showcase = data.kind === "showcase" ? data.showcase : undefined;
+  const [shuffle, setShuffle] = useState(showcase?.shuffle ?? true);
+  const orderBlock = arrange?.blockId ?? showcase?.blockId ?? "";
 
   // Saves the works' new order for this page.
   const saveOrder = async (next: SiteWork[]) => {
-    if (!arrange) return;
+    if (!orderBlock) return;
     const before = works;
     setWorks(next);
     onError(null);
-    const result = await setPageComponentItems(siteId, pageId, arrange.blockId, {
-      hiddenIds: arrange.hiddenIds,
-      orderIds: next.map((w) => w.artworkId),
-    }).catch(() => ({ error: "" }));
+    const orderIds = next.map((w) => w.artworkId);
+    const result = await (arrange
+      ? setPageComponentItems(siteId, pageId, arrange.blockId, { hiddenIds: arrange.hiddenIds, orderIds })
+      : setShowcase(siteId, pageId, orderBlock, { orderIds })
+    ).catch(() => ({ error: "" }));
     if ("error" in result) {
       setWorks(before);
       onError("The works' new order wasn't saved.");
@@ -606,7 +612,18 @@ function PageWorks({
     if (next) saveOrder(next);
   };
 
-  useArrangeReorder(data.kind === "arrange" && arrange ? arrange.blockId : "", move);
+  useArrangeReorder((data.kind === "arrange" && arrange) || showcase ? orderBlock : "", move);
+
+  const switchShuffle = async (on: boolean) => {
+    if (!showcase) return;
+    setShuffle(on);
+    onError(null);
+    const result = await setShowcase(siteId, pageId, showcase.blockId, { shuffle: on }).catch(() => ({ error: "" }));
+    if ("error" in result) {
+      setShuffle(!on);
+      onError("That wasn't saved.");
+    }
+  };
 
   // "Remove work" (Craig, 9 Nov): out of the page's curation, after a
   // check — the work itself stays in the Catalogue.
@@ -661,23 +678,35 @@ function PageWorks({
 
   return (
     <>
-      {data.kind !== "arrange" && (
-        <p className="-mt-4 mb-6 text-center text-sm text-neutral-400">
-          {data.kind === "showcase"
-            ? "This page shows the site's works in a new order on every visit."
-            : "The order of this page's works can't be changed here."}
-        </p>
+      {showcase ? (
+        <div className="-mt-4 mb-6 flex flex-col items-center gap-1 text-sm">
+          <label className="flex cursor-pointer items-center gap-2 text-neutral-700">
+            <input type="checkbox" checked={shuffle} onChange={(e) => switchShuffle(e.target.checked)} className="h-4 w-4" />
+            Shuffle
+          </label>
+          <p className="text-neutral-400">
+            {shuffle
+              ? "The site's works show in a new order on every visit."
+              : "The site's works show in this order — drag them to change it. New works go at the end."}
+          </p>
+        </div>
+      ) : (
+        data.kind !== "arrange" && (
+          <p className="-mt-4 mb-6 text-center text-sm text-neutral-400">
+            The order of this page&apos;s works can&apos;t be changed here.
+          </p>
+        )
       )}
       <WorkGrid>
         {works.map((w, i) =>
-          data.kind === "arrange" && arrange ? (
+          (data.kind === "arrange" && arrange) || showcase ? (
             <DraggableWork
               key={w.artworkId}
-              blockId={arrange.blockId}
+              blockId={orderBlock}
               work={w}
               dragging={dragging}
               onClick={() => onOpen(w)}
-              onRemove={() => remove(w)}
+              onRemove={arrange ? () => remove(w) : undefined}
             />
           ) : (
             <WorkTile
@@ -842,7 +871,8 @@ function DraggableWork({
   work: SiteWork;
   dragging: DragData | null;
   onClick: () => void;
-  onRemove: () => void;
+  // "Remove work" — none on a Showcase.
+  onRemove?: () => void;
 }) {
   const drag = useArrangeItem(blockId, work.artworkId, work.imageUrl, dragging);
   return (
@@ -853,6 +883,7 @@ function DraggableWork({
       onClick={onClick}
       work={work}
       aside={
+        onRemove && (
         <button
           type="button"
           // Not a drag, and not the tile's tap.
@@ -866,6 +897,7 @@ function DraggableWork({
         >
           Remove work
         </button>
+        )
       }
       className={`cursor-grab ${TOUCH_DRAG_CLASS} ${drag.isDragging ? "opacity-30" : ""} ${
         drag.target ? "outline outline-4 outline-neutral-400" : ""

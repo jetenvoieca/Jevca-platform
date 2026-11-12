@@ -528,6 +528,7 @@ export function blockFiller({
           textStyle={layout.textStyles.text}
           contentWidth={contentWidth}
           background={{ desktop: layout.backgroundColor, phone: layout.phoneBackgroundColor }}
+          content={contentByBlock.get(block.id)}
           onOpen={onOpen}
         />
       );
