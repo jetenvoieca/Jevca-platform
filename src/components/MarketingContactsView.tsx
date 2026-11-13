@@ -44,9 +44,9 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // filters, so not as columns); the rest are in the window, and
 // search covers them all. The window's fields are in the order Craig
 // set out (2026-11-06): prices and works first, then contact details.
-// Contacts show as tiles (opening on them, 2026-11-13) or a list — tiles with a photo of the gallery — a
-// link to it on the gallery's own site — and a link to its website
-// (2026-11-06). A contact can have its shop page, and Find prices
+// Contacts show as tiles with a photo of the gallery — a link to it on
+// the gallery's own site — and a link to its website (2026-11-06), or as
+// a list; tiles first (2026-11-13). A contact can have its shop page, and Find prices
 // suggests the price ranges of the contacts shown from what they sell
 // (MarketingPriceFinder, 2026-11-07) — for one gallery from the price
 // tag on its tile, showing the gallery's own currency. The artist icon
