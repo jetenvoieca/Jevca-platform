@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import { fillArtistPictures, findArtistsPage, readArtists } from "@/lib/artistFinder";
 import { findPrices } from "@/lib/priceFinder";
 import type { Prisma } from "@/generated/prisma/client";
+import { CONTACT_SELECT as select, newGalleriesShareToken, toContactRow as toRow } from "@/lib/marketingContactsData";
 import {
   CURRENCIES,
   PRICE_BANDS,
@@ -21,7 +22,6 @@ import {
   type MarketingImportResult,
   type MarketingImportRow,
   type MarketingPriceFind,
-  type MarketingWorksType,
 } from "@/lib/marketingContacts";
 
 // Administration → Contacts (2026-11-04, Craig's request): the platform's
@@ -50,88 +50,6 @@ const MAX_IMPORT_BATCH = 10;
 const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 const otherType = (t: MarketingContactType): MarketingContactType => (t === "GALLERY" ? "ARTIST" : "GALLERY");
-
-const select = {
-  id: true,
-  type: true,
-  name: true,
-  contactPerson: true,
-  email: true,
-  phone: true,
-  website: true,
-  shopUrl: true,
-  photoUrl: true,
-  instagram: true,
-  tiktok: true,
-  town: true,
-  country: true,
-  notes: true,
-  originalsMin: true,
-  originalsMax: true,
-  printsMin: true,
-  printsMax: true,
-  priceCurrency: true,
-  worksTypes: true,
-  tags: { select: { tag: { select: { id: true, name: true } } } },
-  artists: { select: { artist: { select: { id: true, name: true } } } },
-  galleries: { select: { gallery: { select: { id: true, name: true } } } },
-} as const;
-
-type Stored = {
-  id: string;
-  type: MarketingContactType;
-  name: string;
-  contactPerson: string | null;
-  email: string | null;
-  phone: string | null;
-  website: string | null;
-  shopUrl: string | null;
-  photoUrl: string | null;
-  instagram: string | null;
-  tiktok: string | null;
-  town: string | null;
-  country: string | null;
-  notes: string | null;
-  originalsMin: number | null;
-  originalsMax: number | null;
-  printsMin: number | null;
-  printsMax: number | null;
-  priceCurrency: MarketingCurrency | null;
-  worksTypes: MarketingWorksType[];
-  tags: { tag: { id: string; name: string } }[];
-  artists: { artist: { id: string; name: string } }[];
-  galleries: { gallery: { id: string; name: string } }[];
-};
-
-const byName = (a: { name: string }, b: { name: string }) => a.name.localeCompare(b.name);
-
-function toRow(c: Stored): MarketingContactRow {
-  const links = c.type === "GALLERY" ? c.artists.map((l) => l.artist) : c.galleries.map((l) => l.gallery);
-  return {
-    id: c.id,
-    type: c.type,
-    name: c.name,
-    contactPerson: c.contactPerson ?? "",
-    email: c.email ?? "",
-    phone: c.phone ?? "",
-    website: c.website ?? "",
-    shopUrl: c.shopUrl ?? "",
-    photoUrl: c.photoUrl ?? "",
-    instagram: c.instagram ?? "",
-    tiktok: c.tiktok ?? "",
-    town: c.town ?? "",
-    country: c.country ?? "",
-    notes: c.notes ?? "",
-    originalsMin: c.originalsMin,
-    originalsMax: c.originalsMax,
-    printsMin: c.printsMin,
-    printsMax: c.printsMax,
-    priceCurrency: c.priceCurrency,
-    worksTypes: WORKS_TYPES.filter((w) => c.worksTypes.includes(w)),
-    links: links.sort(byName),
-    tags: c.tags.map((t) => t.tag).sort(byName),
-  };
-}
 
 // Every contact, by name.
 export async function listMarketingContacts(): Promise<MarketingContactRow[]> {
@@ -517,4 +435,21 @@ export async function fillGalleryArtistPictures(
   const { artists, next } = await fillArtistPictures(saved.artists, from);
   await db.marketingArtistsLookup.update({ where: { contactId: id }, data: { artists } });
   return { saved: { ...saved, artists }, next };
+}
+
+// ---------- The shared Galleries link (2026-11-13, Craig) ----------
+// The link's secret, made the first time; `fresh` makes a new one, so the
+// old link stops working.
+export async function galleriesShareToken(fresh = false): Promise<string> {
+  await requireAdmin();
+  const settings = await db.platformSettings.upsert({
+    where: { id: "singleton" },
+    update: {},
+    create: { id: "singleton" },
+    select: { galleriesShareToken: true },
+  });
+  if (settings.galleriesShareToken && !fresh) return settings.galleriesShareToken;
+  const token = newGalleriesShareToken();
+  await db.platformSettings.update({ where: { id: "singleton" }, data: { galleriesShareToken: token } });
+  return token;
 }

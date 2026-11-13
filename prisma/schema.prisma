@@ -2748,6 +2748,11 @@ model PlatformSettings {
   // been tried; switched under Administration → Plans.
   signupStripeMode StripeMode @default(TEST)
 
+  // The shared Galleries link's secret (2026-11-13): /shared/galleries/
+  // <token> shows Administration → Contacts' galleries, view only. Null:
+  // no link yet. A new one cuts off the old link.
+  galleriesShareToken String? @unique
+
   updatedAt DateTime @updatedAt
 }
 

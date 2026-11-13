@@ -99,6 +99,8 @@ const PUBLIC_PATH_PREFIXES = [
   // read by the extension itself.
   "/importer/",
   "/privacy",
+  // The shared Galleries link (2026-11-13) — the page checks its secret.
+  "/shared/",
 ];
 
 // What an artist login may open besides "/" (which sends them to their

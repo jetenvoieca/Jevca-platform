@@ -1,8 +1,9 @@
 "use client";
 
-import { useEffect, useMemo, useState, useTransition } from "react";
+import { Fragment, useEffect, useMemo, useState, useTransition } from "react";
 import {
   deleteMarketingContact,
+  galleriesShareToken,
   listMarketingContacts,
   saveMarketingContact,
 } from "@/lib/actions/marketingContacts";
@@ -90,7 +91,16 @@ const worksText = (c: Pick<MarketingContactRow, "worksTypes">) => c.worksTypes.m
 // the site.
 const websiteLink = (v: string) => (/^https?:\/\//i.test(v.trim()) ? v.trim() : `https://${v.trim()}`);
 
-export default function MarketingContactsView({ contacts: initial }: { contacts: MarketingContactRow[] }) {
+export default function MarketingContactsView({
+  contacts: initial,
+  shared = false,
+}: {
+  contacts: MarketingContactRow[];
+  // The shared Galleries link (2026-11-13): galleries only, view only —
+  // no Add, Import, Find prices, artists lookup or Share; a contact opens
+  // its details instead of its editor.
+  shared?: boolean;
+}) {
   const [contacts, setContacts] = useState(initial);
   const [showing, setShowing] = useState<Showing>("ALL");
   const [search, setSearch] = useState("");
@@ -100,10 +110,11 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   // The contact being edited — "new" for Add.
   const [editing, setEditing] = useState<MarketingContactRow | "new" | null>(null);
   const [importing, setImporting] = useState(false);
+  const [sharing, setSharing] = useState(false);
   // The contacts Find prices is looking at, and whether it was opened
   // from one tile (so starts straight away).
   const [findingPrices, setFindingPrices] = useState<{ contacts: MarketingContactRow[]; one: boolean } | null>(null);
-  const canFindPrices = (c: MarketingContactRow) => !!(c.shopUrl.trim() || c.website.trim());
+  const canFindPrices = (c: MarketingContactRow) => !shared && !!(c.shopUrl.trim() || c.website.trim());
   // The gallery whose website's artists are shown.
   const [artistsOf, setArtistsOf] = useState<MarketingContactRow | null>(null);
 
@@ -160,24 +171,33 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
 
   return (
     <div>
-      <div className="mb-1 flex items-center gap-2">
-        <h1 className="text-2xl font-semibold text-neutral-900">Contacts</h1>
-        <AddIconButton label="Add a contact" onClick={() => setEditing("new")} />
-        <button
-          type="button"
-          onClick={() => setFindingPrices({ contacts: shown.filter(canFindPrices), one: false })}
-          className={`${secondaryButtonCls} ml-auto`}
-        >
-          Find prices
-        </button>
-        <button type="button" onClick={() => setImporting(true)} className={secondaryButtonCls}>
-          Import
-        </button>
-      </div>
-      <p className="mb-6 text-sm text-neutral-500">Artists and galleries to keep in touch with.</p>
+      {shared ? (
+        <h1 className="mb-6 text-2xl font-semibold text-neutral-900">Galleries</h1>
+      ) : (
+        <>
+          <div className="mb-1 flex items-center gap-2">
+            <h1 className="text-2xl font-semibold text-neutral-900">Contacts</h1>
+            <AddIconButton label="Add a contact" onClick={() => setEditing("new")} />
+            <button
+              type="button"
+              onClick={() => setFindingPrices({ contacts: shown.filter(canFindPrices), one: false })}
+              className={`${secondaryButtonCls} ml-auto`}
+            >
+              Find prices
+            </button>
+            <button type="button" onClick={() => setImporting(true)} className={secondaryButtonCls}>
+              Import
+            </button>
+            <button type="button" onClick={() => setSharing(true)} className={secondaryButtonCls}>
+              Share galleries
+            </button>
+          </div>
+          <p className="mb-6 text-sm text-neutral-500">Artists and galleries to keep in touch with.</p>
+        </>
+      )}
 
       <div className="mb-4 flex flex-wrap items-center gap-3">
-        <Segmented options={SHOWING} value={showing} onChange={setShowing} />
+        {!shared && <Segmented options={SHOWING} value={showing} onChange={setShowing} />}
         <input
           type="search"
           value={search}
@@ -337,7 +357,11 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         </div>
       )}
 
-      {editing && (
+      {editing && shared && editing !== "new" && (
+        <ContactDetails contact={editing} onClose={() => setEditing(null)} />
+      )}
+      {sharing && <ShareGalleries onClose={() => setSharing(false)} />}
+      {editing && !shared && (
         <ContactModal
           contact={editing === "new" ? null : editing}
           contacts={contacts}
@@ -364,6 +388,77 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
         />
       )}
     </div>
+  );
+}
+
+// A gallery's details on the shared Galleries link — everything, view only.
+function ContactDetails({ contact: c, onClose }: { contact: MarketingContactRow; onClose: () => void }) {
+  const row = (label: string, value: React.ReactNode) =>
+    value ? (
+      <div>
+        <p className={labelCls}>{label}</p>
+        <div className="whitespace-pre-wrap break-words text-sm text-neutral-800">{value}</div>
+      </div>
+    ) : null;
+  const link = (v: string) => v && <ContactLink href={websiteLink(v)} text={v} newTab />;
+  return (
+    <FormModal title={c.name} busy={false} onClose={onClose}>
+      {c.photoUrl && <Photo url={c.photoUrl} className="aspect-[4/3] w-full rounded-md" />}
+      {PRICE_BANDS.map((b) => (
+        <Fragment key={b.label}>{row(b.label, priceBand(c, b))}</Fragment>
+      ))}
+      {row("Works", worksText(c))}
+      {row("Contact person", c.contactPerson)}
+      {row("Email", c.email && <ContactLink href={`mailto:${c.email}`} text={c.email} />)}
+      {row("Phone", c.phone && <ContactLink href={`tel:${c.phone}`} text={c.phone} />)}
+      {row("Website", link(c.website))}
+      {row("Shop page", link(c.shopUrl))}
+      {row("Town", [c.town, c.country].filter(Boolean).join(", "))}
+      {row("Instagram", c.instagram)}
+      {row("TikTok", c.tiktok)}
+      {row(LINKS_LABEL[c.type], c.links.map((l) => l.name).join(", "))}
+      {row("Tags", c.tags.map((t) => t.name).join(", "))}
+      {row("Notes", c.notes)}
+    </FormModal>
+  );
+}
+
+// Share galleries (2026-11-13, Craig): the link for colleagues — the
+// galleries, view only — to copy, and a new link that stops the old one.
+function ShareGalleries({ onClose }: { onClose: () => void }) {
+  const [token, setToken] = useState<string | null>(null);
+  const [message, setMessage] = useState<string | null>(null);
+  const [isPending, startTransition] = useTransition();
+  useEffect(() => {
+    galleriesShareToken().then(setToken, () => setMessage("The link couldn't be made."));
+  }, []);
+  const url = token ? `${window.location.origin}/shared/galleries/${token}` : "";
+  const copy = async () => {
+    await navigator.clipboard.writeText(url).catch(() => {});
+    setMessage("Copied.");
+  };
+  const renew = () =>
+    startTransition(async () => {
+      setToken(await galleriesShareToken(true));
+      setMessage("New link made — the old one no longer works.");
+    });
+  return (
+    <FormModal title="Share galleries" busy={isPending} onClose={onClose}>
+      <p className="text-sm text-neutral-600">
+        Anyone with this link can see the galleries (all their details) but can&apos;t change anything, or see
+        anything else.
+      </p>
+      <input readOnly value={url} onFocus={(e) => e.target.select()} className={inputCls} />
+      <div className="flex items-center gap-2">
+        <button type="button" onClick={copy} disabled={!token} className={secondaryButtonCls}>
+          Copy link
+        </button>
+        <button type="button" onClick={renew} disabled={!token || isPending} className={secondaryButtonCls}>
+          Make a new link
+        </button>
+        {message && <p className="ml-2 text-sm text-neutral-500">{message}</p>}
+      </div>
+    </FormModal>
   );
 }
 
