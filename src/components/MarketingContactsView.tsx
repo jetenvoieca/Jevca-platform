@@ -20,6 +20,7 @@ import {
   type MarketingContactRow,
   type MarketingContactType,
   type MarketingCurrency,
+  type MarketingSavedArtists,
   type MarketingWorksType,
 } from "@/lib/marketingContacts";
 import AddIconButton from "@/components/AddIconButton";
@@ -93,14 +94,16 @@ const websiteLink = (v: string) => (/^https?:\/\//i.test(v.trim()) ? v.trim() : 
 
 export default function MarketingContactsView({
   contacts: initial,
-  shared = false,
+  shared: sharedData,
 }: {
   contacts: MarketingContactRow[];
   // The shared Galleries link (2026-11-13): galleries only, view only —
-  // no Add, Import, Find prices, artists lookup or Share; a contact opens
-  // its details instead of its editor.
-  shared?: boolean;
+  // no Add, Import, Find prices or Share; a contact opens its details
+  // instead of its editor; the artist icon shows the artists last found
+  // on a gallery's website (`artists`, by gallery), without looking again.
+  shared?: { artists: Record<string, MarketingSavedArtists> };
 }) {
+  const shared = !!sharedData;
   const [contacts, setContacts] = useState(initial);
   const [showing, setShowing] = useState<Showing>("ALL");
   const [search, setSearch] = useState("");
@@ -246,7 +249,7 @@ export default function MarketingContactsView({
                 </div>
               </button>
               <div className="absolute bottom-2.5 right-2.5 flex items-center gap-1">
-                {c.type === "GALLERY" && canFindPrices(c) && (
+                {c.type === "GALLERY" && (sharedData ? !!sharedData.artists[c.id] : canFindPrices(c)) && (
                   <button
                     type="button"
                     onClick={() => setArtistsOf(c)}
@@ -378,7 +381,13 @@ export default function MarketingContactsView({
           onClose={() => setImporting(false)}
         />
       )}
-      {artistsOf && <MarketingGalleryArtists gallery={artistsOf} onClose={() => setArtistsOf(null)} />}
+      {artistsOf && (
+        <MarketingGalleryArtists
+          gallery={artistsOf}
+          viewOnly={sharedData?.artists[artistsOf.id]}
+          onClose={() => setArtistsOf(null)}
+        />
+      )}
       {findingPrices && (
         <MarketingPriceFinder
           contacts={findingPrices.contacts}

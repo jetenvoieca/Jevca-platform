@@ -15,11 +15,11 @@ export const metadata: Metadata = {
 // platform. Only the current link works (see readSharedGalleries).
 export default async function SharedGalleriesPage({ params }: { params: Promise<{ token: string }> }) {
   const { token } = await params;
-  const galleries = await readSharedGalleries(token);
-  if (!galleries) notFound();
+  const shared = await readSharedGalleries(token);
+  if (!shared) notFound();
   return (
     <div className="px-6 py-6">
-      <MarketingContactsView contacts={galleries} shared />
+      <MarketingContactsView contacts={shared.galleries} shared={{ artists: shared.artists }} />
     </div>
   );
 }

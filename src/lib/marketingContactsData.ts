@@ -3,6 +3,8 @@ import { db } from "@/lib/db";
 import {
   WORKS_TYPES,
   type MarketingContactRow,
+  type MarketingFoundArtist,
+  type MarketingSavedArtists,
   type MarketingContactType,
   type MarketingCurrency,
   type MarketingWorksType,
@@ -102,15 +104,37 @@ export function newGalleriesShareToken(): string {
   return randomBytes(24).toString("base64url");
 }
 
-// The galleries, by name — only for the current link's token.
-export async function readSharedGalleries(token: string): Promise<MarketingContactRow[] | null> {
+// A gallery's artists as last looked up on its website (2026-11-07).
+type StoredLookup = { source: string; url: string; artists: unknown; checkedAt: Date };
+export function toSavedArtists(saved: StoredLookup): MarketingSavedArtists {
+  return {
+    found: true,
+    source: saved.source,
+    url: saved.url,
+    artists: Array.isArray(saved.artists) ? (saved.artists as MarketingFoundArtist[]) : [],
+    checkedAt: saved.checkedAt.toISOString(),
+  };
+}
+
+// The galleries, by name, and the artists last found on their websites
+// (by gallery) — only for the current link's token.
+export async function readSharedGalleries(
+  token: string,
+): Promise<{ galleries: MarketingContactRow[]; artists: Record<string, MarketingSavedArtists> } | null> {
   if (!token) return null;
   const settings = await db.platformSettings.findFirst({ where: { galleriesShareToken: token }, select: { id: true } });
   if (!settings) return null;
-  const rows = await db.marketingContact.findMany({
-    where: { type: "GALLERY" },
-    select: CONTACT_SELECT,
-    orderBy: { name: "asc" },
-  });
-  return rows.map(toContactRow);
+  const [rows, lookups] = await Promise.all([
+    db.marketingContact.findMany({ where: { type: "GALLERY" }, select: CONTACT_SELECT, orderBy: { name: "asc" } }),
+    db.marketingArtistsLookup.findMany({
+      where: { contact: { type: "GALLERY" } },
+      select: { contactId: true, source: true, url: true, artists: true, checkedAt: true },
+    }),
+  ]);
+  return {
+    galleries: rows.map(toContactRow),
+    artists: Object.fromEntries(
+      lookups.map((l) => [l.contactId, toSavedArtists(l)]),
+    ),
+  };
 }

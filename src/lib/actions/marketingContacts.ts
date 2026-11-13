@@ -5,14 +5,18 @@ import { db } from "@/lib/db";
 import { fillArtistPictures, findArtistsPage, readArtists } from "@/lib/artistFinder";
 import { findPrices } from "@/lib/priceFinder";
 import type { Prisma } from "@/generated/prisma/client";
-import { CONTACT_SELECT as select, newGalleriesShareToken, toContactRow as toRow } from "@/lib/marketingContactsData";
+import {
+  CONTACT_SELECT as select,
+  newGalleriesShareToken,
+  toContactRow as toRow,
+  toSavedArtists,
+} from "@/lib/marketingContactsData";
 import {
   CURRENCIES,
   PRICE_BANDS,
   WORKS_TYPES,
   type MarketingArtistFind,
   type MarketingArtistsPage,
-  type MarketingFoundArtist,
   type MarketingSavedArtists,
   type MarketingContactInput,
   type MarketingContactLinkRef,
@@ -389,14 +393,7 @@ export async function saveMarketingPrices(
 export async function getGalleryArtists(id: string): Promise<MarketingSavedArtists | null> {
   await requireAdmin();
   const saved = await db.marketingArtistsLookup.findUnique({ where: { contactId: id } });
-  if (!saved) return null;
-  return {
-    found: true,
-    source: saved.source,
-    url: saved.url,
-    artists: Array.isArray(saved.artists) ? (saved.artists as MarketingFoundArtist[]) : [],
-    checkedAt: saved.checkedAt.toISOString(),
-  };
+  return saved ? toSavedArtists(saved) : null;
 }
 
 export async function findGalleryArtistsPage(id: string, viaService = false): Promise<MarketingArtistsPage> {

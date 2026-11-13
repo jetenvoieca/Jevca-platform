@@ -20,18 +20,22 @@ import FormModal from "@/components/FormModal";
 // artistFinder.ts) — which costs credits, hence keeping the results.
 // Artists the artists page showed no picture for then get one from their
 // own page, a batch at a time (fillGalleryArtistPictures).
+// On the shared Galleries link (2026-11-13) it shows what was last found
+// (`viewOnly`), without Update.
 
 const checkedOn = (iso: string) =>
   new Date(iso).toLocaleDateString("en-GB", { day: "numeric", month: "short", year: "numeric" });
 
 export default function MarketingGalleryArtists({
   gallery,
+  viewOnly,
   onClose,
 }: {
   gallery: MarketingContactRow;
+  viewOnly?: MarketingSavedArtists;
   onClose: () => void;
 }) {
-  const [saved, setSaved] = useState<MarketingSavedArtists | null>(null);
+  const [saved, setSaved] = useState<MarketingSavedArtists | null>(viewOnly ?? null);
   const [loaded, setLoaded] = useState(false);
   const [looking, setLooking] = useState(false);
   // Reading the site through the page-reading service.
@@ -84,6 +88,7 @@ export default function MarketingGalleryArtists({
   };
 
   useEffect(() => {
+    if (viewOnly) return;
     getGalleryArtists(gallery.id)
       .catch(() => null)
       .then((kept) => {
