@@ -6,6 +6,8 @@ import { readSiteFeatures } from "@/lib/siteFeaturesData";
 import { noteHopperAdded } from "@/lib/hopperAlerts";
 import { listArtistAppPages, type ArtistAppPage } from "@/lib/actions/artistApp";
 import { arrangePages } from "@/lib/artistAppPageOrder";
+import { listPageStyles } from "@/lib/actions/pageStyles";
+import { readContactPanel } from "@/lib/contactPanel";
 import type { HopperNoteItem } from "@/lib/actions/hopper";
 import {
   CONCIERGE_KINDS,
@@ -26,7 +28,7 @@ async function conciergeArtist(siteId: string): Promise<string | { error: string
 
 export async function sendConciergeRequest(
   siteId: string,
-  input: { kind: string; text: string; imageId: string | null },
+  input: { kind: string; text: string; imageId: string | null; pageId: string | null },
 ): Promise<{ ok: true } | { error: string }> {
   const artistId = await conciergeArtist(siteId);
   if (typeof artistId !== "string") return artistId;
@@ -39,9 +41,44 @@ export async function sendConciergeRequest(
     const image = await db.image.findFirst({ where: { id: input.imageId, artistId }, select: { id: true } });
     if (!image) return { error: "That picture wasn't found." };
   }
-  await db.hopperNote.create({ data: { artistId, siteId, kind: input.kind, text, imageId: input.imageId } });
+  if (input.pageId && input.kind !== "rearrange") return { error: "Only a rearrange request names a page." };
+  if (input.pageId) {
+    const page = await db.page.findFirst({ where: { id: input.pageId, siteId }, select: { id: true } });
+    if (!page) return { error: "That page wasn't found." };
+  }
+  await db.hopperNote.create({
+    data: { artistId, siteId, kind: input.kind, text, imageId: input.imageId, pageId: input.pageId },
+  });
   await noteHopperAdded(artistId);
   return { ok: true };
+}
+
+// "Rearrange artworks on a page" — "On which page?" (2026-11-13, Craig's
+// mockup): the site's pages that show works, in the lists' order (Live,
+// then Hidden), leaving out a group's title page (its pages are listed).
+export async function listConciergeWorkPages(siteId: string): Promise<{ id: string; title: string }[]> {
+  const artistId = await conciergeArtist(siteId);
+  if (typeof artistId !== "string") return [];
+  const [pages, rows, styles] = await Promise.all([
+    listArtistAppPages(siteId),
+    db.page.findMany({ where: { siteId }, select: { id: true, pageStyleId: true, contactPanel: true } }),
+    listPageStyles(),
+  ]);
+  const showcaseStyles = new Set(
+    styles
+      .filter((st) => st.type === "BLOCK_BUILD" && st.layout.blocks.some((b) => b.type === "showcase"))
+      .map((st) => st.id),
+  );
+  const byId = new Map<string, { pageStyleId: string | null; contactPanel: unknown }>(
+    rows.map((r) => [r.id, r]),
+  );
+  return arrangePages<ArtistAppPage>(pages)
+    .filter((p) => {
+      const row = byId.get(p.id);
+      if (!row || readContactPanel(row.contactPanel) || pages.some((c) => c.parentId === p.id)) return false;
+      return p.hasCuration || (!!row.pageStyleId && showcaseStyles.has(row.pageStyleId));
+    })
+    .map((p) => ({ id: p.id, title: p.title }));
 }
 
 // The artist's requests, newest first, with whether each is done.
@@ -52,11 +89,19 @@ export async function listConciergeRequests(siteId: string): Promise<ConciergeRe
     where: { artistId, kind: { not: null } },
     orderBy: { createdAt: "desc" },
     take: 50,
-    select: { id: true, kind: true, text: true, doneAt: true, createdAt: true, image: { select: { url: true } } },
+    select: {
+      id: true,
+      kind: true,
+      text: true,
+      doneAt: true,
+      createdAt: true,
+      image: { select: { url: true } },
+      page: { select: { title: true } },
+    },
   });
   return rows.map((r) => ({
     id: r.id,
-    kind: conciergeKindLabel(r.kind) ?? "Request",
+    kind: [conciergeKindLabel(r.kind) ?? "Request", r.page?.title].filter(Boolean).join(" · "),
     text: r.text,
     imageUrl: r.image?.url ?? null,
     createdAt: r.createdAt.toISOString(),
@@ -78,6 +123,8 @@ export type ConciergeNote = HopperNoteItem & {
   client: string;
   siteId: string | null;
   siteName: string | null;
+  // The page the request is about, if the artist chose one.
+  pageId: string | null;
 };
 
 export type ConciergePicture = {
@@ -102,6 +149,7 @@ export async function listConciergeQueue(): Promise<{ notes: ConciergeNote[]; pi
       artistId: true,
       artist: { select: { name: true } },
       site: { select: { id: true, name: true } },
+      pageId: true,
       image: { select: { id: true, url: true, status: true, createdAt: true } },
     },
   });
@@ -116,6 +164,7 @@ export async function listConciergeQueue(): Promise<{ notes: ConciergeNote[]; pi
     client: n.artist.name,
     siteId: n.site?.id ?? null,
     siteName: n.site?.name ?? null,
+    pageId: n.pageId,
   }));
   const pictures = rows.flatMap((n) =>
     n.image && n.image.status === "HOPPER" && n.site

@@ -25,8 +25,8 @@ export function ConciergePagesTask({ note }: { note: ConciergeNote }) {
   return <SitePages note={note} withWorks={false} />;
 }
 
-// Rearrange artworks on a page: choose the page, then drag its works into
-// order (or Remove work).
+// Rearrange artworks on a page: the page the artist chose (or choose it),
+// then drag its works into order (or Remove work).
 export function ConciergeArrangeTask({ note }: { note: ConciergeNote }) {
   return <SitePages note={note} withWorks />;
 }
@@ -39,10 +39,18 @@ function SitePages({ note, withWorks }: { note: ConciergeNote; withWorks: boolea
       </p>
     );
   }
-  return <SitePagesLoader siteId={note.siteId} withWorks={withWorks} />;
+  return <SitePagesLoader siteId={note.siteId} withWorks={withWorks} pageId={withWorks ? note.pageId : null} />;
 }
 
-function SitePagesLoader({ siteId, withWorks }: { siteId: string; withWorks: boolean }) {
+function SitePagesLoader({
+  siteId,
+  withWorks,
+  pageId,
+}: {
+  siteId: string;
+  withWorks: boolean;
+  pageId: string | null;
+}) {
   const [loaded, setLoaded] = useState<Awaited<ReturnType<typeof conciergeSitePages>> | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -60,6 +68,7 @@ function SitePagesLoader({ siteId, withWorks }: { siteId: string; withWorks: boo
       initialPages={loaded.pages}
       pagesPerGroup={loaded.pagesPerGroup}
       withWorks={withWorks}
+      initialPageId={pageId}
     />
   );
 }
@@ -72,12 +81,15 @@ function SitePagesEditor({
   initialPages,
   pagesPerGroup,
   withWorks,
+  initialPageId,
 }: {
   siteId: string;
   artistId: string;
   initialPages: ArtistAppPage[];
   pagesPerGroup: number | null;
   withWorks: boolean;
+  // The page to open on (the one the request is about).
+  initialPageId: string | null;
 }) {
   const [error, setError] = useState<string | null>(null);
   const [dragging, setDragging] = useState<PageDragData | ItemDragData | null>(null);
@@ -104,6 +116,12 @@ function SitePagesEditor({
     setSelectedId(pageId);
     loadContent(pageId);
   };
+
+  useEffect(() => {
+    if (initialPageId && initialPages.some((p) => p.id === initialPageId)) selectPage(initialPageId);
+    // Once, on opening.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const onDragEnd = (e: DragEndEvent) => {
     setDragging(null);

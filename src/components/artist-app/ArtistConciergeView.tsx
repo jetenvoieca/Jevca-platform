@@ -16,23 +16,29 @@ import { formatDateTime } from "@/lib/formatDate";
 // / edit an Artwork" takes a picture (one), and also opens the new work
 // form (the Catalogue only). "Update my Artist statement" starts from the
 // statement as it is, edited and sent to be checked before it goes on the
-// website. Under them, the requests sent and whether each is done.
+// website. "Rearrange artworks on a page" has "On which page?" beside the
+// text — the page chosen (optional) is where Administration → Concierge
+// opens. Under them, the requests sent and whether each is done.
 export default function ArtistConciergeView({
   siteId,
   artistId,
   requests,
   statement,
+  workPages,
 }: {
   siteId: string;
   artistId: string;
   requests: ConciergeRequest[];
   // The Artist Statement as it is now.
   statement: string;
+  // The pages a rearrange request can name (listConciergeWorkPages).
+  workPages: { id: string; title: string }[];
 }) {
   const router = useRouter();
   const words = useClientWords();
   const [kind, setKind] = useState<ConciergeKind>(CONCIERGE_KINDS[0].key);
   const [text, setText] = useState("");
+  const [pageId, setPageId] = useState<string | null>(null);
   const [picture, setPicture] = useState<{ id: string; preview: string } | null>(null);
   const [busy, setBusy] = useState<"upload" | "send" | null>(null);
   const [message, setMessage] = useState<{ error: boolean; text: string } | null>(null);
@@ -66,13 +72,19 @@ export default function ArtistConciergeView({
   const send = async () => {
     setBusy("send");
     setMessage(null);
-    const result = await sendConciergeRequest(siteId, { kind, text, imageId: picture?.id ?? null }).catch(() => ({
+    const result = await sendConciergeRequest(siteId, {
+      kind,
+      text,
+      imageId: picture?.id ?? null,
+      pageId: kind === "rearrange" ? pageId : null,
+    }).catch(() => ({
       error: "That wasn't sent — please try again.",
     }));
     setBusy(null);
     if ("error" in result) return setMessage({ error: true, text: result.error });
     setText("");
     setPicture(null);
+    setPageId(null);
     setMessage({ error: false, text: "Sent — we'll take care of it." });
     router.refresh();
   };
@@ -82,6 +94,7 @@ export default function ArtistConciergeView({
     setMessage(null);
     setText(next === "statement" ? statement : "");
     if (next !== "artwork") setPicture(null);
+    setPageId(null);
   };
   // The statement must be changed before it's sent.
   const unchanged = kind === "statement" && text.trim() === statement.trim();
@@ -109,17 +122,39 @@ export default function ArtistConciergeView({
 
         <section className="flex min-h-96 flex-col gap-4 rounded-lg border border-neutral-300 p-5">
           <h3 className="text-center text-2xl font-light text-neutral-800">{label}</h3>
-          <textarea
-            id="concierge-text"
-            value={text}
-            onChange={(e) => setText(e.target.value)}
-            maxLength={CONCIERGE_MAX_LENGTH}
-            placeholder={kind === "statement" ? "Your artist statement" : "Just say what's needed"}
-            aria-label={kind === "statement" ? "Your artist statement" : "What's needed"}
-            className={`min-h-48 flex-1 resize-y p-1 font-light text-neutral-800 outline-none placeholder:text-neutral-500 ${
-              kind === "statement" ? "text-base" : "text-xl"
-            }`}
-          />
+          <div className={kind === "rearrange" ? "grid flex-1 gap-6 sm:grid-cols-[minmax(0,3fr)_minmax(0,2fr)]" : "flex flex-1 flex-col"}>
+            <textarea
+              id="concierge-text"
+              value={text}
+              onChange={(e) => setText(e.target.value)}
+              maxLength={CONCIERGE_MAX_LENGTH}
+              placeholder={kind === "statement" ? "Your artist statement" : "Just say what's needed"}
+              aria-label={kind === "statement" ? "Your artist statement" : "What's needed"}
+              className={`min-h-48 flex-1 resize-y p-1 font-light text-neutral-800 outline-none placeholder:text-neutral-500 ${
+                kind === "statement" ? "text-base" : "text-xl"
+              }`}
+            />
+            {kind === "rearrange" && workPages.length > 0 && (
+              <div>
+                <p className="mb-3 text-xl font-light text-neutral-800">On which page?</p>
+                <div className="flex flex-col border border-neutral-300 p-1">
+                  {workPages.map((p) => (
+                    <button
+                      key={p.id}
+                      type="button"
+                      onClick={() => setPageId(p.id === pageId ? null : p.id)}
+                      aria-pressed={p.id === pageId}
+                      className={`px-2 py-1 text-left text-base ${
+                        p.id === pageId ? "bg-neutral-900 text-white" : "text-neutral-800 hover:bg-neutral-50"
+                      }`}
+                    >
+                      {p.title}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            )}
+          </div>
           {picture && (
             <div className="flex items-end gap-3">
               {/* eslint-disable-next-line @next/next/no-img-element */}

@@ -1525,6 +1525,8 @@ model Page {
   parentId String?
   parent   Page?   @relation("PageParent", fields: [parentId], references: [id], onDelete: SetNull)
   children Page[]  @relation("PageParent")
+  // Concierge requests about this page (2026-11-13).
+  conciergeRequests HopperNote[]
 
   // A Contact panel page (2026-11-03, the ISYT sites' "contact" — see
   // lib/contactPanel.ts): its menu item slides the site's Contact panel
@@ -2380,6 +2382,10 @@ model HopperNote {
   // Administration → Concierge acts on that site.
   siteId   String?
   site     Site?  @relation(fields: [siteId], references: [id], onDelete: SetNull)
+  // The page it's about, when the artist chose one ("Rearrange artworks on
+  // a page" — Concierge opens on it).
+  pageId   String?
+  page     Page?  @relation(fields: [pageId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
