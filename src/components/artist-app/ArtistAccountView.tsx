@@ -46,8 +46,16 @@ export default function ArtistAccountView({
   const { plan } = account;
   return (
     <MainPanel heading="Account">
-        <div className="grid gap-6 lg:grid-cols-2">
+        {/* Contact details on the left; on the right what it costs, then
+            what's included under it (2026-11-13, Craig's screenshot). */}
+        <div className="grid items-start gap-6 lg:grid-cols-2">
+          <ContactDetails contact={contact} />
           <div className="flex flex-col gap-6">
+            {plan ? (
+              <PlanChoice siteId={siteId} plan={plan} initial={account.addOns} />
+            ) : (
+              <p className={`${BOX} text-sm text-neutral-500`}>Your site doesn&apos;t have a plan yet.</p>
+            )}
             <section className={BOX}>
               <h3 className="mb-3 text-lg text-neutral-800">Plan : {plan?.name ?? "none yet"}</h3>
               {plan && plan.included.length > 0 && (
@@ -58,14 +66,6 @@ export default function ArtistAccountView({
                 </ul>
               )}
             </section>
-            <ContactDetails contact={contact} />
-          </div>
-          <div>
-            {plan ? (
-              <PlanChoice siteId={siteId} plan={plan} initial={account.addOns} />
-            ) : (
-              <p className={`${BOX} text-sm text-neutral-500`}>Your site doesn&apos;t have a plan yet.</p>
-            )}
           </div>
         </div>
     </MainPanel>
