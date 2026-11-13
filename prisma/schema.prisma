@@ -1412,14 +1412,16 @@ model Site {
   // What the site's subscription is (2026-11-09) — see Plan below: its
   // Plan, the Site Theme it uses (one the Plan allows) and its add-ons.
   // A plan in use can't be deleted; a theme deleted leaves none.
-  // `planPrice`: what the site pays a month for its plan, in the plan's
-  // currency (2026-11-10) — the plan's price when it joined, kept when the
+  // `planPrice`: what the site pays a month for its plan, in
+  // `planCurrency` (2026-11-10; the currency it pays in, 2026-11-13 — kept
+  // apart from `defaultCurrency`, its works') — the plan's price when it joined, kept when the
   // plan's price later changes (Craig: price changes are for new sign-ups
   // only); the admin can set its own (existing customers' prices). Its
   // add-ons are added on top, each at its own kept price (SiteAddOn).
   // Set whenever planId is.
   planId      String?
   planPrice   Decimal?   @db.Decimal(10, 2)
+  planCurrency String?
   plan        Plan?      @relation(fields: [planId], references: [id], onDelete: Restrict)
   siteThemeId String?
   siteTheme   SiteTheme? @relation(fields: [siteThemeId], references: [id], onDelete: SetNull)
@@ -1760,8 +1762,6 @@ model SiteTheme {
 model Plan {
   id             String  @id @default(cuid())
   name           String  @unique
-  monthlyPrice   Decimal @db.Decimal(10, 2)
-  currency       String  @default("GBP")
   groupsIncluded Int     @default(1)
   pagesPerGroup  Int     @default(10)
   // What it includes, one item a line (2026-11-10) — listed on the
@@ -1775,6 +1775,9 @@ model Plan {
   includesWeb    Boolean @default(true)
   includesArt    Boolean @default(false)
 
+  // Its price in each currency (2026-11-13: £, € and $ — see
+  // PLAN_CURRENCIES in lib/plans.ts); its add-ons likewise (PlanAddOn).
+  prices      PlanPrice[]
   themes      PlanTheme[]
   addOns      PlanAddOn[]
   sites       Site[]
@@ -1816,9 +1819,21 @@ model PlanAddOn {
   planId       String
   plan         Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
   addOn        AddOn
+  // One row for each currency (2026-11-13).
+  currency     String
   monthlyPrice Decimal @db.Decimal(10, 2)
 
-  @@id([planId, addOn])
+  @@id([planId, addOn, currency])
+}
+
+// A plan's price in one currency (2026-11-13).
+model PlanPrice {
+  planId       String
+  plan         Plan    @relation(fields: [planId], references: [id], onDelete: Cascade)
+  currency     String
+  monthlyPrice Decimal @db.Decimal(10, 2)
+
+  @@id([planId, currency])
 }
 
 // An add-on a site has (`quantity` for EXTRA_PAGE_GROUP; 1 otherwise),
@@ -3163,6 +3178,8 @@ model SignupLink {
   siteThemeId String
   siteTheme   SiteTheme  @relation(fields: [siteThemeId], references: [id], onDelete: Cascade)
   planPrice   Decimal    @db.Decimal(10, 2)
+  // The currency the offer is in (2026-11-13) — its prices and the site's.
+  currency    String
   name        String?
   email       String?
   expiresAt   DateTime

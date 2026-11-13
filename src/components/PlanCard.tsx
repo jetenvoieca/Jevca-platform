@@ -2,7 +2,15 @@
 
 import { useState, useTransition } from "react";
 import { setSiteSubscription } from "@/lib/actions/plans";
-import { priceAddOns, toPence, type PlanSummary, type SiteSubscription } from "@/lib/plans";
+import {
+  PLAN_CURRENCIES,
+  priceAddOns,
+  pricePlan,
+  toPence,
+  type PlanCurrency,
+  type PlanSummary,
+  type SiteSubscription,
+} from "@/lib/plans";
 import PlanAddOnsList from "@/components/PlanAddOnsList";
 import { formatMoney } from "@/lib/currencies";
 
@@ -12,7 +20,8 @@ import { formatMoney } from "@/lib/currencies";
 // when it joined, kept when that changes (2026-11-10), or its own
 // (existing customers'; saved when its box is left, blank for the plan's
 // price now) — and the add-ons the Plan offers, ticked, each at the price
-// the site took it at, and what that comes to a month (PlanAddOnsList).
+// the site took it at, and what that comes to a month (PlanAddOnsList) —
+// all in the currency it pays in (2026-11-13: £, € or $).
 // Shown only: Stripe is still set by hand (Subscription). Each change
 // saves at once.
 export default function PlanCard({
@@ -33,7 +42,8 @@ export default function PlanCard({
   const [price, setPrice] = useState(initial.planPrice ?? "");
   const [error, setError] = useState<string | null>(null);
   const [isPending, startTransition] = useTransition();
-  const plan = plans.find((p) => p.id === value.planId) ?? null;
+  const chosen = plans.find((p) => p.id === value.planId) ?? null;
+  const plan = chosen ? pricePlan(chosen, value.currency ?? "GBP") : null;
   const themeName = new Map(themes.map((t) => [t.id, t.name]));
 
   const save = (next: SiteSubscription) => {
@@ -51,13 +61,14 @@ export default function PlanCard({
     });
   };
 
-  // A new plan starts at its prices, with no add-ons.
-  const choosePlan = (planId: string) => {
-    const chosen = plans.find((p) => p.id === planId) ?? null;
+  // A new plan or currency starts at its prices, with no add-ons.
+  const choosePlan = (planId: string, currency: PlanCurrency = value.currency ?? "GBP") => {
+    const next = plans.find((p) => p.id === planId) ?? null;
     save({
-      planId: chosen?.id ?? null,
-      siteThemeId: chosen?.themeIds[0] ?? null,
-      planPrice: chosen?.monthlyPrice ?? null,
+      planId: next?.id ?? null,
+      currency: next ? currency : null,
+      siteThemeId: (next?.id === value.planId ? value.siteThemeId : null) ?? next?.themeIds[0] ?? null,
+      planPrice: next?.prices[currency] ?? null,
       addOns: [],
     });
   };
@@ -83,13 +94,28 @@ export default function PlanCard({
           <option value="">No plan</option>
           {plans.map((p) => (
             <option key={p.id} value={p.id}>
-              {p.name} — {formatMoney(p.monthlyPrice, p.currency, "when-any")} a month
+              {p.name} — {formatMoney(p.prices[value.currency ?? "GBP"], value.currency ?? "GBP", "when-any")} a month
             </option>
           ))}
         </select>
 
         {plan && (
           <>
+            <label className="flex items-center gap-2">
+              <span className="w-16 shrink-0 text-neutral-500">Pays in</span>
+              <select
+                value={plan.currency}
+                onChange={(e) => choosePlan(plan.id, e.target.value as PlanCurrency)}
+                disabled={isPending}
+                className={field}
+              >
+                {PLAN_CURRENCIES.map((c) => (
+                  <option key={c} value={c}>
+                    {c}
+                  </option>
+                ))}
+              </select>
+            </label>
             <label className="flex items-center gap-2">
               <span className="w-16 shrink-0 text-neutral-500">Theme</span>
               <select

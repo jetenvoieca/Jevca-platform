@@ -4,7 +4,15 @@ import { useState, useTransition } from "react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
 import { createSignupLink, deleteSignupLink } from "@/lib/actions/signupLinks";
-import { ADD_ONS, monthlyTotalPence, type PlanSummary, type SiteAddOnChoice } from "@/lib/plans";
+import {
+  ADD_ONS,
+  PLAN_CURRENCIES,
+  monthlyTotalPence,
+  pricePlan,
+  type PlanCurrency,
+  type PlanSummary,
+  type SiteAddOnChoice,
+} from "@/lib/plans";
 import {
   SIGNUP_LINK_LIMITS,
   SIGNUP_LINK_STATUS_LABEL,
@@ -211,9 +219,12 @@ function NewLinkModal({
   onCreated: () => void;
 }) {
   const [planId, setPlanId] = useState(plans[0]?.id ?? "");
-  const plan = plans.find((p) => p.id === planId) ?? null;
+  // The offer's currency (2026-11-13).
+  const [currency, setCurrency] = useState<PlanCurrency>("GBP");
+  const chosenPlan = plans.find((p) => p.id === planId) ?? null;
+  const plan = chosenPlan ? pricePlan(chosenPlan, currency) : null;
   const [siteThemeId, setSiteThemeId] = useState(plans[0]?.themeIds[0] ?? "");
-  const [planPrice, setPlanPrice] = useState(plans[0]?.monthlyPrice ?? "");
+  const [planPrice, setPlanPrice] = useState(plans[0]?.prices.GBP ?? "");
   const [addOns, setAddOns] = useState<SiteAddOnChoice[]>([]);
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
@@ -225,18 +236,28 @@ function NewLinkModal({
   const backdrop = useBackdropClose(onClose);
   const themeName = new Map(themes.map((t) => [t.id, t.name]));
 
-  const choosePlan = (id: string) => {
+  const choosePlan = (id: string, inCurrency: PlanCurrency = currency) => {
     const chosen = plans.find((p) => p.id === id);
     setPlanId(id);
-    setSiteThemeId(chosen?.themeIds[0] ?? "");
-    setPlanPrice(chosen?.monthlyPrice ?? "");
+    setCurrency(inCurrency);
+    if (id !== planId) setSiteThemeId(chosen?.themeIds[0] ?? "");
+    setPlanPrice(chosen?.prices[inCurrency] ?? "");
     setAddOns([]);
   };
 
   const create = () => {
     setError(null);
     startTransition(async () => {
-      const result = await createSignupLink({ planId, siteThemeId, planPrice, addOns, name, email, expiryDays });
+      const result = await createSignupLink({
+        planId,
+        siteThemeId,
+        currency,
+        planPrice,
+        addOns,
+        name,
+        email,
+        expiryDays,
+      });
       if ("error" in result) return setError(result.error);
       setToken(result.token);
       onCreated();
@@ -282,12 +303,24 @@ function NewLinkModal({
               <select value={planId} onChange={(e) => choosePlan(e.target.value)} className={field}>
                 {plans.map((p) => (
                   <option key={p.id} value={p.id}>
-                    {p.name} — {formatMoney(p.monthlyPrice, p.currency, "when-any")} a month
+                    {p.name} — {formatMoney(p.prices[currency], currency, "when-any")} a month
                   </option>
                 ))}
               </select>
               {plan && (
                 <>
+                  <span className={label}>Currency</span>
+                  <select
+                    value={currency}
+                    onChange={(e) => choosePlan(planId, e.target.value as PlanCurrency)}
+                    className={field}
+                  >
+                    {PLAN_CURRENCIES.map((c) => (
+                      <option key={c} value={c}>
+                        {c}
+                      </option>
+                    ))}
+                  </select>
                   <span className={label}>Theme</span>
                   <select
                     value={siteThemeId}

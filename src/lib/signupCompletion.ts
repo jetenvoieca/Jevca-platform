@@ -34,11 +34,12 @@ const LINK_SELECT = {
   planId: true,
   siteThemeId: true,
   planPrice: true,
+  currency: true,
   signupName: true,
   signupEmail: true,
   signupPhone: true,
   passwordHash: true,
-  plan: { select: { name: true, currency: true } },
+  plan: { select: { name: true } },
   siteTheme: { select: { entries: true } },
   addOns: { select: { addOn: true, quantity: true, monthlyPrice: true } },
 } as const;
@@ -93,9 +94,12 @@ export async function completeSignup(sessionId: string, mode: StripeMode): Promi
       data: {
         name,
         artistId: artist.id,
-        defaultCurrency: link.plan.currency,
+        // The sign-up's currency: what it pays in, and its works' to start
+        // (changed in its settings — kept apart, 2026-11-13).
+        defaultCurrency: link.currency,
         planId: link.planId,
         planPrice: link.planPrice,
+        planCurrency: link.currency,
         siteThemeId: link.siteThemeId,
         billingStripeMode: mode,
         stripeCustomerId: customerId,
@@ -133,7 +137,7 @@ export async function completeSignup(sessionId: string, mode: StripeMode): Promi
     quantity: a.quantity,
     monthlyPrice: a.monthlyPrice.toFixed(2),
   }));
-  const total = formatMoney(monthlyTotalPence(link.planPrice.toFixed(2), addOns) / 100, link.plan.currency);
+  const total = formatMoney(monthlyTotalPence(link.planPrice.toFixed(2), addOns) / 100, link.currency);
   const testNote = mode === "TEST" ? " (Stripe Test)" : "";
 
   const problems = [

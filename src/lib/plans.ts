@@ -31,14 +31,31 @@ export function inRange(n: number, limits: { min: number; max: number }): boolea
   return Number.isInteger(n) && n >= limits.min && n <= limits.max;
 }
 
+// The currencies a plan is priced in (2026-11-13, Craig): each plan and
+// add-on has a price in every one; a site pays in one of them.
+export const PLAN_CURRENCIES = ["GBP", "EUR", "USD"] as const;
+export type PlanCurrency = (typeof PLAN_CURRENCIES)[number];
+
+export function isPlanCurrency(value: unknown): value is PlanCurrency {
+  return typeof value === "string" && (PLAN_CURRENCIES as readonly string[]).includes(value);
+}
+
+// A price in each currency — decimals, e.g. "19.00".
+export type CurrencyPrices = Record<PlanCurrency, string>;
+
+export const NO_PRICES: CurrencyPrices = { GBP: "0.00", EUR: "0.00", USD: "0.00" };
+
+// An add-on a plan offers, in each currency.
+export type PlanAddOnPrices = { addOn: AddOnKey; prices: CurrencyPrices };
+
+// An add-on's price in one currency.
 export type PlanAddOnPrice = { addOn: AddOnKey; monthlyPrice: string };
 
 export type PlanSummary = {
   id: string;
   name: string;
-  // Decimal, e.g. "19.00".
-  monthlyPrice: string;
-  currency: string;
+  // Its price in each currency.
+  prices: CurrencyPrices;
   // The products it includes (2026-11-13) — at least one; see Plan in
   // schema.prisma.
   includesWeb: boolean;
@@ -50,10 +67,27 @@ export type PlanSummary = {
   // The Site Themes it allows, the default first.
   themeIds: string[];
   // The add-ons it offers, in ADD_ONS order.
-  addOns: PlanAddOnPrice[];
+  addOns: PlanAddOnPrices[];
   // Sites on it (a plan in use can't be deleted).
   siteCount: number;
 };
+
+// A plan in one currency — what a site paying in it is offered.
+export type PricedPlan = Omit<PlanSummary, "prices" | "addOns"> & {
+  currency: PlanCurrency;
+  monthlyPrice: string;
+  addOns: PlanAddOnPrice[];
+};
+
+export function pricePlan(plan: PlanSummary, currency: PlanCurrency): PricedPlan {
+  const { prices, addOns, ...rest } = plan;
+  return {
+    ...rest,
+    currency,
+    monthlyPrice: prices[currency],
+    addOns: addOns.map((a) => ({ addOn: a.addOn, monthlyPrice: a.prices[currency] })),
+  };
+}
 
 // An add-on as chosen (on the Plan card or the Account).
 export type SiteAddOnChoice = { addOn: AddOnKey; quantity: number };
@@ -66,6 +100,8 @@ export type SiteAddOnRow = SiteAddOnChoice & { monthlyPrice: string };
 // (the plan's price when it joined, or its own) and its add-ons.
 export type SiteSubscription = {
   planId: string | null;
+  // The currency it pays in (2026-11-13) — set with its plan.
+  currency: PlanCurrency | null;
   siteThemeId: string | null;
   planPrice: string | null;
   addOns: SiteAddOnRow[];
@@ -84,7 +120,7 @@ export function toPence(value: string): number | null {
 // with it, in the plan or added.
 type PlanProducts = { includesWeb: boolean; includesArt: boolean };
 
-export function offeredAddOns<T extends { addOn: AddOnKey }>(plan: PlanProducts, addOns: T[]): T[] {
+export function offeredAddOns<T extends { addOn: AddOnKey }>(plan: PlanProducts, addOns: readonly T[]): T[] {
   return addOns.filter(
     (a) => !(a.addOn === "ART_MANAGER" && plan.includesArt) && !(a.addOn === "WEB_MANAGER" && plan.includesWeb),
   );
@@ -97,7 +133,7 @@ export function hasArtManager(plan: PlanProducts, addOns: { addOn: AddOnKey }[])
 // Add-ons chosen for `plan`, checked: only those it offers, each once; a
 // quantity only for those charged each (otherwise 1).
 export function checkAddOns(
-  plan: PlanProducts & { addOns: PlanAddOnPrice[] },
+  plan: PlanProducts & { addOns: { addOn: AddOnKey }[] },
   input: SiteAddOnChoice[],
 ): { addOns: SiteAddOnChoice[] } | { error: string } {
   const offered = new Set(offeredAddOns(plan, plan.addOns).map((a) => a.addOn));

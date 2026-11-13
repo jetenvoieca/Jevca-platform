@@ -4,9 +4,16 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPlan, deletePlan, setSignupStripeMode, updatePlan } from "@/lib/actions/plans";
 import type { StripeMode } from "@/lib/stripe";
-import { ADD_ONS,
-  offeredAddOns, PLAN_LIMITS, type AddOnKey, type PlanSummary } from "@/lib/plans";
-import { CURRENCIES } from "@/lib/currencies";
+import {
+  ADD_ONS,
+  NO_PRICES,
+  PLAN_CURRENCIES,
+  PLAN_LIMITS,
+  offeredAddOns,
+  type AddOnKey,
+  type CurrencyPrices,
+  type PlanSummary,
+} from "@/lib/plans";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
 // Administration → Plans (2026-11-09, Craig's request — see lib/plans.ts):
@@ -25,8 +32,7 @@ type Draft = Omit<PlanSummary, "id" | "siteCount">;
 
 const draftOf = (p: PlanSummary): Draft => ({
   name: p.name,
-  monthlyPrice: p.monthlyPrice,
-  currency: p.currency,
+  prices: p.prices,
   includesWeb: p.includesWeb,
   includesArt: p.includesArt,
   groupsIncluded: p.groupsIncluded,
@@ -100,12 +106,13 @@ export default function PlansManager({
     draft && change({ themeIds: on ? [...draft.themeIds, id] : draft.themeIds.filter((t) => t !== id) });
   const makeDefault = (id: string) => draft && change({ themeIds: [id, ...draft.themeIds.filter((t) => t !== id)] });
 
-  // Add-ons: ticked ones offered, at their price; kept in ADD_ONS order.
-  const priceOf = (key: AddOnKey) => draft?.addOns.find((a) => a.addOn === key)?.monthlyPrice;
-  const setAddOn = (key: AddOnKey, monthlyPrice: string | null, typing = false) => {
+  // Add-ons: ticked ones offered, at their price in each currency; kept
+  // in ADD_ONS order.
+  const pricesOf = (key: AddOnKey) => draft?.addOns.find((a) => a.addOn === key)?.prices;
+  const setAddOn = (key: AddOnKey, prices: CurrencyPrices | null, typing = false) => {
     if (!draft) return;
     const others = draft.addOns.filter((a) => a.addOn !== key);
-    const next = monthlyPrice === null ? others : [...others, { addOn: key, monthlyPrice }];
+    const next = prices === null ? others : [...others, { addOn: key, prices }];
     change({ addOns: ADD_ONS.flatMap((o) => next.filter((a) => a.addOn === o.key)) }, typing);
   };
 
@@ -118,8 +125,7 @@ export default function PlansManager({
       setSelectedId(result.id);
       setDraft({
         name: newName.trim(),
-        monthlyPrice: "0.00",
-        currency: "GBP",
+        prices: NO_PRICES,
         includesWeb: true,
         includesArt: false,
         groupsIncluded: 1,
@@ -205,22 +211,12 @@ export default function PlansManager({
                 ))}
               </div>
               <label className="text-sm text-neutral-700">Monthly price</label>
-              <div className="flex gap-2">
-                <select value={draft.currency} onChange={(e) => change({ currency: e.target.value })} className={field}>
-                  {CURRENCIES.map((c) => (
-                    <option key={c} value={c}>
-                      {c}
-                    </option>
-                  ))}
-                </select>
-                <input
-                  inputMode="decimal"
-                  value={draft.monthlyPrice}
-                  onChange={(e) => change({ monthlyPrice: e.target.value }, true)}
-                  onBlur={saveTyped}
-                  className={`${field} w-28`}
-                />
-              </div>
+              <CurrencyPriceInputs
+                prices={draft.prices}
+                onChange={(prices) => change({ prices }, true)}
+                onBlur={saveTyped}
+                label="Monthly price"
+              />
               <label className="text-sm text-neutral-700">Groups of pages included</label>
               <input
                 type="number"
@@ -293,27 +289,25 @@ export default function PlansManager({
                   draft,
                   ADD_ONS.map((o) => ({ ...o, addOn: o.key })),
                 ).map((o) => {
-                  const price = priceOf(o.key);
+                  const prices = pricesOf(o.key);
                   return (
-                    <div key={o.key} className="flex items-center gap-3 text-sm text-neutral-800">
+                    <div key={o.key} className="flex flex-wrap items-center gap-3 text-sm text-neutral-800">
                       <label className="flex flex-1 items-center gap-2">
                         <input
                           type="checkbox"
-                          checked={price !== undefined}
-                          onChange={(e) => setAddOn(o.key, e.target.checked ? "0.00" : null)}
+                          checked={prices !== undefined}
+                          onChange={(e) => setAddOn(o.key, e.target.checked ? NO_PRICES : null)}
                         />
                         {o.label}
                       </label>
-                      {price !== undefined && (
+                      {prices !== undefined && (
                         <span className="flex items-center gap-2 text-neutral-500">
-                          + {draft.currency}
-                          <input
-                            inputMode="decimal"
-                            value={price}
-                            onChange={(e) => setAddOn(o.key, e.target.value, true)}
+                          +
+                          <CurrencyPriceInputs
+                            prices={prices}
+                            onChange={(next) => setAddOn(o.key, next, true)}
                             onBlur={saveTyped}
-                            aria-label={`${o.label} monthly price`}
-                            className={`${field} w-24`}
+                            label={`${o.label} monthly price`}
                           />
                           {o.perItem ? "each a month" : "a month"}
                         </span>
@@ -417,5 +411,36 @@ export default function PlansManager({
         onCancel={() => setConfirmingDelete(false)}
       />
     </div>
+  );
+}
+
+// A price box for each currency (2026-11-13: £, € and $).
+function CurrencyPriceInputs({
+  prices,
+  onChange,
+  onBlur,
+  label,
+}: {
+  prices: CurrencyPrices;
+  onChange: (prices: CurrencyPrices) => void;
+  onBlur: () => void;
+  label: string;
+}) {
+  return (
+    <span className="flex flex-wrap items-center gap-2">
+      {PLAN_CURRENCIES.map((c) => (
+        <span key={c} className="flex items-center gap-1 text-neutral-500">
+          {c}
+          <input
+            inputMode="decimal"
+            value={prices[c]}
+            onChange={(e) => onChange({ ...prices, [c]: e.target.value })}
+            onBlur={onBlur}
+            aria-label={`${label} in ${c}`}
+            className="w-20 rounded-md border border-neutral-300 px-2 py-1 text-sm text-neutral-800"
+          />
+        </span>
+      ))}
+    </span>
   );
 }

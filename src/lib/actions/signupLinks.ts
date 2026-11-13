@@ -4,7 +4,17 @@ import { randomBytes } from "node:crypto";
 import { requireAdmin } from "@/lib/currentUser";
 import { db } from "@/lib/db";
 import { readPlan } from "@/lib/planRecords";
-import { ADD_ON_ORDER, checkAddOns, inRange, priceAddOns, toPence, type SiteAddOnChoice } from "@/lib/plans";
+import {
+  ADD_ON_ORDER,
+  checkAddOns,
+  inRange,
+  isPlanCurrency,
+  priceAddOns,
+  pricePlan,
+  toPence,
+  type PlanCurrency,
+  type SiteAddOnChoice,
+} from "@/lib/plans";
 import { SIGNUP_LINK_LIMITS, type SignupLinkRow } from "@/lib/signupLinks";
 
 // Administration → Sign-ups (2026-11-10, Craig's request) — see
@@ -16,13 +26,14 @@ const LINK_SELECT = {
   id: true,
   token: true,
   planPrice: true,
+  currency: true,
   name: true,
   email: true,
   createdAt: true,
   expiresAt: true,
   openedAt: true,
   completedAt: true,
-  plan: { select: { name: true, currency: true } },
+  plan: { select: { name: true } },
   siteTheme: { select: { name: true } },
   site: { select: { id: true, name: true } },
   addOns: { select: { addOn: true, quantity: true, monthlyPrice: true } },
@@ -36,7 +47,7 @@ export async function listSignupLinks(): Promise<SignupLinkRow[]> {
     token: r.token,
     planName: r.plan.name,
     themeName: r.siteTheme.name,
-    currency: r.plan.currency,
+    currency: r.currency,
     planPrice: r.planPrice.toFixed(2),
     addOns: r.addOns
       .map((a) => ({ addOn: a.addOn, quantity: a.quantity, monthlyPrice: a.monthlyPrice.toFixed(2) }))
@@ -55,6 +66,8 @@ export async function listSignupLinks(): Promise<SignupLinkRow[]> {
 export type NewSignupLink = {
   planId: string;
   siteThemeId: string;
+  // The currency the offer is in (2026-11-13).
+  currency: PlanCurrency;
   // Blank: the plan's price now.
   planPrice: string;
   addOns: SiteAddOnChoice[];
@@ -67,8 +80,10 @@ export type NewSignupLink = {
 // now. Returns its token.
 export async function createSignupLink(input: NewSignupLink): Promise<Result<{ token: string }>> {
   await requireAdmin();
-  const plan = await readPlan(input.planId);
-  if (!plan) return { error: "That plan wasn't found." };
+  const found = await readPlan(input.planId);
+  if (!found) return { error: "That plan wasn't found." };
+  if (!isPlanCurrency(input.currency)) return { error: "Choose the currency of the offer." };
+  const plan = pricePlan(found, input.currency);
   if (!plan.themeIds.includes(input.siteThemeId)) return { error: "That theme isn't one this plan allows." };
   const planPence = toPence(input.planPrice.trim() || plan.monthlyPrice);
   if (planPence === null) return { error: "The price for the plan couldn't be read." };
@@ -89,6 +104,7 @@ export async function createSignupLink(input: NewSignupLink): Promise<Result<{ t
       planId: plan.id,
       siteThemeId: input.siteThemeId,
       planPrice: planPence / 100,
+      currency: input.currency,
       name: input.name.trim() || null,
       email: email || null,
       expiresAt: new Date(Date.now() + input.expiryDays * 24 * 60 * 60 * 1000),

@@ -2,18 +2,21 @@
 
 import { requireAdmin, requireSiteAccess } from "@/lib/currentUser";
 import { db } from "@/lib/db";
-import { isCurrency } from "@/lib/currencies";
 import type { StripeMode } from "@/lib/stripe";
 import { PLAN_SELECT, readPlan, readPlans, toPlanSummary } from "@/lib/planRecords";
 import {
   ADD_ON_ORDER,
+  PLAN_CURRENCIES,
   PLAN_LIMITS,
   checkAddOns,
   offeredAddOns,
   inRange,
+  isPlanCurrency,
+  pricePlan,
   toPence,
   type AddOnKey,
-  type PlanAddOnPrice,
+  type CurrencyPrices,
+  type PlanCurrency,
   type PlanSummary,
   priceAddOns,
   type SiteAccount,
@@ -30,6 +33,22 @@ import {
 
 type Result = { ok: true } | { error: string };
 
+// Prices in each currency in pence, or null if one can't be read.
+function pencePrices(prices: CurrencyPrices): Record<PlanCurrency, number> | null {
+  const out = {} as Record<PlanCurrency, number>;
+  for (const currency of PLAN_CURRENCIES) {
+    const pence = toPence(prices[currency] ?? "");
+    if (pence === null) return null;
+    out[currency] = pence;
+  }
+  return out;
+}
+
+// The currency a site pays in — £ for one set before 2026-11-13 without.
+function siteCurrency(value: string | null): PlanCurrency {
+  return isPlanCurrency(value) ? value : "GBP";
+}
+
 export async function listPlans(): Promise<PlanSummary[]> {
   await requireAdmin();
   return readPlans();
@@ -42,7 +61,10 @@ export async function createPlan(nameRaw: string): Promise<{ id: string } | { er
   if (await db.plan.findUnique({ where: { name }, select: { id: true } })) {
     return { error: "There's already a plan with that name." };
   }
-  return db.plan.create({ data: { name, monthlyPrice: 0 }, select: { id: true } });
+  return db.plan.create({
+    data: { name, prices: { create: PLAN_CURRENCIES.map((currency) => ({ currency, monthlyPrice: 0 })) } },
+    select: { id: true },
+  });
 }
 
 // Saves a plan. Sites on it keep the prices they joined at (new prices
@@ -57,9 +79,9 @@ export async function updatePlan(
   if (!name) return { error: "Give the plan a name." };
   const clash = await db.plan.findFirst({ where: { name, id: { not: id } }, select: { id: true } });
   if (clash) return { error: "There's already a plan with that name." };
-  const price = toPence(input.monthlyPrice);
-  if (price === null) return { error: "The plan's price couldn't be read." };
-  if (!isCurrency(input.currency)) return { error: "That currency isn't offered." };
+  // A price in each currency (2026-11-13).
+  const prices = pencePrices(input.prices);
+  if (!prices) return { error: "The plan's price in each currency couldn't be read." };
   if (!input.includesWeb && !input.includesArt) return { error: "A plan includes Web Manager, Art Manager or both." };
   if (!inRange(input.groupsIncluded, PLAN_LIMITS.groupsIncluded)) {
     return { error: `Groups of pages included must be ${PLAN_LIMITS.groupsIncluded.min} to ${PLAN_LIMITS.groupsIncluded.max}.` };
@@ -81,12 +103,12 @@ export async function updatePlan(
   const found = await db.siteTheme.count({ where: { id: { in: themeIds } } });
   if (found !== themeIds.length) return { error: "One of those themes wasn't found." };
 
-  const addOns: { addOn: AddOnKey; pence: number }[] = [];
+  const addOns: { addOn: AddOnKey; pence: Record<PlanCurrency, number> }[] = [];
   // Not an add-on for a product it includes (offeredAddOns).
-  for (const a of offeredAddOns(input, input.addOns as PlanAddOnPrice[])) {
+  for (const a of offeredAddOns(input, input.addOns)) {
     if (!ADD_ON_ORDER.has(a.addOn) || addOns.some((x) => x.addOn === a.addOn)) continue;
-    const pence = toPence(a.monthlyPrice);
-    if (pence === null) return { error: "An add-on's price couldn't be read." };
+    const pence = pencePrices(a.prices);
+    if (!pence) return { error: "An add-on's price in each currency couldn't be read." };
     addOns.push({ addOn: a.addOn, pence });
   }
   const offered = addOns.map((a) => a.addOn);
@@ -99,8 +121,6 @@ export async function updatePlan(
       where: { id },
       data: {
         name,
-        monthlyPrice: price / 100,
-        currency: input.currency,
         includesWeb: input.includesWeb,
         includesArt: input.includesArt,
         groupsIncluded: input.groupsIncluded,
@@ -108,11 +128,17 @@ export async function updatePlan(
         included,
       },
     }),
+    db.planPrice.deleteMany({ where: { planId: id } }),
+    db.planPrice.createMany({
+      data: PLAN_CURRENCIES.map((currency) => ({ planId: id, currency, monthlyPrice: prices[currency] / 100 })),
+    }),
     db.planTheme.deleteMany({ where: { planId: id } }),
     db.planTheme.createMany({ data: themeIds.map((siteThemeId, position) => ({ planId: id, siteThemeId, position })) }),
     db.planAddOn.deleteMany({ where: { planId: id } }),
     db.planAddOn.createMany({
-      data: addOns.map((a) => ({ planId: id, addOn: a.addOn, monthlyPrice: a.pence / 100 })),
+      data: addOns.flatMap((a) =>
+        PLAN_CURRENCIES.map((currency) => ({ planId: id, addOn: a.addOn, currency, monthlyPrice: a.pence[currency] / 100 })),
+      ),
     }),
     db.siteAddOn.deleteMany({ where: { site: { planId: id }, addOn: { notIn: offered } } }),
     // Locations / Consignments only with Art Manager.
@@ -152,10 +178,17 @@ export async function getSiteSubscription(siteId: string): Promise<SiteSubscript
   await requireAdmin();
   const site = await db.site.findUniqueOrThrow({
     where: { id: siteId },
-    select: { planId: true, siteThemeId: true, planPrice: true, addOns: { select: ADD_ON_ROW_SELECT } },
+    select: {
+      planId: true,
+      planCurrency: true,
+      siteThemeId: true,
+      planPrice: true,
+      addOns: { select: ADD_ON_ROW_SELECT },
+    },
   });
   return {
     planId: site.planId,
+    currency: isPlanCurrency(site.planCurrency) ? site.planCurrency : null,
     siteThemeId: site.siteThemeId,
     planPrice: site.planPrice?.toFixed(2) ?? null,
     addOns: toAddOnRows(site.addOns),
@@ -172,28 +205,33 @@ function writeAddOns(siteId: string, rows: SiteAddOnRow[]) {
   ];
 }
 
-// Sets a site's Plan, Site Theme (one the Plan allows), what it pays for
-// the plan (blank: the plan's price now) and add-ons (those it offers —
-// those it has keep their prices, new ones at the plan's price now). A
-// new Plan starts afresh at its prices. No plan: none of those either.
+// Sets a site's Plan, the currency it pays in (2026-11-13), Site Theme
+// (one the Plan allows), what it pays for the plan (blank: the plan's
+// price now) and add-ons (those it offers — those it has keep their
+// prices, new ones at the plan's price now). A new Plan or currency
+// starts afresh at its prices. No plan: none of those either.
 export async function setSiteSubscription(
   siteId: string,
-  input: { planId: string | null; siteThemeId: string | null; planPrice: string | null; addOns: SiteAddOnChoice[] },
+  input: Omit<SiteSubscription, "addOns"> & { addOns: SiteAddOnChoice[] },
 ): Promise<Result> {
   await requireAdmin();
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { planId: true, addOns: { select: ADD_ON_ROW_SELECT } },
+    select: { planId: true, planCurrency: true, addOns: { select: ADD_ON_ROW_SELECT } },
   });
   if (!site) return { error: "Site not found." };
 
   let siteThemeId: string | null = null;
   let planPence: number | null = null;
+  let currency: PlanCurrency | null = null;
   let addOns: SiteAddOnRow[] = [];
   if (input.planId) {
-    const summary = await readPlan(input.planId);
-    if (!summary) return { error: "That plan wasn't found." };
-    const samePlan = site.planId === input.planId;
+    const plan = await readPlan(input.planId);
+    if (!plan) return { error: "That plan wasn't found." };
+    if (!isPlanCurrency(input.currency)) return { error: "Choose the currency the site pays in." };
+    currency = input.currency;
+    const summary = pricePlan(plan, currency);
+    const samePlan = site.planId === input.planId && site.planCurrency === currency;
     planPence = toPence(samePlan && input.planPrice?.trim() ? input.planPrice : summary.monthlyPrice);
     if (planPence === null) return { error: "The price for the plan couldn't be read." };
     if (input.siteThemeId && !summary.themeIds.includes(input.siteThemeId)) {
@@ -208,7 +246,12 @@ export async function setSiteSubscription(
   await db.$transaction([
     db.site.update({
       where: { id: siteId },
-      data: { planId: input.planId, siteThemeId, planPrice: planPence === null ? null : planPence / 100 },
+      data: {
+        planId: input.planId,
+        planCurrency: currency,
+        siteThemeId,
+        planPrice: planPence === null ? null : planPence / 100,
+      },
     }),
     ...writeAddOns(siteId, addOns),
   ]);
@@ -223,6 +266,7 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
     where: { id: siteId },
     select: {
       planPrice: true,
+      planCurrency: true,
       siteTheme: { select: { name: true } },
       plan: { select: PLAN_SELECT },
       addOns: { select: ADD_ON_ROW_SELECT },
@@ -230,7 +274,7 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
   });
   const addOns = toAddOnRows(site.addOns);
   if (!site.plan) return { plan: null, addOns };
-  const plan = toPlanSummary(site.plan);
+  const plan = pricePlan(toPlanSummary(site.plan), siteCurrency(site.planCurrency));
   return {
     plan: {
       name: plan.name,
@@ -256,10 +300,10 @@ export async function setSiteAddOns(siteId: string, input: SiteAddOnChoice[]): P
   await requireSiteAccess(siteId);
   const site = await db.site.findUnique({
     where: { id: siteId },
-    select: { plan: { select: PLAN_SELECT }, addOns: { select: ADD_ON_ROW_SELECT } },
+    select: { planCurrency: true, plan: { select: PLAN_SELECT }, addOns: { select: ADD_ON_ROW_SELECT } },
   });
   if (!site?.plan) return { error: "This site has no plan yet." };
-  const summary = toPlanSummary(site.plan);
+  const summary = pricePlan(toPlanSummary(site.plan), siteCurrency(site.planCurrency));
   const checked = checkAddOns(summary, input);
   if ("error" in checked) return checked;
   await db.$transaction(writeAddOns(siteId, priceAddOns(checked.addOns, toAddOnRows(site.addOns), summary.addOns)));

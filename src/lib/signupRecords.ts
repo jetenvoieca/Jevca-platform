@@ -25,12 +25,13 @@ export type SignupLinkState =
 const OFFER_SELECT = {
   id: true,
   planPrice: true,
+  currency: true,
   name: true,
   email: true,
   expiresAt: true,
   openedAt: true,
   completedAt: true,
-  plan: { select: { name: true, currency: true, included: true } },
+  plan: { select: { name: true, included: true } },
   addOns: { select: { addOn: true, quantity: true, monthlyPrice: true } },
 } as const;
 
@@ -46,7 +47,7 @@ export async function readSignupLink(token: string): Promise<SignupLinkState> {
       linkId: link.id,
       planName: link.plan.name,
       included: link.plan.included ? link.plan.included.split("\n") : [],
-      currency: link.plan.currency,
+      currency: link.currency,
       planPrice: link.planPrice.toFixed(2),
       addOns: link.addOns
         .map((a) => ({ addOn: a.addOn, quantity: a.quantity, monthlyPrice: a.monthlyPrice.toFixed(2) }))
