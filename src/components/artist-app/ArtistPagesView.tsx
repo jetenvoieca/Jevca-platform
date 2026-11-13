@@ -36,7 +36,7 @@ import ArtistNewWorkModal from "@/components/artist-app/ArtistNewWorkModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { addWorksToCuration, removeWorkFromCuration } from "@/lib/actions/curations";
 import { LiveSiteData } from "@/lib/siteData";
-import { ARTIST_APP_FONT, ARTIST_APP_SHOWS_PRESENTATION_MEDIUM, artistAppPageHref } from "@/lib/artistApp";
+import { ARTIST_APP_SHOWS_PRESENTATION_MEDIUM, artistAppPageHref } from "@/lib/artistApp";
 import { useArtistAppFeatures } from "@/components/artist-app/ArtistAppFeatures";
 import { MainPanel, PictureTile, SidePanel, WorkGrid, WorkTile } from "@/components/artist-app/ArtistAppPanels";
 import {
