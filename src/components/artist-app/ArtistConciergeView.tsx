@@ -7,30 +7,38 @@ import ArtistNewWorkModal from "@/components/artist-app/ArtistNewWorkModal";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { finalizeUpload, requestUploadUrl } from "@/lib/actions/media";
 import { sendConciergeRequest } from "@/lib/actions/concierge";
-import { CONCIERGE_KINDS, CONCIERGE_MAX_LENGTH, type ConciergeKind, type ConciergeRequest } from "@/lib/concierge";
+import {
+  CONCIERGE_KINDS,
+  CONCIERGE_MAX_LENGTH,
+  CONCIERGE_PROFILE_KINDS,
+  isConciergeProfileKind,
+  type ConciergeKind,
+  type ConciergeProfileKind,
+  type ConciergeRequest,
+} from "@/lib/concierge";
 import { formatDateTime } from "@/lib/formatDate";
 
 // The Concierge (2026-11-13, Craig's mockup): the kinds of request on the
 // left; the one chosen on the right, its title, "Just say what's needed"
 // and Send — sent to the client's Hopper (sendConciergeRequest). Only "Add
 // / edit an Artwork" takes a picture (one), and also opens the new work
-// form (the Catalogue only). "Update my Artist statement" starts from the
-// statement as it is, edited and sent to be checked before it goes on the
-// website. "Rearrange artworks on a page" has "On which page?" beside the
+// form (the Catalogue only). The Artist statement, Biography and list of
+// Galleries start from the entry as it is (CONCIERGE_PROFILE_KINDS),
+// edited and sent to be checked before it goes on the website. "Rearrange artworks on a page" has "On which page?" beside the
 // text — the page chosen (optional) is where Administration → Concierge
 // opens. Under them, the requests sent and whether each is done.
 export default function ArtistConciergeView({
   siteId,
   artistId,
   requests,
-  statement,
+  profileTexts,
   workPages,
 }: {
   siteId: string;
   artistId: string;
   requests: ConciergeRequest[];
-  // The Artist Statement as it is now.
-  statement: string;
+  // The Artist Statement, Biography and Galleries as they are now.
+  profileTexts: Record<ConciergeProfileKind, string>;
   // The pages a rearrange request can name (listConciergeWorkPages).
   workPages: { id: string; title: string }[];
 }) {
@@ -92,12 +100,13 @@ export default function ArtistConciergeView({
   const choose = (next: ConciergeKind) => {
     setKind(next);
     setMessage(null);
-    setText(next === "statement" ? statement : "");
+    setText(isConciergeProfileKind(next) ? profileTexts[next] : "");
     if (next !== "artwork") setPicture(null);
     setPageId(null);
   };
-  // The statement must be changed before it's sent.
-  const unchanged = kind === "statement" && text.trim() === statement.trim();
+  // A Profile entry must be changed before it's sent.
+  const profile = isConciergeProfileKind(kind) ? CONCIERGE_PROFILE_KINDS[kind] : null;
+  const unchanged = isConciergeProfileKind(kind) && text.trim() === profileTexts[kind].trim();
 
   const button = "border border-neutral-300 px-5 py-2 text-base font-light text-neutral-700 hover:bg-neutral-50 disabled:opacity-50";
 
@@ -128,10 +137,10 @@ export default function ArtistConciergeView({
               value={text}
               onChange={(e) => setText(e.target.value)}
               maxLength={CONCIERGE_MAX_LENGTH}
-              placeholder={kind === "statement" ? "Your artist statement" : "Just say what's needed"}
-              aria-label={kind === "statement" ? "Your artist statement" : "What's needed"}
+              placeholder={profile?.placeholder ?? "Just say what's needed"}
+              aria-label={profile?.placeholder ?? "What's needed"}
               className={`min-h-48 flex-1 resize-y p-1 font-light text-neutral-800 outline-none placeholder:text-neutral-500 ${
-                kind === "statement" ? "text-base" : "text-xl"
+                profile ? "text-base" : "text-xl"
               }`}
             />
             {kind === "rearrange" && workPages.length > 0 && (

@@ -8,6 +8,7 @@ import { listArtistAppPages, type ArtistAppPage } from "@/lib/actions/artistApp"
 import { arrangePages } from "@/lib/artistAppPageOrder";
 import { listPageStyles } from "@/lib/actions/pageStyles";
 import { readContactPanel } from "@/lib/contactPanel";
+import { readLocations } from "@/lib/artworkSettingsData";
 import type { HopperNoteItem } from "@/lib/actions/hopper";
 import {
   CONCIERGE_KINDS,
@@ -194,4 +195,12 @@ export async function conciergeSitePages(
     readSiteFeatures(siteId),
   ]);
   return { artistId: site.artistId, pages: arrangePages(pages), pagesPerGroup: features.pagesPerGroup };
+}
+
+// "Update my list of Galleries": the client's Locations of type Gallery, to
+// choose from.
+export async function conciergeGalleryOptions(artistId: string): Promise<{ id: string; name: string }[]> {
+  await requireAdmin();
+  const locations = await readLocations(artistId);
+  return locations.filter((l) => l.type === "GALLERY").map((l) => ({ id: l.id, name: l.name }));
 }

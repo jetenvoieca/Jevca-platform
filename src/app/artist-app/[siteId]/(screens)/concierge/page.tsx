@@ -25,7 +25,11 @@ export default async function ArtistConciergePage({ params }: { params: Promise<
       siteId={siteId}
       artistId={site.artistId}
       requests={requests}
-      statement={entries.find((e) => e.kind === "STATEMENT")?.story ?? ""}
+      profileTexts={{
+        statement: entries.find((e) => e.kind === "STATEMENT")?.story ?? "",
+        biography: entries.find((e) => e.kind === "BIOGRAPHY")?.story ?? "",
+        galleries: (entries.find((e) => e.kind === "GALLERIES")?.galleries ?? []).map((g) => g.name).join("\n"),
+      }}
       workPages={workPages}
     />
   );

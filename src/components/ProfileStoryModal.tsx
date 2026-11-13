@@ -236,13 +236,15 @@ export default function ProfileStoryModal({
 // The Galleries entry's galleries (2026-11-03): the chosen ones in order
 // — drag one onto another to move it, ✕ to take it off — and a list of
 // the artist's other galleries to add one. Each change saves at once.
-function GalleriesList({
+// Also Administration → Concierge's "Update my list of Galleries"
+// (2026-11-13), where the site may not be known (no Locations link).
+export function GalleriesList({
   siteId,
   chosen,
   options,
   onChange,
 }: {
-  siteId: string;
+  siteId: string | null;
   chosen: GalleryOption[];
   options: GalleryOption[];
   onChange: (ids: string[]) => void;
@@ -327,15 +329,17 @@ function GalleriesList({
           </select>
         )
       )}
-      <p className="mt-1 text-xs text-neutral-400">
-        {/* Where those are set, linked (2026-11-08 — "contact card" didn't
-            say where). */}
-        Each shows its name, town and website — set those in{" "}
-        <a href={`/sites/${siteId}/galleries`} target="_blank" rel="noopener noreferrer" className="underline">
-          Locations
-        </a>{" "}
-        (click the gallery).
-      </p>
+      {siteId && (
+        <p className="mt-1 text-xs text-neutral-400">
+          {/* Where those are set, linked (2026-11-08 — "contact card" didn't
+              say where). */}
+          Each shows its name, town and website — set those in{" "}
+          <a href={`/sites/${siteId}/galleries`} target="_blank" rel="noopener noreferrer" className="underline">
+            Locations
+          </a>{" "}
+          (click the gallery).
+        </p>
+      )}
     </div>
   );
 }
