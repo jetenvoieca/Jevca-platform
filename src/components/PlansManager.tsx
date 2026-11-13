@@ -2,7 +2,7 @@
 
 import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
-import { createPlan, deletePlan, setSignupStripeMode, updatePlan } from "@/lib/actions/plans";
+import { createPlan, deletePlan, setAddOnIncluded, setSignupStripeMode, updatePlan } from "@/lib/actions/plans";
 import type { StripeMode } from "@/lib/stripe";
 import {
   ADD_ONS,
@@ -44,14 +44,34 @@ const draftOf = (p: PlanSummary): Draft => ({
 
 export default function PlansManager({
   plans,
+  addOnsIncluded: initialAddOnsIncluded,
   signupMode: initialSignupMode,
   themes,
 }: {
   plans: PlanSummary[];
+  // What each add-on includes — the same on every plan (2026-11-13).
+  addOnsIncluded: Partial<Record<AddOnKey, string>>;
   signupMode: StripeMode;
   themes: { id: string; name: string }[];
 }) {
   const [signupMode, setSignupMode] = useState(initialSignupMode);
+  const [addOnsIncluded, setAddOnsIncluded] = useState(initialAddOnsIncluded);
+  // Saved when its box is left.
+  const saveAddOnIncluded = (key: AddOnKey) => {
+    setError(null);
+    setStatus("saving");
+    setAddOnIncluded(key, addOnsIncluded[key] ?? "")
+      .then((result) => {
+        if ("error" in result) {
+          setError(result.error);
+          setStatus(null);
+        } else setStatus("saved");
+      })
+      .catch(() => {
+        setError("That wasn't saved — please try again.");
+        setStatus(null);
+      });
+  };
   const router = useRouter();
   const [selectedId, setSelectedId] = useState<string | null>(plans[0]?.id ?? null);
   const selected = plans.find((p) => p.id === selectedId) ?? null;
@@ -311,6 +331,20 @@ export default function PlansManager({
                           />
                           {o.perItem ? "each a month" : "a month"}
                         </span>
+                      )}
+                      {prices !== undefined && (
+                        <div className="w-full pl-6">
+                          <textarea
+                            value={addOnsIncluded[o.key] ?? ""}
+                            onChange={(e) => setAddOnsIncluded({ ...addOnsIncluded, [o.key]: e.target.value })}
+                            onBlur={() => saveAddOnIncluded(o.key)}
+                            rows={3}
+                            maxLength={PLAN_LIMITS.included.maxLength}
+                            placeholder={`What ${o.label} includes, one item a line — the same on every plan`}
+                            aria-label={`What ${o.label} includes`}
+                            className={`${field} w-full`}
+                          />
+                        </div>
                       )}
                     </div>
                   );

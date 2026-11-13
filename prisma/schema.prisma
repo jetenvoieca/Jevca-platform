@@ -1826,6 +1826,14 @@ model PlanAddOn {
   @@id([planId, addOn, currency])
 }
 
+// What an add-on includes (2026-11-13), one item a line — the same on
+// every plan; listed on the Artist App's Account under the plan's own
+// list when the site has it.
+model AddOnInfo {
+  addOn    AddOn  @id
+  included String @default("")
+}
+
 // A plan's price in one currency (2026-11-13).
 model PlanPrice {
   planId       String

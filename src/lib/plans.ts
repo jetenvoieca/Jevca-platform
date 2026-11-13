@@ -199,6 +199,9 @@ export type SiteAccountPlan = {
 
 export type SiteAccount = {
   plan: SiteAccountPlan | null;
+  // What the site's add-ons include (AddOnInfo), those with a list, in
+  // ADD_ONS order — shown under the plan's own list.
+  addOnsIncluded: { addOn: AddOnKey; label: string; included: string[] }[];
   addOns: SiteAddOnRow[];
 };
 

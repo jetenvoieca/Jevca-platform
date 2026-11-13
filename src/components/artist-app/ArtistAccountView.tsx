@@ -65,6 +65,18 @@ export default function ArtistAccountView({
                   ))}
                 </ul>
               )}
+              {/* Each add-on the site has, with what it includes
+                  (2026-11-13). */}
+              {account.addOnsIncluded.map((a) => (
+                <div key={a.addOn} className="mt-5">
+                  <h3 className="mb-3 text-lg text-neutral-800">{a.label}</h3>
+                  <ul className="flex flex-col gap-0.5 pl-12 text-base text-neutral-800">
+                    {a.included.map((item, i) => (
+                      <li key={i}>{item}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
             </section>
           </div>
         </div>

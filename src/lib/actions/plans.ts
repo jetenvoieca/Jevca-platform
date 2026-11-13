@@ -5,6 +5,7 @@ import { db } from "@/lib/db";
 import type { StripeMode } from "@/lib/stripe";
 import { PLAN_SELECT, readPlan, readPlans, toPlanSummary } from "@/lib/planRecords";
 import {
+  ADD_ONS,
   ADD_ON_ORDER,
   PLAN_CURRENCIES,
   PLAN_LIMITS,
@@ -89,12 +90,7 @@ export async function updatePlan(
   if (!inRange(input.pagesPerGroup, PLAN_LIMITS.pagesPerGroup)) {
     return { error: `Pages in a group must be ${PLAN_LIMITS.pagesPerGroup.min} to ${PLAN_LIMITS.pagesPerGroup.max}.` };
   }
-  // One item a line, blank lines dropped.
-  const included = input.included
-    .split("\n")
-    .map((line) => line.trim())
-    .filter(Boolean)
-    .join("\n");
+  const included = cleanLines(input.included);
   if (included.length > PLAN_LIMITS.included.maxLength) {
     return { error: "What's included is too long." };
   }
@@ -258,6 +254,31 @@ export async function setSiteSubscription(
   return { ok: true };
 }
 
+// What each add-on includes (2026-11-13) — see AddOnInfo.
+export async function listAddOnsIncluded(): Promise<Partial<Record<AddOnKey, string>>> {
+  await requireAdmin();
+  const rows = await db.addOnInfo.findMany({ select: { addOn: true, included: true } });
+  return Object.fromEntries(rows.map((r) => [r.addOn, r.included]));
+}
+
+export async function setAddOnIncluded(addOn: AddOnKey, text: string): Promise<Result> {
+  await requireAdmin();
+  if (!ADD_ON_ORDER.has(addOn)) return { error: "That add-on wasn't found." };
+  const included = cleanLines(text);
+  if (included.length > PLAN_LIMITS.included.maxLength) return { error: "What it includes is too long." };
+  await db.addOnInfo.upsert({ where: { addOn }, create: { addOn, included }, update: { included } });
+  return { ok: true };
+}
+
+// One item a line, blank lines dropped.
+function cleanLines(text: string): string {
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .join("\n");
+}
+
 // A site's plan for the Artist App's Account (2026-11-10) — see
 // SiteAccount in lib/plans.ts.
 export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
@@ -273,7 +294,16 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
     },
   });
   const addOns = toAddOnRows(site.addOns);
-  if (!site.plan) return { plan: null, addOns };
+  const infos = await db.addOnInfo.findMany({
+    where: { addOn: { in: addOns.map((a) => a.addOn) } },
+    select: { addOn: true, included: true },
+  });
+  const addOnsIncluded = addOns.flatMap((a) => {
+    const text = infos.find((i) => i.addOn === a.addOn)?.included ?? "";
+    const label = ADD_ONS.find((o) => o.key === a.addOn)?.label ?? a.addOn;
+    return text ? [{ addOn: a.addOn, label, included: text.split("\n") }] : [];
+  });
+  if (!site.plan) return { plan: null, addOns, addOnsIncluded };
   const plan = pricePlan(toPlanSummary(site.plan), siteCurrency(site.planCurrency));
   return {
     plan: {
@@ -289,6 +319,7 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
       addOns: plan.addOns,
     },
     addOns,
+    addOnsIncluded,
   };
 }
 
