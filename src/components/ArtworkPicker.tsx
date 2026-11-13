@@ -23,7 +23,7 @@ export default function ArtworkPicker({
   triggerClassName,
   allowCreate = true,
   showFilters = true,
-  headerAction,
+  opened,
   excludeIds = [],
   availableOnly = false,
   onSelect,
@@ -50,10 +50,10 @@ export default function ArtworkPicker({
   // level, 2026-11-09). The Name dropdown (2026-11-11, Craig — as the
   // Artwork Catalogue's) is always there.
   showFilters?: boolean;
-  // Something more in the picker's header, after the search and filters
-  // (2026-11-09 — the Artist App's "Add new work"); given a way to close
-  // the picker.
-  headerAction?: (close: () => void) => ReactNode;
+  // Opened by its caller instead of its own button (2026-11-13 — the
+  // Artist App's "Choose existing", from its new work form): no button;
+  // the picker is open while given, and closing it calls `onClose`.
+  opened?: { onClose: () => void };
   // Artworks to leave out of the list (2026-09-24) — e.g. works already
   // in the curation being added to, so they can't be picked twice.
   excludeIds?: string[];
@@ -63,7 +63,12 @@ export default function ArtworkPicker({
 }) {
   const words = useClientWords();
   const triggerLabel = label ?? `Add ${words.item}`;
-  const [open, setOpen] = useState(false);
+  const [ownOpen, setOwnOpen] = useState(false);
+  const open = opened ? true : ownOpen;
+  const setOpen = (next: boolean) => {
+    if (opened && !next) opened.onClose();
+    else setOwnOpen(next);
+  };
   const [query, setQuery] = useState("");
   // Location and Type filters (2026-10-04) — the same lists the Artwork
   // Catalogue's own filters offer, loaded the first time the picker
@@ -163,6 +168,12 @@ export default function ArtworkPicker({
       );
     }
   };
+  // Opened by its caller: loaded as its own button would.
+  useEffect(() => {
+    if (opened) handleOpen();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
 
   // Debounced search-as-you-type (2026-08-31) — previously fired a full
   // server request on every keystroke. Only fires while the picker is open, and only reacts to
@@ -313,7 +324,6 @@ export default function ArtworkPicker({
               </select>
             </>
           )}
-          {headerAction?.(() => setOpen(false))}
           <div className="flex-1" />
           {allowCreate && (
             <>
@@ -433,7 +443,7 @@ export default function ArtworkPicker({
 
   return (
     <>
-      {trigger}
+      {!opened && trigger}
       {open && createPortal(modal, document.body)}
     </>
   );
