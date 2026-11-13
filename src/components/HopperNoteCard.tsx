@@ -36,7 +36,8 @@ export function HopperNoteTile({
 // A note opened for sorting (2026-10-31, Craig's mockup): when it came,
 // its text on the Hopper's navy, then Done (kept on record) or Delete.
 // Administration → Concierge (2026-11-13) adds who sent it (`from`) and,
-// under the text, the form to act on it (`children`).
+// under Done / Delete (kept straight under the text, Craig), the form to
+// act on it (`children`).
 export default function HopperNoteCard({
   note,
   from,
@@ -60,7 +61,7 @@ export default function HopperNoteCard({
         {from && <span className="mr-2 font-medium text-neutral-700">{from}</span>}
         Received {formatDateTime(note.createdAt)}
       </p>
-      <div className={`mb-8 min-h-[360px] rounded-md ${NOTE_BG} px-4 py-8 text-white`}>
+      <div className={`mb-4 min-h-[360px] rounded-md ${NOTE_BG} px-4 py-8 text-white`}>
         {/* A Concierge request (2026-11-13) says so, with its kind; its
             picture is shown here and is in the Hopper to sort too. */}
         <p className="mb-12 text-center text-xs font-semibold tracking-wide">
@@ -72,7 +73,6 @@ export default function HopperNoteCard({
           <img src={note.imageUrl} alt="" className="mt-6 max-h-60 rounded-md object-contain" />
         )}
       </div>
-      {children && <div className="mb-8">{children}</div>}
       <div className="flex justify-between gap-3">
         <button type="button" onClick={onDone} disabled={isPending} className={buttonCls}>
           Done
@@ -81,6 +81,7 @@ export default function HopperNoteCard({
           Delete
         </button>
       </div>
+      {children && <div className="mt-6">{children}</div>}
     </div>
   );
 }
