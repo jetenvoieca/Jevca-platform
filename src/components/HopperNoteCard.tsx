@@ -61,10 +61,10 @@ export default function HopperNoteCard({
         {from && <span className="mr-2 font-medium text-neutral-700">{from}</span>}
         Received {formatDateTime(note.createdAt)}
       </p>
-      <div className={`mb-4 min-h-[360px] rounded-md ${NOTE_BG} px-4 py-8 text-white`}>
+      <div className={`mb-4 min-h-[160px] rounded-md ${NOTE_BG} px-4 py-6 text-white`}>
         {/* A Concierge request (2026-11-13) says so, with its kind; its
             picture is shown here and is in the Hopper to sort too. */}
-        <p className="mb-12 text-center text-xs font-semibold tracking-wide">
+        <p className="mb-6 text-center text-xs font-semibold tracking-wide">
           {note.kind ? `CONCIERGE — ${note.kind.toUpperCase()}` : "INSTRUCTION"}
         </p>
         <p className="whitespace-pre-wrap text-lg font-semibold">{note.text}</p>

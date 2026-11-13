@@ -44,7 +44,7 @@ import { inputCls, labelCls, secondaryButtonCls } from "@/components/subscriberF
 // filters, so not as columns); the rest are in the window, and
 // search covers them all. The window's fields are in the order Craig
 // set out (2026-11-06): prices and works first, then contact details.
-// Contacts show as a list or as tiles with a photo of the gallery — a
+// Contacts show as tiles (opening on them, 2026-11-13) or a list — tiles with a photo of the gallery — a
 // link to it on the gallery's own site — and a link to its website
 // (2026-11-06). A contact can have its shop page, and Find prices
 // suggests the price ranges of the contacts shown from what they sell
@@ -96,7 +96,7 @@ export default function MarketingContactsView({ contacts: initial }: { contacts:
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState(ALL);
   const [countryFilter, setCountryFilter] = useState(ALL);
-  const [layout, setLayout] = useState<Layout>("LIST");
+  const [layout, setLayout] = useState<Layout>("TILES");
   // The contact being edited — "new" for Add.
   const [editing, setEditing] = useState<MarketingContactRow | "new" | null>(null);
   const [importing, setImporting] = useState(false);
