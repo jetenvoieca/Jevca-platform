@@ -40,7 +40,8 @@ export type SignupLinkRow = {
   id: string;
   token: string;
   planName: string;
-  themeName: string;
+  // None without the website.
+  themeName: string | null;
   currency: string;
   planPrice: string;
   addOns: SiteAddOnRow[];

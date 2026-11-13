@@ -7,6 +7,7 @@ import { createSignupLink, deleteSignupLink } from "@/lib/actions/signupLinks";
 import {
   ADD_ONS,
   PLAN_CURRENCIES,
+  hasWebManager,
   monthlyTotalPence,
   pricePlan,
   type PlanCurrency,
@@ -127,7 +128,8 @@ export default function SignupLinksView({
                     </td>
                     <td className="px-3 py-2">
                       <div className="text-neutral-900">
-                        {l.planName} <span className="text-neutral-400">· {l.themeName}</span>
+                        {l.planName}
+                        {l.themeName && <span className="text-neutral-400"> · {l.themeName}</span>}
                       </div>
                       {l.addOns.length > 0 && (
                         <div className="text-xs text-neutral-500">
@@ -235,6 +237,8 @@ function NewLinkModal({
   const [isPending, startTransition] = useTransition();
   const backdrop = useBackdropClose(onClose);
   const themeName = new Map(themes.map((t) => [t.id, t.name]));
+  // A theme only with the website (2026-11-13).
+  const website = !!plan && hasWebManager(plan, addOns);
 
   const choosePlan = (id: string, inCurrency: PlanCurrency = currency) => {
     const chosen = plans.find((p) => p.id === id);
@@ -321,6 +325,8 @@ function NewLinkModal({
                       </option>
                     ))}
                   </select>
+                  {website && (
+                    <>
                   <span className={label}>Theme</span>
                   <select
                     value={siteThemeId}
@@ -335,6 +341,8 @@ function NewLinkModal({
                       </option>
                     ))}
                   </select>
+                    </>
+                  )}
                   <span className={label}>Price for the plan</span>
                   <span className="flex items-center gap-1 text-sm text-neutral-500">
                     {plan.currency}
@@ -400,7 +408,7 @@ function NewLinkModal({
               <button
                 type="button"
                 onClick={create}
-                disabled={isPending || !plan || !siteThemeId}
+                disabled={isPending || !plan || (website && !siteThemeId)}
                 className="rounded-md bg-neutral-900 px-4 py-1.5 text-sm font-medium text-white hover:bg-neutral-800 disabled:opacity-40"
               >
                 {isPending ? "Making…" : "Make link"}

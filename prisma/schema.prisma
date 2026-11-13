@@ -3175,8 +3175,9 @@ model SignupLink {
   token       String     @unique
   planId      String
   plan        Plan       @relation(fields: [planId], references: [id], onDelete: Cascade)
-  siteThemeId String
-  siteTheme   SiteTheme  @relation(fields: [siteThemeId], references: [id], onDelete: Cascade)
+  // None for an offer without the website (Art Manager only, 2026-11-13).
+  siteThemeId String?
+  siteTheme   SiteTheme? @relation(fields: [siteThemeId], references: [id], onDelete: Cascade)
   planPrice   Decimal    @db.Decimal(10, 2)
   // The currency the offer is in (2026-11-13) — its prices and the site's.
   currency    String

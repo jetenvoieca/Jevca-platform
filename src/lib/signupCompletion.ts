@@ -87,7 +87,7 @@ export async function completeSignup(sessionId: string, mode: StripeMode): Promi
       data: { name, kind: "ARTIST", email, phone: link.signupPhone, emailSlug },
       select: { id: true },
     });
-    if (cleanThemeEntries(link.siteTheme.entries).some((e) => e.kind === "CURATIONS")) {
+    if (link.siteTheme && cleanThemeEntries(link.siteTheme.entries).some((e) => e.kind === "CURATIONS")) {
       await tx.curation.create({ data: { artistId: artist.id, name: FIRST_CURATION_NAME } });
     }
     const site = await tx.site.create({
@@ -122,14 +122,18 @@ export async function completeSignup(sessionId: string, mode: StripeMode): Promi
   if (!made) return;
 
   // The site's pages from its theme. Done after the records are safe, so a
-  // problem here doesn't lose the sign-up; Craig is told instead.
+  // problem here doesn't lose the sign-up; Craig is told instead. Art
+  // Manager only (2026-11-13): no theme — the site stays hidden, with no
+  // pages, until Web Manager is added.
   let themeProblem: string | null = null;
-  try {
-    const applied = await applyThemeToSite(made.siteId, link.siteThemeId);
-    if ("error" in applied) themeProblem = applied.error;
-  } catch (err) {
-    console.error("Sign-up: applying the theme failed", err);
-    themeProblem = "it failed";
+  if (link.siteThemeId) {
+    try {
+      const applied = await applyThemeToSite(made.siteId, link.siteThemeId);
+      if ("error" in applied) themeProblem = applied.error;
+    } catch (err) {
+      console.error("Sign-up: applying the theme failed", err);
+      themeProblem = "it failed";
+    }
   }
 
   const addOns = link.addOns.map((a) => ({
@@ -167,6 +171,7 @@ export async function completeSignup(sessionId: string, mode: StripeMode): Promi
     }),
     total,
     testNote,
+    website: !!link.siteThemeId,
     hasLogin: emailFree,
     problems,
   });
@@ -185,6 +190,8 @@ async function sendSignupEmails(input: {
   addOnLines: string[];
   total: string;
   testNote: string;
+  // With the website (a theme) — otherwise Art Manager only.
+  website: boolean;
   hasLogin: boolean;
   problems: string[];
 }): Promise<void> {
@@ -203,11 +210,13 @@ async function sendSignupEmails(input: {
   const from = `Craig, Jetenvoieca <${business}>`;
   const plan = [input.planName, ...input.addOnLines].join(" + ");
 
-  const welcomeSubject = "Welcome — your site is ready";
+  // Art Manager only (2026-11-13): no site to speak of.
+  const ready = input.website ? "your site" : "your Art Manager";
+  const welcomeSubject = `Welcome — ${ready} is ready`;
   const welcomeBody = [
     `Hello ${input.name},`,
     "",
-    `Thank you for signing up. Your site is ready for you to start on.`,
+    `Thank you for signing up. ${ready.charAt(0).toUpperCase()}${ready.slice(1)} is ready for you to start on.`,
     "",
     input.hasLogin
       ? `Log in at ${APP_URL}/login with this email (${input.email}) and the password you chose.`

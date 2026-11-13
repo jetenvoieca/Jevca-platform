@@ -126,6 +126,11 @@ export function offeredAddOns<T extends { addOn: AddOnKey }>(plan: PlanProducts,
   );
 }
 
+// With the website (Web Manager): in the plan or added.
+export function hasWebManager(plan: PlanProducts, addOns: { addOn: AddOnKey }[]): boolean {
+  return plan.includesWeb || addOns.some((a) => a.addOn === "WEB_MANAGER");
+}
+
 export function hasArtManager(plan: PlanProducts, addOns: { addOn: AddOnKey }[]): boolean {
   return plan.includesArt || addOns.some((a) => a.addOn === "ART_MANAGER");
 }

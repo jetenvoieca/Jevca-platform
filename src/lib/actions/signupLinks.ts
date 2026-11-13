@@ -7,6 +7,7 @@ import { readPlan } from "@/lib/planRecords";
 import {
   ADD_ON_ORDER,
   checkAddOns,
+  hasWebManager,
   inRange,
   isPlanCurrency,
   priceAddOns,
@@ -46,7 +47,7 @@ export async function listSignupLinks(): Promise<SignupLinkRow[]> {
     id: r.id,
     token: r.token,
     planName: r.plan.name,
-    themeName: r.siteTheme.name,
+    themeName: r.siteTheme?.name ?? null,
     currency: r.currency,
     planPrice: r.planPrice.toFixed(2),
     addOns: r.addOns
@@ -65,6 +66,7 @@ export async function listSignupLinks(): Promise<SignupLinkRow[]> {
 
 export type NewSignupLink = {
   planId: string;
+  // Ignored for an offer without the website (Art Manager only).
   siteThemeId: string;
   // The currency the offer is in (2026-11-13).
   currency: PlanCurrency;
@@ -84,11 +86,16 @@ export async function createSignupLink(input: NewSignupLink): Promise<Result<{ t
   if (!found) return { error: "That plan wasn't found." };
   if (!isPlanCurrency(input.currency)) return { error: "Choose the currency of the offer." };
   const plan = pricePlan(found, input.currency);
-  if (!plan.themeIds.includes(input.siteThemeId)) return { error: "That theme isn't one this plan allows." };
+
   const planPence = toPence(input.planPrice.trim() || plan.monthlyPrice);
   if (planPence === null) return { error: "The price for the plan couldn't be read." };
   const checked = checkAddOns(plan, input.addOns);
   if ("error" in checked) return checked;
+  // A theme only with the website (2026-11-13).
+  const website = hasWebManager(plan, checked.addOns);
+  if (website && !plan.themeIds.includes(input.siteThemeId)) {
+    return { error: "That theme isn't one this plan allows." };
+  }
   if (!inRange(input.expiryDays, SIGNUP_LINK_LIMITS.expiryDays)) {
     return {
       error: `A link lasts ${SIGNUP_LINK_LIMITS.expiryDays.min} to ${SIGNUP_LINK_LIMITS.expiryDays.max} days.`,
@@ -102,7 +109,7 @@ export async function createSignupLink(input: NewSignupLink): Promise<Result<{ t
     data: {
       token,
       planId: plan.id,
-      siteThemeId: input.siteThemeId,
+      siteThemeId: website ? input.siteThemeId : null,
       planPrice: planPence / 100,
       currency: input.currency,
       name: input.name.trim() || null,
