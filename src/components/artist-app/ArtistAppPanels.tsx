@@ -116,8 +116,9 @@ export type TileWork = {
 
 // A work: square picture, its name (cut short) and ★ #number. Takes a
 // ref and any attributes, so a screen can make it draggable.
-// `aside` (2026-11-09, Arrange Pages) takes the place of the ★ #number
-// (e.g. "Remove work"); `hideNumber` leaves the number out.
+// `aside` (2026-11-09, Arrange Pages — e.g. "Remove work") goes on a
+// second line under the name, in place of the ★ #number (2026-11-13, so
+// the name can be read); `hideNumber` leaves the number out.
 export const WorkTile = forwardRef<
   HTMLDivElement,
   { work: TileWork; aside?: ReactNode; hideNumber?: boolean } & HTMLAttributes<HTMLDivElement>
@@ -136,15 +137,21 @@ export const WorkTile = forwardRef<
       ) : (
         <div className="aspect-square w-full rounded-sm bg-neutral-100" />
       )}
-      <div className="mt-2 flex items-center justify-between gap-2 text-sm">
-        <span className="min-w-0 truncate text-neutral-800">{work.catalogueName}</span>
-        {aside ??
-          (!hideNumber && (
+      {aside ? (
+        <div className="mt-2 text-sm">
+          <p className="truncate text-neutral-800">{work.catalogueName}</p>
+          <div className="mt-0.5">{aside}</div>
+        </div>
+      ) : (
+        <div className="mt-2 flex items-center justify-between gap-2 text-sm">
+          <span className="min-w-0 truncate text-neutral-800">{work.catalogueName}</span>
+          {!hideNumber && (
             <span className="shrink-0 text-neutral-400">
               <BaseStar isBase={work.isBase} />#{work.catalogueNumber}
             </span>
-          ))}
-      </div>
+          )}
+        </div>
+      )}
     </div>
   );
 });

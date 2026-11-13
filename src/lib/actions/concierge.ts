@@ -129,11 +129,16 @@ export async function listConciergeQueue(): Promise<{ notes: ConciergeNote[]; pi
   return { notes, pictures };
 }
 
-// Reorder pages: the site's pages, arranged, and its plan's pages per group.
+// A site's pages task (Reorder pages, Rearrange artworks): its client, its
+// pages, arranged, and its plan's pages per group.
 export async function conciergeSitePages(
   siteId: string,
-): Promise<{ pages: ArtistAppPage[]; pagesPerGroup: number | null }> {
+): Promise<{ artistId: string; pages: ArtistAppPage[]; pagesPerGroup: number | null }> {
   await requireAdmin();
-  const [pages, features] = await Promise.all([listArtistAppPages(siteId), readSiteFeatures(siteId)]);
-  return { pages: arrangePages(pages), pagesPerGroup: features.pagesPerGroup };
+  const [site, pages, features] = await Promise.all([
+    db.site.findUniqueOrThrow({ where: { id: siteId }, select: { artistId: true } }),
+    listArtistAppPages(siteId),
+    readSiteFeatures(siteId),
+  ]);
+  return { artistId: site.artistId, pages: arrangePages(pages), pagesPerGroup: features.pagesPerGroup };
 }

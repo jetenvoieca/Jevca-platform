@@ -7,7 +7,7 @@ import { completeHopperNote, deleteHopperNote } from "@/lib/actions/hopper";
 import type { ConciergeNote, ConciergePicture } from "@/lib/actions/concierge";
 import type { ConciergeKind } from "@/lib/concierge";
 import HopperNoteCard, { HopperNoteTile, NOTE_BG } from "@/components/HopperNoteCard";
-import ConciergePagesTask from "@/components/concierge/ConciergePagesTask";
+import { ConciergeArrangeTask, ConciergePagesTask } from "@/components/concierge/ConciergeSiteTasks";
 
 // Administration → Concierge (2026-11-13, Craig's mockup): a Hopper for
 // every site at once. On the left, the notes still to do — Concierge
@@ -20,6 +20,7 @@ import ConciergePagesTask from "@/components/concierge/ConciergePagesTask";
 // The form for each kind of request that has one; more as they're built.
 const TASKS: Partial<Record<ConciergeKind, React.ComponentType<{ siteId: string }>>> = {
   pages: ConciergePagesTask,
+  rearrange: ConciergeArrangeTask,
 };
 
 type Tile =
