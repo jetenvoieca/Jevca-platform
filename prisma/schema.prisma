@@ -822,10 +822,6 @@ model ProfileStory {
   kind     ProfileStoryKind @default(STORY)
   imageId  String?
   image    Image? @relation(fields: [imageId], references: [id], onDelete: SetNull)
-  // The site whose Artist App sent it (a Concierge request; a client can
-  // have several sites) — Administration → Concierge acts on that site.
-  siteId   String?
-  site     Site?  @relation(fields: [siteId], references: [id], onDelete: SetNull)
   caption  String @default("")
   story    String @default("")
   position Int
@@ -2380,6 +2376,10 @@ model HopperNote {
   kind     String?
   imageId  String?
   image    Image? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  // The site whose Artist App sent it (a client can have several sites) —
+  // Administration → Concierge acts on that site.
+  siteId   String?
+  site     Site?  @relation(fields: [siteId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
