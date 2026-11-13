@@ -976,8 +976,16 @@ function NoteCard({
     <div className="rounded-lg border border-neutral-200 bg-white p-6">
       <p className="mb-3 text-xs text-neutral-400">Received {formatDateTime(note.createdAt)}</p>
       <div className={`mb-8 min-h-[360px] rounded-md ${NOTE_BG} px-4 py-8 text-white`}>
-        <p className="mb-12 text-center text-xs font-semibold tracking-wide">INSTRUCTION</p>
+        {/* A Concierge request (2026-11-13) says so, with its kind; its
+            picture is shown here and is in the Hopper to sort too. */}
+        <p className="mb-12 text-center text-xs font-semibold tracking-wide">
+          {note.kind ? `CONCIERGE — ${note.kind.toUpperCase()}` : "INSTRUCTION"}
+        </p>
         <p className="whitespace-pre-wrap text-lg font-semibold">{note.text}</p>
+        {note.imageUrl && (
+          // eslint-disable-next-line @next/next/no-img-element
+          <img src={note.imageUrl} alt="" className="mt-6 max-h-60 rounded-md object-contain" />
+        )}
       </div>
       <div className="flex justify-between gap-3">
         <button type="button" onClick={onDone} disabled={isPending} className={buttonCls}>

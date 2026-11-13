@@ -34,10 +34,11 @@ export default function ArtistNewWorkModal({
 }: {
   siteId: string;
   artistId: string;
-  curationId: string;
+  // None from the Concierge (2026-11-13): the Catalogue only.
+  curationId: string | null;
   onClose: () => void;
   // "Choose existing" (2026-11-13): the catalogue's works instead.
-  onChooseExisting: () => void;
+  onChooseExisting?: () => void;
   onAdded: () => void;
 }) {
   const words = useClientWords();
@@ -170,14 +171,16 @@ export default function ArtistNewWorkModal({
 
         <div className="flex shrink-0 items-center gap-3 border-t border-neutral-200 px-4 py-3">
           <p className="min-w-0 flex-1 text-sm text-red-600">{error}</p>
-          <button
-            type="button"
-            onClick={onChooseExisting}
-            disabled={saving}
-            className="shrink-0 rounded-md bg-neutral-900 px-5 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-40"
-          >
-            Choose existing
-          </button>
+          {onChooseExisting && (
+            <button
+              type="button"
+              onClick={onChooseExisting}
+              disabled={saving}
+              className="shrink-0 rounded-md bg-neutral-900 px-5 py-2 text-sm text-white hover:bg-neutral-700 disabled:opacity-40"
+            >
+              Choose existing
+            </button>
+          )}
           <button
             type="button"
             onClick={add}

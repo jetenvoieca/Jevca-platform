@@ -9,6 +9,7 @@ import {
   ADD_ON_ORDER,
   PLAN_CURRENCIES,
   PLAN_LIMITS,
+  PRODUCTS,
   checkAddOns,
   offeredAddOns,
   inRange,
@@ -83,9 +84,7 @@ export async function updatePlan(
   // A price in each currency (2026-11-13).
   const prices = pencePrices(input.prices);
   if (!prices) return { error: "The plan's price in each currency couldn't be read." };
-  if (!input.includesWeb && !input.includesArt && !input.includesMarketing) {
-    return { error: "A plan includes at least one of Web Manager, Art Manager and Marketing Manager." };
-  }
+  if (!PRODUCTS.some((p) => input[p.include])) return { error: "A plan includes at least one product." };
   if (!inRange(input.groupsIncluded, PLAN_LIMITS.groupsIncluded)) {
     return { error: `Groups of pages included must be ${PLAN_LIMITS.groupsIncluded.min} to ${PLAN_LIMITS.groupsIncluded.max}.` };
   }
@@ -122,6 +121,7 @@ export async function updatePlan(
         includesWeb: input.includesWeb,
         includesArt: input.includesArt,
         includesMarketing: input.includesMarketing,
+        includesConcierge: input.includesConcierge,
         groupsIncluded: input.groupsIncluded,
         pagesPerGroup: input.pagesPerGroup,
         included,
@@ -316,6 +316,7 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
       includesWeb: plan.includesWeb,
       includesArt: plan.includesArt,
       includesMarketing: plan.includesMarketing,
+      includesConcierge: plan.includesConcierge,
       groupsIncluded: plan.groupsIncluded,
       pagesPerGroup: plan.pagesPerGroup,
       included: plan.included ? plan.included.split("\n") : [],

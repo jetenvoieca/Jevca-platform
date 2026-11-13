@@ -36,6 +36,7 @@ export default function PlanAddOnsList({
     includesWeb: boolean;
     includesArt: boolean;
     includesMarketing: boolean;
+    includesConcierge: boolean;
     addOns: PlanAddOnPrice[];
   };
   planPrice: string;

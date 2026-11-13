@@ -6,6 +6,7 @@ export type AddOnKey =
   | "ART_MANAGER"
   | "WEB_MANAGER"
   | "MARKETING_MANAGER"
+  | "CONCIERGE"
   | "LOCATIONS"
   | "ECOMMERCE"
   | "MAILINGS"
@@ -17,6 +18,7 @@ export const ADD_ONS: { key: AddOnKey; label: string; perItem: boolean }[] = [
   { key: "ART_MANAGER", label: "Art Manager", perItem: false },
   { key: "WEB_MANAGER", label: "Web Manager", perItem: false },
   { key: "MARKETING_MANAGER", label: "Marketing Manager", perItem: false },
+  { key: "CONCIERGE", label: "Personal Concierge", perItem: false },
   { key: "LOCATIONS", label: "Locations / Consignments", perItem: false },
   { key: "ECOMMERCE", label: "Ecommerce", perItem: false },
   { key: "MAILINGS", label: "Mailings", perItem: false },
@@ -69,6 +71,7 @@ export type PlanSummary = {
   includesWeb: boolean;
   includesArt: boolean;
   includesMarketing: boolean;
+  includesConcierge: boolean;
   groupsIncluded: number;
   pagesPerGroup: number;
   // What it includes, one item a line (shown on the Artist App's Account).
@@ -127,13 +130,19 @@ export function toPence(value: string): number | null {
 // The products (2026-11-13): an add-on for a product the plan includes
 // isn't offered; Locations / Consignments belongs to Art Manager — only
 // with it, in the plan or added.
-type PlanProducts = { includesWeb: boolean; includesArt: boolean; includesMarketing: boolean };
+type PlanProducts = {
+  includesWeb: boolean;
+  includesArt: boolean;
+  includesMarketing: boolean;
+  includesConcierge: boolean;
+};
 
 // The products and the add-on that adds each (2026-11-13).
 export const PRODUCTS = [
   { include: "includesWeb", addOn: "WEB_MANAGER", label: "Web Manager" },
   { include: "includesArt", addOn: "ART_MANAGER", label: "Art Manager" },
   { include: "includesMarketing", addOn: "MARKETING_MANAGER", label: "Marketing Manager" },
+  { include: "includesConcierge", addOn: "CONCIERGE", label: "Personal Concierge" },
 ] as const;
 
 export function offeredAddOns<T extends { addOn: AddOnKey }>(plan: PlanProducts, addOns: readonly T[]): T[] {
@@ -205,6 +214,7 @@ export type SiteAccountPlan = {
   includesWeb: boolean;
   includesArt: boolean;
   includesMarketing: boolean;
+  includesConcierge: boolean;
   groupsIncluded: number;
   pagesPerGroup: number;
   included: string[];
@@ -233,6 +243,8 @@ export type SiteFeatures = {
   website: boolean;
   // Marketing Manager (2026-11-13): the Artist App's Marketing manager.
   marketing: boolean;
+  // Personal Concierge (2026-11-13): the Artist App's Concierge.
+  concierge: boolean;
   picturesFrom: "file" | "both";
   catalogue: boolean;
   pickerFilters: boolean;
@@ -249,6 +261,7 @@ export function siteFeatures(
   return {
     website: !plan || plan.includesWeb || has("WEB_MANAGER") > 0,
     marketing: (plan?.includesMarketing ?? false) || has("MARKETING_MANAGER") > 0,
+    concierge: (plan?.includesConcierge ?? false) || has("CONCIERGE") > 0,
     picturesFrom: art ? "both" : "file",
     catalogue: art,
     pickerFilters: art || has("LOCATIONS") > 0,

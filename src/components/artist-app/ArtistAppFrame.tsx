@@ -30,7 +30,7 @@ import { useFrameSlots } from "@/components/artist-app/ArtistAppPanels";
 // reading "Website" while it's open, back to Pages: 2026-11-11), Marketing
 // manager (the admin's Marketing items, with Marketing Manager, likewise —
 // 2026-11-13),
-// Concierge (a placeholder) and Account.
+// Concierge (requests to the Hopper, with Personal Concierge — 2026-11-13) and Account.
 // Medium screens and up the two side by side; a phone stacked.
 
 const BUTTON_COLOR = "#FBF7EE";
@@ -60,7 +60,8 @@ export default function ArtistAppFrame({
   const chosenPage = pathname === artistAppHref(siteId, "pages") ? searchParams.get("page") : null;
   // Web Manager / Art Manager (2026-11-13): without the website, no pages,
   // preview, publish or site link, and Art manager has no Website button.
-  const { catalogue, website, marketing } = useArtistAppFeatures();
+  const { catalogue, website, marketing, concierge } = useArtistAppFeatures();
+  const conciergeHref = artistAppHref(siteId, "concierge");
   const slots = useFrameSlots();
   const catalogueHref = artistAppHref(siteId, "artworks");
   const accountHref = artistAppHref(siteId, "account");
@@ -133,7 +134,11 @@ export default function ArtistAppFrame({
                   Manage Works
                 </AppButton>
               )}
-              <AppButton color={CONCIERGE_COLOR}>Concierge</AppButton>
+              {concierge && (
+                <AppButton href={conciergeHref} color={CONCIERGE_COLOR} active={pathname === conciergeHref}>
+                  Concierge
+                </AppButton>
+              )}
               <AppButton href={accountHref} active={pathname === accountHref}>
                 Account
               </AppButton>
@@ -181,14 +186,14 @@ function PageLinks({ siteId, pages }: { siteId: string; pages: ArtistAppPage[] }
   );
 }
 
-// A screen's button, or a placeholder when it has no `href`.
+// A screen's button.
 function AppButton({
   href,
   active = false,
   color = BUTTON_COLOR,
   children,
 }: {
-  href?: string;
+  href: string;
   active?: boolean;
   color?: string;
   children: React.ReactNode;
@@ -198,13 +203,6 @@ function AppButton({
   const className = `flex h-11 shrink-0 items-center whitespace-nowrap rounded-xl border px-5 text-lg font-light text-neutral-600 lg:h-[54px] lg:text-[22px] ${
     active ? "border-neutral-500" : "border-neutral-300"
   }`;
-  if (!href) {
-    return (
-      <button type="button" aria-disabled style={{ backgroundColor: color }} className={`${className} cursor-default`}>
-        {children}
-      </button>
-    );
-  }
   return (
     <Link href={href} prefetch={false} style={{ backgroundColor: color }} className={`${className} hover:brightness-[0.98]`}>
       {children}

@@ -28,7 +28,7 @@ export const ARTIST_APP_SHOWS_PRESENTATION_MEDIUM = false;
 // and a location.
 export function artistAppHref(
   siteId: string,
-  screen: "" | "pages" | "account" | "artworks" | "artworks/add" | "artworks/locations" | "marketing" = "",
+  screen: "" | "pages" | "account" | "artworks" | "artworks/add" | "artworks/locations" | "marketing" | "concierge" = "",
 ): string {
   return `/artist-app/${siteId}${screen ? `/${screen}` : ""}`;
 }

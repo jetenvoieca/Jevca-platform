@@ -266,10 +266,11 @@ export async function artistAppDefaultCurrency(siteId: string): Promise<string> 
 // Makes the work: a new Catalogue entry (name, description, full price;
 // its first picture as the Catalogue's main picture, where it can be),
 // added to the end of `curationId` with this curation's own description
-// and — when it has more than that one picture — its pictures.
+// and — when it has more than that one picture — its pictures. No
+// curation (2026-11-13, from the Concierge): the Catalogue entry only.
 export async function createArtistAppWork(
   siteId: string,
-  curationId: string,
+  curationId: string | null,
   input: { name: string; description: string; price: string; currency: string; imageIds: string[] },
 ): Promise<{ ok: true } | { error: string }> {
   const { artistId } = await requireSiteAccess(siteId);
@@ -281,8 +282,10 @@ export async function createArtistAppWork(
   if (!isCurrency(input.currency)) return { error: "That currency isn't supported." };
   const description = input.description.trim();
 
-  const curation = await db.curation.findFirst({ where: { id: curationId, artistId }, select: { id: true } });
-  if (!curation) return { error: "This page's curation wasn't found." };
+  if (curationId) {
+    const curation = await db.curation.findFirst({ where: { id: curationId, artistId }, select: { id: true } });
+    if (!curation) return { error: "This page's curation wasn't found." };
+  }
   const imageIds = [...new Set(input.imageIds)];
   if (imageIds.length > MAX_NEW_WORK_IMAGES) return { error: `A work can have at most ${MAX_NEW_WORK_IMAGES} pictures.` };
   const images = await db.image.findMany({
@@ -306,11 +309,9 @@ export async function createArtistAppWork(
   });
   // Its own pictures in this curation unless they're just the Catalogue's.
   const ownImages = imageIds.length > 0 && !(imageIds.length === 1 && mainImageId);
-  const last = await db.curationItem.findFirst({
-    where: { curationId },
-    orderBy: { position: "desc" },
-    select: { position: true },
-  });
+  const last = curationId
+    ? await db.curationItem.findFirst({ where: { curationId }, orderBy: { position: "desc" }, select: { position: true } })
+    : null;
   await db.$transaction([
     ...(mainImageId
       ? [
@@ -318,16 +319,20 @@ export async function createArtistAppWork(
           db.image.update({ where: { id: mainImageId }, data: { status: "SORTED" } }),
         ]
       : []),
-    db.curationItem.create({
-      data: {
-        curationId,
-        artworkId: artwork.id,
-        position: (last?.position ?? -1) + 1,
-        description: description || null,
-        ownImages,
-        images: ownImages ? { create: imageIds.map((imageId, position) => ({ imageId, position })) } : undefined,
-      },
-    }),
+    ...(curationId
+      ? [
+          db.curationItem.create({
+            data: {
+              curationId,
+              artworkId: artwork.id,
+              position: (last?.position ?? -1) + 1,
+              description: description || null,
+              ownImages,
+              images: ownImages ? { create: imageIds.map((imageId, position) => ({ imageId, position })) } : undefined,
+            },
+          }),
+        ]
+      : []),
   ]);
   return { ok: true };
 }

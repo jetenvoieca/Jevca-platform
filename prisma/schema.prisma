@@ -1777,6 +1777,9 @@ model Plan {
   // Marketing Manager (2026-11-13): the admin's Marketing items in the
   // Artist App (add-on MARKETING_MANAGER when not included).
   includesMarketing Boolean @default(false)
+  // Personal Concierge (2026-11-13): the Artist App's Concierge (add-on
+  // CONCIERGE when not included).
+  includesConcierge Boolean @default(false)
 
   // Its price in each currency (2026-11-13: £, € and $ — see
   // PLAN_CURRENCIES in lib/plans.ts); its add-ons likewise (PlanAddOn).
@@ -1812,6 +1815,7 @@ enum AddOn {
   ART_MANAGER
   WEB_MANAGER
   MARKETING_MANAGER
+  CONCIERGE
   LOCATIONS
   ECOMMERCE
   MAILINGS
@@ -2365,6 +2369,11 @@ model HopperNote {
   artist   Artist @relation(fields: [artistId], references: [id], onDelete: Cascade)
   text     String
   doneAt   DateTime?
+  // A Concierge request (2026-11-13): the kind chosen (CONCIERGE_KINDS in
+  // lib/concierge.ts) and its one picture (itself in the Hopper to sort).
+  kind     String?
+  imageId  String?
+  image    Image? @relation(fields: [imageId], references: [id], onDelete: SetNull)
 
   createdAt DateTime @default(now())
 
@@ -2589,6 +2598,8 @@ model Image {
 
   @@index([artistId])
   @@index([artistId, sourceUrl])
+  // Concierge requests it was sent with (2026-11-13).
+  hopperNotes HopperNote[]
 }
 
 enum VideoRenderStatus {

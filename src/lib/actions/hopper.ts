@@ -1,6 +1,7 @@
 "use server";
 
 import { db } from "@/lib/db";
+import { conciergeKindLabel } from "@/lib/concierge";
 import { requireArtistAccess, requireRecordAccess } from "@/lib/currentUser";
 import { publicMediaUrl } from "@/lib/r2";
 import { revalidatePath } from "next/cache";
@@ -308,7 +309,8 @@ async function addToPortfolioCuration(artistId: string, name: string, artworkId:
 
 // ---------- Notes sent from the Studio app (2026-10-31) ----------
 
-export type HopperNoteItem = { id: string; text: string; createdAt: string };
+// A Concierge request (2026-11-13) also has its kind and picture.
+export type HopperNoteItem = { id: string; text: string; createdAt: string; kind: string | null; imageUrl: string | null };
 
 // The notes still in a client's Hopper (see HopperNote).
 export async function listHopperNotes(artistId: string): Promise<HopperNoteItem[]> {
@@ -316,9 +318,15 @@ export async function listHopperNotes(artistId: string): Promise<HopperNoteItem[
   const rows = await db.hopperNote.findMany({
     where: { artistId, doneAt: null },
     orderBy: { createdAt: "asc" },
-    select: { id: true, text: true, createdAt: true },
+    select: { id: true, text: true, createdAt: true, kind: true, image: { select: { url: true } } },
   });
-  return rows.map((n) => ({ id: n.id, text: n.text, createdAt: n.createdAt.toISOString() }));
+  return rows.map((n) => ({
+    id: n.id,
+    text: n.text,
+    createdAt: n.createdAt.toISOString(),
+    kind: conciergeKindLabel(n.kind),
+    imageUrl: n.image?.url ?? null,
+  }));
 }
 
 // The note's client, once the person logged in is checked to have access.
