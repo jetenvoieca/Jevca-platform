@@ -11,18 +11,23 @@ import { CONCIERGE_KINDS, CONCIERGE_MAX_LENGTH, type ConciergeKind, type Concier
 import { formatDateTime } from "@/lib/formatDate";
 
 // The Concierge (2026-11-13, Craig's mockup): the kinds of request on the
-// left; the one chosen on the right, its title, "Just say what's needed",
-// one picture and Send — sent to the client's Hopper (sendConciergeRequest).
-// "Add / edit an Artwork" also opens the new work form (the Catalogue
-// only). Under them, the requests sent and whether each is done.
+// left; the one chosen on the right, its title, "Just say what's needed"
+// and Send — sent to the client's Hopper (sendConciergeRequest). Only "Add
+// / edit an Artwork" takes a picture (one), and also opens the new work
+// form (the Catalogue only). "Update my Artist statement" starts from the
+// statement as it is, edited and sent to be checked before it goes on the
+// website. Under them, the requests sent and whether each is done.
 export default function ArtistConciergeView({
   siteId,
   artistId,
   requests,
+  statement,
 }: {
   siteId: string;
   artistId: string;
   requests: ConciergeRequest[];
+  // The Artist Statement as it is now.
+  statement: string;
 }) {
   const router = useRouter();
   const words = useClientWords();
@@ -72,6 +77,15 @@ export default function ArtistConciergeView({
     router.refresh();
   };
 
+  const choose = (next: ConciergeKind) => {
+    setKind(next);
+    setMessage(null);
+    setText(next === "statement" ? statement : "");
+    if (next !== "artwork") setPicture(null);
+  };
+  // The statement must be changed before it's sent.
+  const unchanged = kind === "statement" && text.trim() === statement.trim();
+
   const button = "border border-neutral-300 px-5 py-2 text-base font-light text-neutral-700 hover:bg-neutral-50 disabled:opacity-50";
 
   return (
@@ -82,10 +96,7 @@ export default function ArtistConciergeView({
             <button
               key={k.key}
               type="button"
-              onClick={() => {
-                setKind(k.key);
-                setMessage(null);
-              }}
+              onClick={() => choose(k.key)}
               aria-current={k.key === kind ? "true" : undefined}
               className={`border px-6 py-1.5 text-left text-base font-light text-neutral-800 hover:bg-neutral-50 ${
                 k.key === kind ? "border-neutral-800" : "border-neutral-300"
@@ -103,9 +114,11 @@ export default function ArtistConciergeView({
             value={text}
             onChange={(e) => setText(e.target.value)}
             maxLength={CONCIERGE_MAX_LENGTH}
-            placeholder="Just say what's needed"
-            aria-label="What's needed"
-            className="min-h-48 flex-1 resize-y p-1 text-xl font-light text-neutral-800 outline-none placeholder:text-neutral-500"
+            placeholder={kind === "statement" ? "Your artist statement" : "Just say what's needed"}
+            aria-label={kind === "statement" ? "Your artist statement" : "What's needed"}
+            className={`min-h-48 flex-1 resize-y p-1 font-light text-neutral-800 outline-none placeholder:text-neutral-500 ${
+              kind === "statement" ? "text-base" : "text-xl"
+            }`}
           />
           {picture && (
             <div className="flex items-end gap-3">
@@ -121,17 +134,19 @@ export default function ArtistConciergeView({
               <p className={`mr-auto text-sm ${message.error ? "text-red-600" : "text-green-700"}`}>{message.text}</p>
             )}
             {kind === "artwork" && (
-              <button type="button" onClick={() => setNewWork(true)} className={button}>
-                Add {words.item.toLowerCase()} myself
-              </button>
+              <>
+                <button type="button" onClick={() => setNewWork(true)} className={button}>
+                  Add {words.item.toLowerCase()} myself
+                </button>
+                <button type="button" onClick={() => fileRef.current?.click()} disabled={busy !== null} className={button}>
+                  {busy === "upload" ? "Adding…" : picture ? "Change image" : "Add an image"}
+                </button>
+              </>
             )}
-            <button type="button" onClick={() => fileRef.current?.click()} disabled={busy !== null} className={button}>
-              {busy === "upload" ? "Adding…" : picture ? "Change image" : "Add an image"}
-            </button>
             <button
               type="button"
               onClick={send}
-              disabled={busy !== null || !text.trim()}
+              disabled={busy !== null || !text.trim() || unchanged}
               className="bg-neutral-900 px-6 py-2 text-base text-white hover:bg-neutral-700 disabled:opacity-40"
             >
               {busy === "send" ? "Sending…" : "Send"}

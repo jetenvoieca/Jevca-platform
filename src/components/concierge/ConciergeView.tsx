@@ -8,6 +8,7 @@ import type { ConciergeNote, ConciergePicture } from "@/lib/actions/concierge";
 import type { ConciergeKind } from "@/lib/concierge";
 import HopperNoteCard, { HopperNoteTile, NOTE_BG } from "@/components/HopperNoteCard";
 import { ConciergeArrangeTask, ConciergePagesTask } from "@/components/concierge/ConciergeSiteTasks";
+import ConciergeStatementTask from "@/components/concierge/ConciergeStatementTask";
 
 // Administration → Concierge (2026-11-13, Craig's mockup): a Hopper for
 // every site at once. On the left, the notes still to do — Concierge
@@ -18,9 +19,10 @@ import { ConciergeArrangeTask, ConciergePagesTask } from "@/components/concierge
 // sees it done) or Delete. On the right, what's just been done.
 
 // The form for each kind of request that has one; more as they're built.
-const TASKS: Partial<Record<ConciergeKind, React.ComponentType<{ siteId: string }>>> = {
+const TASKS: Partial<Record<ConciergeKind, React.ComponentType<{ note: ConciergeNote }>>> = {
   pages: ConciergePagesTask,
   rearrange: ConciergeArrangeTask,
+  statement: ConciergeStatementTask,
 };
 
 type Tile =
@@ -150,14 +152,7 @@ export default function ConciergeView({
               onDone={() => handle(current, "done")}
               onDelete={() => handle(current, "delete")}
             >
-              {Task &&
-                (current.siteId ? (
-                  <Task siteId={current.siteId} />
-                ) : (
-                  <p className="text-center text-sm text-neutral-500">
-                    This request doesn&apos;t say which of {current.client}&apos;s sites it&apos;s for.
-                  </p>
-                ))}
+              {Task && <Task note={current} />}
             </HopperNoteCard>
           )}
         </div>

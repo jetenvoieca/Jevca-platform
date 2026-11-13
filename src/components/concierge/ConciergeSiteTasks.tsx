@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { DndContext, DragOverlay, type DragEndEvent, type DragStartEvent } from "@dnd-kit/core";
-import { conciergeSitePages } from "@/lib/actions/concierge";
+import { conciergeSitePages, type ConciergeNote } from "@/lib/actions/concierge";
 import { getArtistAppPageContent, type ArtistAppPage, type ArtistAppPageContent } from "@/lib/actions/artistApp";
 import { arrangePages, pageToOpen } from "@/lib/artistAppPageOrder";
 import PageOrderLists, {
@@ -21,17 +21,28 @@ import { DragThumb, ignoreClickAfterDrag, useArtistAppSensors } from "@/componen
 // is saved to the site at once.
 
 // Reorder pages: the site's Live and Hidden pages, dragged into order.
-export function ConciergePagesTask({ siteId }: { siteId: string }) {
-  return <SitePages siteId={siteId} withWorks={false} />;
+export function ConciergePagesTask({ note }: { note: ConciergeNote }) {
+  return <SitePages note={note} withWorks={false} />;
 }
 
 // Rearrange artworks on a page: choose the page, then drag its works into
 // order (or Remove work).
-export function ConciergeArrangeTask({ siteId }: { siteId: string }) {
-  return <SitePages siteId={siteId} withWorks />;
+export function ConciergeArrangeTask({ note }: { note: ConciergeNote }) {
+  return <SitePages note={note} withWorks />;
 }
 
-function SitePages({ siteId, withWorks }: { siteId: string; withWorks: boolean }) {
+function SitePages({ note, withWorks }: { note: ConciergeNote; withWorks: boolean }) {
+  if (!note.siteId) {
+    return (
+      <p className="text-center text-sm text-neutral-500">
+        This request doesn&apos;t say which of {note.client}&apos;s sites it&apos;s for.
+      </p>
+    );
+  }
+  return <SitePagesLoader siteId={note.siteId} withWorks={withWorks} />;
+}
+
+function SitePagesLoader({ siteId, withWorks }: { siteId: string; withWorks: boolean }) {
   const [loaded, setLoaded] = useState<Awaited<ReturnType<typeof conciergeSitePages>> | null>(null);
   const [error, setError] = useState<string | null>(null);
 

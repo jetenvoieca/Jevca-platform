@@ -3,6 +3,7 @@ import { db } from "@/lib/db";
 import { artistAppHref } from "@/lib/artistApp";
 import { readSiteFeatures } from "@/lib/siteFeaturesData";
 import { listConciergeRequests } from "@/lib/actions/concierge";
+import { listProfileCatalogue } from "@/lib/actions/profileStories";
 import ArtistConciergeView from "@/components/artist-app/ArtistConciergeView";
 
 export const dynamic = "force-dynamic";
@@ -14,7 +15,13 @@ export default async function ArtistConciergePage({ params }: { params: Promise<
   if (!(await readSiteFeatures(siteId)).concierge) redirect(artistAppHref(siteId, "pages"));
   const site = await db.site.findUnique({ where: { id: siteId }, select: { artistId: true } });
   if (!site) notFound();
+  const [requests, entries] = await Promise.all([listConciergeRequests(siteId), listProfileCatalogue(site.artistId)]);
   return (
-    <ArtistConciergeView siteId={siteId} artistId={site.artistId} requests={await listConciergeRequests(siteId)} />
+    <ArtistConciergeView
+      siteId={siteId}
+      artistId={site.artistId}
+      requests={requests}
+      statement={entries.find((e) => e.kind === "STATEMENT")?.story ?? ""}
+    />
   );
 }

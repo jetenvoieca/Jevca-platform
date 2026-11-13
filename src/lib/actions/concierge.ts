@@ -34,6 +34,7 @@ export async function sendConciergeRequest(
   const text = input.text.trim();
   if (!text) return { error: "Say what's needed first." };
   if (text.length > CONCIERGE_MAX_LENGTH) return { error: `Keep it under ${CONCIERGE_MAX_LENGTH} characters.` };
+  if (input.imageId && input.kind !== "artwork") return { error: "Only an artwork request takes a picture." };
   if (input.imageId) {
     const image = await db.image.findFirst({ where: { id: input.imageId, artistId }, select: { id: true } });
     if (!image) return { error: "That picture wasn't found." };
@@ -73,6 +74,7 @@ export async function listConciergeRequests(siteId: string): Promise<ConciergeRe
 export type ConciergeNote = HopperNoteItem & {
   // The kind's key (CONCIERGE_KINDS), which picks the form to act on it.
   kindKey: string | null;
+  artistId: string;
   client: string;
   siteId: string | null;
   siteName: string | null;
@@ -97,6 +99,7 @@ export async function listConciergeQueue(): Promise<{ notes: ConciergeNote[]; pi
       text: true,
       kind: true,
       createdAt: true,
+      artistId: true,
       artist: { select: { name: true } },
       site: { select: { id: true, name: true } },
       image: { select: { id: true, url: true, status: true, createdAt: true } },
@@ -109,6 +112,7 @@ export async function listConciergeQueue(): Promise<{ notes: ConciergeNote[]; pi
     kind: conciergeKindLabel(n.kind),
     imageUrl: n.image?.url ?? null,
     kindKey: n.kind,
+    artistId: n.artistId,
     client: n.artist.name,
     siteId: n.site?.id ?? null,
     siteName: n.site?.name ?? null,
