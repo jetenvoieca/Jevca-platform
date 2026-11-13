@@ -8,7 +8,7 @@ export async function readSiteFeatures(siteId: string): Promise<SiteFeatures> {
   const site = await db.site.findUnique({
     where: { id: siteId },
     select: {
-      plan: { select: { groupsIncluded: true, pagesPerGroup: true } },
+      plan: { select: { groupsIncluded: true, pagesPerGroup: true, includesWeb: true, includesArt: true } },
       addOns: { select: { addOn: true, quantity: true } },
     },
   });

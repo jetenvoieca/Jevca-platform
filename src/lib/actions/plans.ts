@@ -9,6 +9,7 @@ import {
   ADD_ON_ORDER,
   PLAN_LIMITS,
   checkAddOns,
+  offeredAddOns,
   inRange,
   toPence,
   type AddOnKey,
@@ -59,6 +60,7 @@ export async function updatePlan(
   const price = toPence(input.monthlyPrice);
   if (price === null) return { error: "The plan's price couldn't be read." };
   if (!isCurrency(input.currency)) return { error: "That currency isn't offered." };
+  if (!input.includesWeb && !input.includesArt) return { error: "A plan includes Web Manager, Art Manager or both." };
   if (!inRange(input.groupsIncluded, PLAN_LIMITS.groupsIncluded)) {
     return { error: `Groups of pages included must be ${PLAN_LIMITS.groupsIncluded.min} to ${PLAN_LIMITS.groupsIncluded.max}.` };
   }
@@ -80,7 +82,8 @@ export async function updatePlan(
   if (found !== themeIds.length) return { error: "One of those themes wasn't found." };
 
   const addOns: { addOn: AddOnKey; pence: number }[] = [];
-  for (const a of input.addOns as PlanAddOnPrice[]) {
+  // Not an add-on for a product it includes (offeredAddOns).
+  for (const a of offeredAddOns(input, input.addOns as PlanAddOnPrice[])) {
     if (!ADD_ON_ORDER.has(a.addOn) || addOns.some((x) => x.addOn === a.addOn)) continue;
     const pence = toPence(a.monthlyPrice);
     if (pence === null) return { error: "An add-on's price couldn't be read." };
@@ -98,6 +101,8 @@ export async function updatePlan(
         name,
         monthlyPrice: price / 100,
         currency: input.currency,
+        includesWeb: input.includesWeb,
+        includesArt: input.includesArt,
         groupsIncluded: input.groupsIncluded,
         pagesPerGroup: input.pagesPerGroup,
         included,
@@ -110,6 +115,14 @@ export async function updatePlan(
       data: addOns.map((a) => ({ planId: id, addOn: a.addOn, monthlyPrice: a.pence / 100 })),
     }),
     db.siteAddOn.deleteMany({ where: { site: { planId: id }, addOn: { notIn: offered } } }),
+    // Locations / Consignments only with Art Manager.
+    ...(input.includesArt
+      ? []
+      : [
+          db.siteAddOn.deleteMany({
+            where: { addOn: "LOCATIONS", site: { planId: id, addOns: { none: { addOn: "ART_MANAGER" } } } },
+          }),
+        ]),
     db.site.updateMany({
       where: { planId: id, OR: [{ siteThemeId: null }, { siteThemeId: { notIn: themeIds } }] },
       data: { siteThemeId: themeIds[0] ?? null },
@@ -223,6 +236,8 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
       name: plan.name,
       monthlyPrice: site.planPrice?.toFixed(2) ?? plan.monthlyPrice,
       currency: plan.currency,
+      includesWeb: plan.includesWeb,
+      includesArt: plan.includesArt,
       groupsIncluded: plan.groupsIncluded,
       pagesPerGroup: plan.pagesPerGroup,
       included: plan.included ? plan.included.split("\n") : [],

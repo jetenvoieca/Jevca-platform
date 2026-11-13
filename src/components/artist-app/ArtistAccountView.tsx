@@ -109,15 +109,22 @@ function PlanChoice({
         <p className="rounded-md border border-neutral-300 px-3 py-1.5">
           {plan.name} — {formatMoney(plan.monthlyPrice, plan.currency, "when-any")} a month
         </p>
-        {plan.themeName && (
-          <p className="flex items-center gap-2">
-            <span className="w-16 shrink-0 text-neutral-500">Theme</span>
-            {plan.themeName}
-          </p>
+        {/* The website's theme and pages — with Web Manager, included or
+            added (2026-11-13). */}
+        {(plan.includesWeb || saved.some((a) => a.addOn === "WEB_MANAGER")) && (
+          <>
+            {plan.themeName && (
+              <p className="flex items-center gap-2">
+                <span className="w-16 shrink-0 text-neutral-500">Theme</span>
+                {plan.themeName}
+              </p>
+            )}
+            <p className="text-xs text-neutral-500">
+              {plan.groupsIncluded} group{plan.groupsIncluded === 1 ? "" : "s"} of up to {plan.pagesPerGroup} pages
+              included.
+            </p>
+          </>
         )}
-        <p className="text-xs text-neutral-500">
-          {plan.groupsIncluded} group{plan.groupsIncluded === 1 ? "" : "s"} of up to {plan.pagesPerGroup} pages included.
-        </p>
         <PlanAddOnsList
           plan={plan}
           planPrice={plan.monthlyPrice}

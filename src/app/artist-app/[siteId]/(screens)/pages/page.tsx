@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { db } from "@/lib/db";
-import { artistAppPageHref } from "@/lib/artistApp";
+import { artistAppHref, artistAppPageHref } from "@/lib/artistApp";
+import { readSiteFeatures } from "@/lib/siteFeaturesData";
 import { getArtistAppPageContent, listArtistAppPages } from "@/lib/actions/artistApp";
 import { readLocations } from "@/lib/artworkSettingsData";
 import { arrangePages, pageToOpen } from "@/lib/artistAppPageOrder";
@@ -20,6 +21,8 @@ export default async function ArtistPagesPage({
   searchParams: Promise<{ page?: string }>;
 }) {
   const { siteId } = await params;
+  // Art Manager only (2026-11-13): no website — straight to Art manager.
+  if (!(await readSiteFeatures(siteId)).website) redirect(artistAppHref(siteId, "artworks"));
   const { page } = await searchParams;
   const site = await db.site.findUnique({
     where: { id: siteId },

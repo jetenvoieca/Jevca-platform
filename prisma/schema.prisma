@@ -1767,6 +1767,13 @@ model Plan {
   // What it includes, one item a line (2026-11-10) — listed on the
   // Artist App's Account.
   included       String  @default("")
+  // The products it includes (2026-11-13, Craig): Web Manager (the
+  // website — its pages, publishing) and/or Art Manager (the Artwork
+  // Catalogue, Locations). The one it doesn't include can be added as an
+  // add-on (WEB_MANAGER / ART_MANAGER). Every site keeps everything
+  // underneath; these only show or hide parts of the Artist App.
+  includesWeb    Boolean @default(true)
+  includesArt    Boolean @default(false)
 
   themes      PlanTheme[]
   addOns      PlanAddOn[]
@@ -1797,6 +1804,7 @@ model PlanTheme {
 // Plan's pagesPerGroup. See lib/plans.ts.
 enum AddOn {
   ART_MANAGER
+  WEB_MANAGER
   LOCATIONS
   ECOMMERCE
   MAILINGS

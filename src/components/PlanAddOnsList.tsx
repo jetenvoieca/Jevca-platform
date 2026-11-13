@@ -3,6 +3,8 @@
 import {
   ADD_ONS,
   PLAN_LIMITS,
+  hasArtManager,
+  offeredAddOns,
   monthlyTotalPence,
   priceAddOns,
   type AddOnKey,
@@ -18,6 +20,9 @@ import { formatMoney } from "@/lib/currencies";
 // Artist App's Account). `planPrice`: what the site pays for the plan.
 // Add-ons the site has (`kept`) show the price it took them at; others
 // the plan's price now. `onChange` gets the add-ons in ADD_ONS order.
+// Products (2026-11-13): not an add-on for a product the plan includes;
+// Locations / Consignments only with Art Manager (unticking Art Manager
+// unticks it).
 export default function PlanAddOnsList({
   plan,
   planPrice,
@@ -26,7 +31,7 @@ export default function PlanAddOnsList({
   onChange,
   disabled,
 }: {
-  plan: { currency: string; addOns: PlanAddOnPrice[] };
+  plan: { currency: string; includesWeb: boolean; includesArt: boolean; addOns: PlanAddOnPrice[] };
   planPrice: string;
   kept: SiteAddOnRow[];
   value: SiteAddOnChoice[];
@@ -38,15 +43,20 @@ export default function PlanAddOnsList({
   const quantityOf = (key: AddOnKey) => value.find((a) => a.addOn === key)?.quantity ?? 0;
   const setQuantity = (key: AddOnKey, quantity: number) => {
     const others = value.filter((a) => a.addOn !== key);
-    const next = quantity > 0 ? [...others, { addOn: key, quantity }] : others;
+    const chosen = quantity > 0 ? [...others, { addOn: key, quantity }] : others;
+    const next = hasArtManager(plan, chosen) ? chosen : chosen.filter((a) => a.addOn !== "LOCATIONS");
     onChange(ADD_ONS.flatMap((o) => next.filter((a) => a.addOn === o.key)));
   };
 
+  const shown = offeredAddOns(plan, plan.addOns).filter(
+    (a) => a.addOn !== "LOCATIONS" || hasArtManager(plan, value),
+  );
+
   return (
     <>
-      {plan.addOns.length > 0 && (
+      {shown.length > 0 && (
         <div className="flex flex-col gap-1.5">
-          {plan.addOns.map((a) => {
+          {shown.map((a) => {
             const option = ADD_ONS.find((o) => o.key === a.addOn)!;
             const quantity = quantityOf(a.addOn);
             return (

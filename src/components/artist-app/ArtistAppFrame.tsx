@@ -56,7 +56,9 @@ export default function ArtistAppFrame({
   const searchParams = useSearchParams();
   // Pages keeps its chosen page in the address (`page`).
   const chosenPage = pathname === artistAppHref(siteId, "pages") ? searchParams.get("page") : null;
-  const { catalogue } = useArtistAppFeatures();
+  // Web Manager / Art Manager (2026-11-13): without the website, no pages,
+  // preview, publish or site link, and Art manager has no Website button.
+  const { catalogue, website } = useArtistAppFeatures();
   const slots = useFrameSlots();
   const catalogueHref = artistAppHref(siteId, "artworks");
   const accountHref = artistAppHref(siteId, "account");
@@ -82,7 +84,7 @@ export default function ArtistAppFrame({
                   </form>
                 )}
               </div>
-              {chosenPage && (
+              {website && chosenPage && (
                 <Link
                   href={artistAppPreviewHref(siteId, chosenPage)}
                   prefetch={false}
@@ -94,23 +96,29 @@ export default function ArtistAppFrame({
                 </Link>
               )}
               <div ref={slots.band.setNode} className="flex items-center gap-1.5" />
-              <PublishButton siteId={siteId} lastPublishedAt={lastPublishedAt} />
-              <PublishedSiteLink href={publishedHomePath(siteId)} />
+              {website && (
+                <>
+                  <PublishButton siteId={siteId} lastPublishedAt={lastPublishedAt} />
+                  <PublishedSiteLink href={publishedHomePath(siteId)} />
+                </>
+              )}
             </div>
 
             <div className="flex min-h-0 flex-1 flex-col sm:overflow-y-auto">
               {/* Takes the room only when a screen uses it — empty, it pushed the
                   pages list to the foot (2026-11-11). */}
               <div ref={slots.side.setNode} className={slots.side.claimed ? "flex min-h-0 flex-1 flex-col" : ""} />
-              {!slots.side.claimed && <PageLinks siteId={siteId} pages={pages} />}
+              {website && !slots.side.claimed && <PageLinks siteId={siteId} pages={pages} />}
             </div>
 
             <nav className="flex shrink-0 flex-col gap-2">
               {catalogue &&
-                (pathname === catalogueHref || pathname.startsWith(`${catalogueHref}/`) ? (
+                (website && (pathname === catalogueHref || pathname.startsWith(`${catalogueHref}/`)) ? (
                   <AppButton href={artistAppHref(siteId, "pages")}>Website</AppButton>
                 ) : (
-                  <AppButton href={catalogueHref}>Art manager</AppButton>
+                  <AppButton href={catalogueHref} active={!website && pathname.startsWith(catalogueHref)}>
+                    Art manager
+                  </AppButton>
                 ))}
               {ARTIST_APP_SHOWS_MANAGE_WORKS && (
                 <AppButton href={artistAppHref(siteId)} active={pathname === artistAppHref(siteId)}>

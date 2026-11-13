@@ -2,12 +2,13 @@
 // schema.prisma. No database here, so the screens can use it too; the
 // actions are in lib/actions/plans.ts.
 
-export type AddOnKey = "ART_MANAGER" | "LOCATIONS" | "ECOMMERCE" | "MAILINGS" | "EXTRA_PAGE_GROUP";
+export type AddOnKey = "ART_MANAGER" | "WEB_MANAGER" | "LOCATIONS" | "ECOMMERCE" | "MAILINGS" | "EXTRA_PAGE_GROUP";
 
 // The add-ons there are, in the order they're listed. `perItem`: charged
 // for each one the site has (a quantity), not just on or off.
 export const ADD_ONS: { key: AddOnKey; label: string; perItem: boolean }[] = [
   { key: "ART_MANAGER", label: "Art Manager", perItem: false },
+  { key: "WEB_MANAGER", label: "Web Manager", perItem: false },
   { key: "LOCATIONS", label: "Locations / Consignments", perItem: false },
   { key: "ECOMMERCE", label: "Ecommerce", perItem: false },
   { key: "MAILINGS", label: "Mailings", perItem: false },
@@ -38,6 +39,10 @@ export type PlanSummary = {
   // Decimal, e.g. "19.00".
   monthlyPrice: string;
   currency: string;
+  // The products it includes (2026-11-13) — at least one; see Plan in
+  // schema.prisma.
+  includesWeb: boolean;
+  includesArt: boolean;
   groupsIncluded: number;
   pagesPerGroup: number;
   // What it includes, one item a line (shown on the Artist App's Account).
@@ -74,13 +79,31 @@ export function toPence(value: string): number | null {
   return Number(whole) * 100 + Number(frac.padEnd(2, "0"));
 }
 
+// The products (2026-11-13): an add-on for a product the plan includes
+// isn't offered; Locations / Consignments belongs to Art Manager — only
+// with it, in the plan or added.
+type PlanProducts = { includesWeb: boolean; includesArt: boolean };
+
+export function offeredAddOns<T extends { addOn: AddOnKey }>(plan: PlanProducts, addOns: T[]): T[] {
+  return addOns.filter(
+    (a) => !(a.addOn === "ART_MANAGER" && plan.includesArt) && !(a.addOn === "WEB_MANAGER" && plan.includesWeb),
+  );
+}
+
+export function hasArtManager(plan: PlanProducts, addOns: { addOn: AddOnKey }[]): boolean {
+  return plan.includesArt || addOns.some((a) => a.addOn === "ART_MANAGER");
+}
+
 // Add-ons chosen for `plan`, checked: only those it offers, each once; a
 // quantity only for those charged each (otherwise 1).
 export function checkAddOns(
-  plan: { addOns: PlanAddOnPrice[] },
+  plan: PlanProducts & { addOns: PlanAddOnPrice[] },
   input: SiteAddOnChoice[],
 ): { addOns: SiteAddOnChoice[] } | { error: string } {
-  const offered = new Set(plan.addOns.map((a) => a.addOn));
+  const offered = new Set(offeredAddOns(plan, plan.addOns).map((a) => a.addOn));
+  if (input.some((a) => a.addOn === "LOCATIONS") && !hasArtManager(plan, input)) {
+    return { error: "Locations / Consignments comes with Art Manager." };
+  }
   const addOns: SiteAddOnChoice[] = [];
   for (const a of input) {
     if (!offered.has(a.addOn)) return { error: "That add-on isn't offered on this plan." };
@@ -124,6 +147,8 @@ export type SiteAccountPlan = {
   name: string;
   monthlyPrice: string;
   currency: string;
+  includesWeb: boolean;
+  includesArt: boolean;
   groupsIncluded: number;
   pagesPerGroup: number;
   included: string[];
@@ -137,6 +162,8 @@ export type SiteAccount = {
 };
 
 // What a site's Plan and add-ons give it in the Artist App (2026-11-09):
+// the website (Web Manager — its pages, publishing; 2026-11-13) and Art
+// Manager, each from the plan or added;
 // pictures from the device, or with Art Manager from the Media Catalogue
 // too; with Art Manager the Catalogue screen (2026-11-10); the artwork picker's Location and Type filters with Art Manager or
 // Locations; and how many pages a group may have (null: no limit) and how
@@ -144,6 +171,7 @@ export type SiteAccount = {
 // when groups can be added). A site with no Plan works as Portfolio did:
 // pictures from the device, no filters, no limits.
 export type SiteFeatures = {
+  website: boolean;
   picturesFrom: "file" | "both";
   catalogue: boolean;
   pickerFilters: boolean;
@@ -152,14 +180,16 @@ export type SiteFeatures = {
 };
 
 export function siteFeatures(
-  plan: { groupsIncluded: number; pagesPerGroup: number } | null,
+  plan: (PlanProducts & { groupsIncluded: number; pagesPerGroup: number }) | null,
   addOns: SiteAddOnChoice[],
 ): SiteFeatures {
   const has = (key: AddOnKey) => addOns.find((a) => a.addOn === key)?.quantity ?? 0;
+  const art = (plan?.includesArt ?? false) || has("ART_MANAGER") > 0;
   return {
-    picturesFrom: has("ART_MANAGER") ? "both" : "file",
-    catalogue: has("ART_MANAGER") > 0,
-    pickerFilters: has("ART_MANAGER") > 0 || has("LOCATIONS") > 0,
+    website: !plan || plan.includesWeb || has("WEB_MANAGER") > 0,
+    picturesFrom: art ? "both" : "file",
+    catalogue: art,
+    pickerFilters: art || has("LOCATIONS") > 0,
     pagesPerGroup: plan ? plan.pagesPerGroup : null,
     pageGroups: plan ? plan.groupsIncluded + has("EXTRA_PAGE_GROUP") : null,
   };

@@ -9,6 +9,8 @@ export const PLAN_SELECT = {
   name: true,
   monthlyPrice: true,
   currency: true,
+  includesWeb: true,
+  includesArt: true,
   groupsIncluded: true,
   pagesPerGroup: true,
   included: true,
@@ -22,6 +24,8 @@ type PlanRecord = {
   name: string;
   monthlyPrice: { toFixed: (digits: number) => string };
   currency: string;
+  includesWeb: boolean;
+  includesArt: boolean;
   groupsIncluded: number;
   pagesPerGroup: number;
   included: string;
@@ -36,6 +40,8 @@ export function toPlanSummary(p: PlanRecord): PlanSummary {
     name: p.name,
     monthlyPrice: p.monthlyPrice.toFixed(2),
     currency: p.currency,
+    includesWeb: p.includesWeb,
+    includesArt: p.includesArt,
     groupsIncluded: p.groupsIncluded,
     pagesPerGroup: p.pagesPerGroup,
     included: p.included,

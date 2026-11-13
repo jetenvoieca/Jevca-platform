@@ -4,7 +4,8 @@ import { useRef, useState, useTransition } from "react";
 import { useRouter } from "next/navigation";
 import { createPlan, deletePlan, setSignupStripeMode, updatePlan } from "@/lib/actions/plans";
 import type { StripeMode } from "@/lib/stripe";
-import { ADD_ONS, PLAN_LIMITS, type AddOnKey, type PlanSummary } from "@/lib/plans";
+import { ADD_ONS,
+  offeredAddOns, PLAN_LIMITS, type AddOnKey, type PlanSummary } from "@/lib/plans";
 import { CURRENCIES } from "@/lib/currencies";
 import ConfirmDialog from "@/components/ConfirmDialog";
 
@@ -26,6 +27,8 @@ const draftOf = (p: PlanSummary): Draft => ({
   name: p.name,
   monthlyPrice: p.monthlyPrice,
   currency: p.currency,
+  includesWeb: p.includesWeb,
+  includesArt: p.includesArt,
   groupsIncluded: p.groupsIncluded,
   pagesPerGroup: p.pagesPerGroup,
   included: p.included,
@@ -117,6 +120,8 @@ export default function PlansManager({
         name: newName.trim(),
         monthlyPrice: "0.00",
         currency: "GBP",
+        includesWeb: true,
+        includesArt: false,
         groupsIncluded: 1,
         pagesPerGroup: 10,
         included: "",
@@ -169,6 +174,36 @@ export default function PlansManager({
                 onBlur={saveTyped}
                 className={field}
               />
+              {/* The products (2026-11-13): at least one; the other is
+                  offered as an add-on. Groups of pages and themes are
+                  the website's — used when Web Manager is in, included
+                  or added. */}
+              <span className="text-sm text-neutral-700">Includes</span>
+              <div className="flex gap-5 text-sm text-neutral-800">
+                {(
+                  [
+                    ["includesWeb", "Web Manager"],
+                    ["includesArt", "Art Manager"],
+                  ] as const
+                ).map(([key, label]) => (
+                  <label key={key} className="flex items-center gap-2">
+                    <input
+                      type="checkbox"
+                      checked={draft[key]}
+                      disabled={draft[key] && !(key === "includesWeb" ? draft.includesArt : draft.includesWeb)}
+                      onChange={(e) =>
+                        change({
+                          [key]: e.target.checked,
+                          addOns: draft.addOns.filter(
+                            (a) => a.addOn !== (key === "includesWeb" ? "WEB_MANAGER" : "ART_MANAGER"),
+                          ),
+                        })
+                      }
+                    />
+                    {label}
+                  </label>
+                ))}
+              </div>
               <label className="text-sm text-neutral-700">Monthly price</label>
               <div className="flex gap-2">
                 <select value={draft.currency} onChange={(e) => change({ currency: e.target.value })} className={field}>
@@ -254,7 +289,10 @@ export default function PlansManager({
             <div>
               <h2 className="mb-2 text-base font-medium text-neutral-900">Add-ons</h2>
               <div className="flex flex-col gap-2">
-                {ADD_ONS.map((o) => {
+                {offeredAddOns(
+                  draft,
+                  ADD_ONS.map((o) => ({ ...o, addOn: o.key })),
+                ).map((o) => {
                   const price = priceOf(o.key);
                   return (
                     <div key={o.key} className="flex items-center gap-3 text-sm text-neutral-800">
