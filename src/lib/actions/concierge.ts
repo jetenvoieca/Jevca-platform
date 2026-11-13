@@ -1,9 +1,12 @@
 "use server";
 
 import { db } from "@/lib/db";
-import { requireSiteAccess } from "@/lib/currentUser";
+import { requireAdmin, requireSiteAccess } from "@/lib/currentUser";
 import { readSiteFeatures } from "@/lib/siteFeaturesData";
 import { noteHopperAdded } from "@/lib/hopperAlerts";
+import { listArtistAppPages, type ArtistAppPage } from "@/lib/actions/artistApp";
+import { arrangePages } from "@/lib/artistAppPageOrder";
+import type { HopperNoteItem } from "@/lib/actions/hopper";
 import {
   CONCIERGE_KINDS,
   CONCIERGE_MAX_LENGTH,
@@ -35,7 +38,7 @@ export async function sendConciergeRequest(
     const image = await db.image.findFirst({ where: { id: input.imageId, artistId }, select: { id: true } });
     if (!image) return { error: "That picture wasn't found." };
   }
-  await db.hopperNote.create({ data: { artistId, kind: input.kind, text, imageId: input.imageId } });
+  await db.hopperNote.create({ data: { artistId, siteId, kind: input.kind, text, imageId: input.imageId } });
   await noteHopperAdded(artistId);
   return { ok: true };
 }
@@ -58,4 +61,79 @@ export async function listConciergeRequests(siteId: string): Promise<ConciergeRe
     createdAt: r.createdAt.toISOString(),
     done: r.doneAt !== null,
   }));
+}
+
+// ---------- Administration → Concierge (2026-11-13, Craig's mockup) ----------
+// Every client's notes still to do — Concierge requests and the Studio
+// app's instructions — and the pictures sent with Concierge requests still
+// in their Hopper, from every site, newest first. Done or Delete as in a
+// site's Hopper (completeHopperNote / deleteHopperNote); Done shows on the
+// artist's "Your requests".
+
+export type ConciergeNote = HopperNoteItem & {
+  // The kind's key (CONCIERGE_KINDS), which picks the form to act on it.
+  kindKey: string | null;
+  client: string;
+  siteId: string | null;
+  siteName: string | null;
+};
+
+export type ConciergePicture = {
+  imageId: string;
+  url: string;
+  createdAt: string;
+  client: string;
+  // Sorted in this site's Hopper.
+  siteId: string;
+};
+
+export async function listConciergeQueue(): Promise<{ notes: ConciergeNote[]; pictures: ConciergePicture[] }> {
+  await requireAdmin();
+  const rows = await db.hopperNote.findMany({
+    where: { doneAt: null },
+    orderBy: { createdAt: "desc" },
+    select: {
+      id: true,
+      text: true,
+      kind: true,
+      createdAt: true,
+      artist: { select: { name: true } },
+      site: { select: { id: true, name: true } },
+      image: { select: { id: true, url: true, status: true, createdAt: true } },
+    },
+  });
+  const notes = rows.map((n) => ({
+    id: n.id,
+    text: n.text,
+    createdAt: n.createdAt.toISOString(),
+    kind: conciergeKindLabel(n.kind),
+    imageUrl: n.image?.url ?? null,
+    kindKey: n.kind,
+    client: n.artist.name,
+    siteId: n.site?.id ?? null,
+    siteName: n.site?.name ?? null,
+  }));
+  const pictures = rows.flatMap((n) =>
+    n.image && n.image.status === "HOPPER" && n.site
+      ? [
+          {
+            imageId: n.image.id,
+            url: n.image.url,
+            createdAt: n.image.createdAt.toISOString(),
+            client: n.artist.name,
+            siteId: n.site.id,
+          },
+        ]
+      : [],
+  );
+  return { notes, pictures };
+}
+
+// Reorder pages: the site's pages, arranged, and its plan's pages per group.
+export async function conciergeSitePages(
+  siteId: string,
+): Promise<{ pages: ArtistAppPage[]; pagesPerGroup: number | null }> {
+  await requireAdmin();
+  const [pages, features] = await Promise.all([listArtistAppPages(siteId), readSiteFeatures(siteId)]);
+  return { pages: arrangePages(pages), pagesPerGroup: features.pagesPerGroup };
 }

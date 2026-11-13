@@ -822,6 +822,10 @@ model ProfileStory {
   kind     ProfileStoryKind @default(STORY)
   imageId  String?
   image    Image? @relation(fields: [imageId], references: [id], onDelete: SetNull)
+  // The site whose Artist App sent it (a Concierge request; a client can
+  // have several sites) — Administration → Concierge acts on that site.
+  siteId   String?
+  site     Site?  @relation(fields: [siteId], references: [id], onDelete: SetNull)
   caption  String @default("")
   story    String @default("")
   position Int
@@ -1436,6 +1440,8 @@ model Site {
   stripeCustomerId         String?
   stripeSubscriptionId     String?     @unique
   stripeSubscriptionStatus String?
+  // Concierge requests sent from its Artist App (2026-11-13).
+  conciergeRequests HopperNote[]
 
   @@index([artistId])
   @@index([menuStyleId])

@@ -13,6 +13,7 @@ export type TopNavKey =
   | "mailTemplates"
   | "dashboard"
   | "inbox"
+  | "concierge"
   | "subscriptions"
   | "expenses"
   | "accountSummary"
@@ -75,6 +76,8 @@ export function buildAccountsSection(
       { label: "Contacts", href: "/accounts/contacts", active: active === "contacts" },
       { label: "Dashboard", href: "/accounts/dashboard", active: active === "dashboard", badge: alertCount },
       { label: "Inbox", href: "/accounts/inbox", active: active === "inbox" },
+      // Every site's Concierge requests (2026-11-13).
+      { label: "Concierge", href: "/accounts/concierge", active: active === "concierge" },
       { label: "Subscriptions", href: "/accounts", active: active === "subscriptions" },
       // Subscriber options (2026-11-09; under Administration since 2026-11-10).
       { label: "Plans", href: "/accounts/plans", active: active === "plans" },

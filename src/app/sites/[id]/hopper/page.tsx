@@ -12,10 +12,11 @@ export default async function HopperPage({
   params: Promise<{ id: string }>;
   // Where to go back to once an item is added to Media — set by a media
   // picker's "Upload new". Only a path within this app is accepted.
-  searchParams: Promise<{ returnTo?: string }>;
+  // `item`: the item to open on (Administration → Concierge's pictures).
+  searchParams: Promise<{ returnTo?: string; item?: string }>;
 }) {
   const { id } = await params;
-  const { returnTo: returnToRaw } = await searchParams;
+  const { returnTo: returnToRaw, item } = await searchParams;
   const returnTo =
     returnToRaw && returnToRaw.startsWith("/") && !returnToRaw.startsWith("//")
       ? returnToRaw
@@ -39,6 +40,7 @@ export default async function HopperPage({
       notes={notes}
       artworkSettings={settings}
       returnTo={returnTo}
+      openItemId={item}
     />
   );
 }

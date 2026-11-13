@@ -1,18 +1,13 @@
 "use client";
 
-import { Fragment, useRef, useState } from "react";
+import { useRef, useState } from "react";
 import {
   DndContext,
   DragOverlay,
-  pointerWithin,
-  useDraggable,
-  useDroppable,
-  type CollisionDetection,
   type DragEndEvent,
   type DragStartEvent,
 } from "@dnd-kit/core";
 import {
-  addArtistAppGroupPage,
   getArtistAppPageContent,
   dropArtistAppWork,
   type ArtistAppPage,
@@ -21,10 +16,16 @@ import {
 import type { ExhibitionRow } from "@/lib/actions/exhibitions";
 import type { ProfileStoryRow } from "@/lib/actions/profileStories";
 import { exhibitionDates } from "@/lib/exhibitionDates";
-import { reorderPages } from "@/lib/actions/pages";
 import { setPageComponentItems, setShowcase } from "@/lib/actions/pageComponents";
 import { useRouter } from "next/navigation";
-import { arrangePages, movePage, pageToOpen, type PageDrop } from "@/lib/artistAppPageOrder";
+import { arrangePages, pageToOpen } from "@/lib/artistAppPageOrder";
+import PageOrderLists, {
+  DraggedPage,
+  pageListCollisions,
+  usePageOrder,
+  type PageDragData,
+  type PageDropData,
+} from "@/components/PageOrderLists";
 import { moveItem, useArrangeItem, useArrangeReorder, type ItemDragData } from "@/components/arrangeItemDrag";
 import CurationWorkPresentationModal from "@/components/CurationWorkPresentationModal";
 import ProfileStoryModal, { type GalleryOption } from "@/components/ProfileStoryModal";
@@ -58,20 +59,10 @@ import type { SiteWork } from "@/lib/siteWorks";
 // page without works shows its Profile entries (tap for the entry's
 // window), exhibitions or contact form instead (Craig, 9 Nov). A work
 // dragged onto another curation page in the lists moves there (onto a
-// one-picture page such as Home, it's copied there as its picture). Under a
-// group of curation pages, "Add new … page" adds one (a new curation and
-// its page, in Hidden — addArtistAppGroupPage).
+// one-picture page such as Home, it's copied there as its picture). The
+// page lists themselves: PageOrderLists.
 
-type PageDragData = { type: "page"; pageId: string };
-type PageDropData = { kind: "page"; pageId: string } | { kind: "list"; visible: boolean };
 type DragData = PageDragData | ItemDragData;
-
-// The pointer's page row (or work) rather than the list around it.
-const collisions: CollisionDetection = (args) => {
-  const hits = pointerWithin(args);
-  const inner = hits.find((h) => h.data?.droppableContainer.data.current?.kind !== "list");
-  return inner ? [inner] : hits;
-};
 
 export default function ArtistPagesView({
   siteId,
@@ -96,7 +87,6 @@ export default function ArtistPagesView({
 }) {
   const features = useArtistAppFeatures();
   const router = useRouter();
-  const [pages, setPages] = useState(initialPages);
   const [selectedId, setSelectedId] = useState(firstPageId);
   const [content, setContent] = useState(firstContent);
   // Counts loads, so the grid starts afresh with each.
@@ -115,6 +105,12 @@ export default function ArtistPagesView({
   const [dragging, setDragging] = useState<DragData | null>(null);
 
   const sensors = useArtistAppSensors();
+  // The frame's list of pages (beside Account, Art manager) follows a new
+  // order.
+  const { pages, setPages, dropPage } = usePageOrder(siteId, initialPages, {
+    onError: setError,
+    onSaved: () => router.refresh(),
+  });
 
   const loadContent = async (pageId: string) => {
     setLoading(true);
@@ -137,26 +133,6 @@ export default function ArtistPagesView({
     // Into the address without reloading (see the page's route).
     window.history.replaceState(null, "", artistAppPageHref(siteId, pageId));
     loadContent(pageId);
-  };
-
-  const dropPage = async (fromId: string, drop: PageDrop) => {
-    const next = movePage(pages, fromId, drop);
-    if (!next) return;
-    const before = pages;
-    setPages(next);
-    setError(null);
-    try {
-      await reorderPages(
-        siteId,
-        next.filter((p) => p.visible).map((p) => p.id),
-        next.filter((p) => !p.visible).map((p) => p.id),
-      );
-      // The frame's list of pages (beside Account, Art manager) follows.
-      router.refresh();
-    } catch {
-      setPages(before);
-      setError("The pages' new order wasn't saved.");
-    }
   };
 
   const onDragEnd = (e: DragEndEvent) => {
@@ -192,14 +168,13 @@ export default function ArtistPagesView({
   const selected = pages.find((p) => p.id === selectedId) ?? null;
   const openExhibition =
     content?.kind === "exhibitions" ? (content.exhibitions.find((e) => e.id === openExhibitionId) ?? null) : null;
-  const titleOf = (id: string | null) => pages.find((p) => p.id === id)?.title ?? "";
   const draggedPage = dragging?.type === "page" ? pages.find((p) => p.id === dragging.pageId) : null;
 
   return (
     <>
       <DndContext
         sensors={sensors}
-        collisionDetection={collisions}
+        collisionDetection={pageListCollisions}
         onDragStart={(e: DragStartEvent) => setDragging((e.active.data.current as DragData | undefined) ?? null)}
         onDragEnd={onDragEnd}
         onDragCancel={() => {
@@ -266,57 +241,24 @@ export default function ArtistPagesView({
 
         <SidePanel>
           {error && <p className="px-1 text-sm text-red-600">{error}</p>}
-          {[true, false].map((visible) => {
-            const listed = pages.filter((p) => p.visible === visible);
-            return (
-              <PageList key={String(visible)} visible={visible}>
-                {listed.map((p, i) => {
-                  const parentHere = !!p.parentId && listed.some((q) => q.id === p.parentId);
-                  // After a group's last page in this list, its Add.
-                  const groupId = parentHere ? p.parentId : p.id;
-                  const next = listed[i + 1];
-                  const lastOfGroup = !!groupId && next?.parentId !== groupId;
-                  const addTo = lastOfGroup && groupId && addsPages(pages, groupId) ? groupId : null;
-                  return (
-                    <Fragment key={p.id}>
-                      <PageRow
-                        page={p}
-                        dropAllowed={dragging?.type !== "item" || takesWork(p.id)}
-                        selected={p.id === selectedId}
-                        under={p.parentId && !parentHere ? titleOf(p.parentId) : null}
-                        onSelect={() => selectPage(p.id)}
-                      />
-                      {addTo && (
-                        <AddGroupPage
-                          siteId={siteId}
-                          groupId={addTo}
-                          groupTitle={titleOf(addTo)}
-                          limit={
-                            features.pagesPerGroup !== null &&
-                            pages.filter((c) => c.parentId === addTo).length >= features.pagesPerGroup
-                              ? features.pagesPerGroup
-                              : null
-                          }
-                          onAdded={(page) => {
-                            setPages((prev) => arrangePages([...prev, page]));
-                            selectPage(page.id);
-                            router.refresh();
-                          }}
-                        />
-                      )}
-                    </Fragment>
-                  );
-                })}
-              </PageList>
-            );
-          })}
+          <PageOrderLists
+            siteId={siteId}
+            pages={pages}
+            pagesPerGroup={features.pagesPerGroup}
+            selectedId={selectedId}
+            dropAllowed={(pageId) => dragging?.type !== "item" || takesWork(pageId)}
+            onSelect={selectPage}
+            onAdded={(page) => {
+              setPages((prev) => arrangePages([...prev, page]));
+              selectPage(page.id);
+              router.refresh();
+            }}
+          />
         </SidePanel>
 
         <DragOverlay dropAnimation={null}>
           {draggedPage ? (
-            <div className="w-72 rounded-sm border border-neutral-500 bg-white px-4 py-2 text-sm text-neutral-800 shadow-md">
-              {draggedPage.title}
-            </div>
+            <DraggedPage title={draggedPage.title} />
           ) : dragging?.type === "item" ? (
             <DragThumb url={dragging.url} />
           ) : null}
@@ -396,166 +338,6 @@ export default function ArtistPagesView({
         />
       )}
     </>
-  );
-}
-
-// Live or Hidden (only Hidden headed — Craig's screenshot, 2026-11-11)
-// and its pages; dropping a page on its
-// empty space puts it at the end. Hidden sits straight under Live
-// (Craig, 8 Nov) and takes the rest of the panel; Live keeps a little
-// space below its pages to drop onto.
-function PageList({ visible, children }: { visible: boolean; children: React.ReactNode }) {
-  const drop = useDroppable({ id: `list:${visible}`, data: { kind: "list", visible } satisfies PageDropData });
-  return (
-    <div
-      ref={drop.setNodeRef}
-      className={`flex flex-col gap-1.5 rounded-sm ${visible ? "flex-none pb-8" : "min-h-48 flex-[1_0_auto] pt-5"} ${
-        drop.isOver ? "bg-neutral-50" : ""
-      }`}
-    >
-      {!visible && <h3 className="mb-2 text-center text-lg text-neutral-800">Hidden Pages</h3>}
-      {children}
-    </div>
-  );
-}
-
-// A group whose pages all show a curation (e.g. portfolio) can have more
-// added.
-function addsPages(pages: ArtistAppPage[], groupId: string): boolean {
-  const group = pages.find((p) => p.id === groupId);
-  const children = pages.filter((p) => p.parentId === groupId);
-  return !!group && !group.parentId && children.length > 0 && children.every((c) => c.hasCuration);
-}
-
-// "Add new … page": tapped, a name box and Add (Enter); see
-// addArtistAppGroupPage. Once the group has the pages its plan allows
-// (`limit`, 2026-11-09), it says so instead.
-function AddGroupPage({
-  siteId,
-  groupId,
-  groupTitle,
-  limit,
-  onAdded,
-}: {
-  siteId: string;
-  groupId: string;
-  groupTitle: string;
-  limit: number | null;
-  onAdded: (page: ArtistAppPage) => void;
-}) {
-  const [naming, setNaming] = useState(false);
-  const [name, setName] = useState("");
-  const [saving, setSaving] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-
-  const add = async () => {
-    if (saving || !name.trim()) return;
-    setSaving(true);
-    setError(null);
-    const result = await addArtistAppGroupPage(siteId, groupId, name).catch(() => ({
-      error: "The page wasn't added — please try again.",
-    }));
-    setSaving(false);
-    if ("error" in result) return setError(result.error);
-    setNaming(false);
-    setName("");
-    onAdded(result);
-  };
-
-  if (limit !== null) {
-    return (
-      <p className="ml-6 px-4 py-2 text-sm text-neutral-400">
-        {groupTitle} has its {limit} pages
-      </p>
-    );
-  }
-  if (!naming) {
-    return (
-      <button
-        type="button"
-        onClick={() => setNaming(true)}
-        className="ml-6 rounded-sm border border-neutral-200 bg-white px-4 py-2 text-left text-sm font-semibold text-neutral-800 hover:bg-neutral-50"
-      >
-        Add new {groupTitle} page
-      </button>
-    );
-  }
-  return (
-    <div className="ml-6 flex flex-col gap-1">
-      <div className="flex gap-1.5">
-        <input
-          autoFocus
-          value={name}
-          onChange={(e) => setName(e.target.value)}
-          onKeyDown={(e) => {
-            if (e.key === "Enter") add();
-            if (e.key === "Escape") setNaming(false);
-          }}
-          placeholder="New page's name"
-          className="min-w-0 flex-1 rounded-sm border border-neutral-400 px-3 py-1.5 text-sm text-neutral-900"
-        />
-        <button
-          type="button"
-          onClick={add}
-          disabled={saving || !name.trim()}
-          className="shrink-0 rounded-sm border border-neutral-400 px-3 text-sm text-neutral-800 hover:bg-neutral-50 disabled:opacity-40"
-        >
-          {saving ? "Adding…" : "Add"}
-        </button>
-        <button
-          type="button"
-          onClick={() => {
-            setNaming(false);
-            setError(null);
-          }}
-          aria-label="Cancel"
-          className="shrink-0 px-1.5 text-sm text-neutral-500 hover:text-neutral-800"
-        >
-          ✕
-        </button>
-      </div>
-      {error && <p className="text-xs text-red-600">{error}</p>}
-    </div>
-  );
-}
-
-function PageRow({
-  page,
-  dropAllowed,
-  selected,
-  under,
-  onSelect,
-}: {
-  page: ArtistAppPage;
-  // What's being dragged can be dropped here (a page always; a work only
-  // onto a page it can move to).
-  dropAllowed: boolean;
-  selected: boolean;
-  // The top page's name, when it's in the other list.
-  under: string | null;
-  onSelect: () => void;
-}) {
-  const drag = useDraggable({ id: `page:${page.id}`, data: { type: "page", pageId: page.id } satisfies PageDragData });
-  const drop = useDroppable({ id: `pagedrop:${page.id}`, data: { kind: "page", pageId: page.id } satisfies PageDropData });
-  return (
-    <button
-      type="button"
-      ref={(node) => {
-        drag.setNodeRef(node);
-        drop.setNodeRef(node);
-      }}
-      {...drag.attributes}
-      {...drag.listeners}
-      onClick={onSelect}
-      className={`flex items-baseline justify-between gap-2 rounded-sm border bg-white px-4 py-2 text-left text-sm text-neutral-800 ${TOUCH_DRAG_CLASS} ${
-        page.parentId ? "ml-6" : ""
-      } ${selected ? "border-neutral-600" : "border-neutral-200 hover:bg-neutral-50"} ${
-        drag.isDragging ? "opacity-30" : ""
-      } ${drop.isOver && dropAllowed && !drag.isDragging ? "ring-2 ring-neutral-400" : ""}`}
-    >
-      <span className="min-w-0 truncate">{page.title}</span>
-      {under && <span className="shrink-0 text-xs text-neutral-400">under {under}</span>}
-    </button>
   );
 }
 

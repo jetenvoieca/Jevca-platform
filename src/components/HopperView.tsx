@@ -26,7 +26,7 @@ import HopperCropEditor from "@/components/HopperCropEditor";
 import { computeReferencePrice } from "@/lib/pricing";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import { PageHeading } from "@/components/PageHeading";
-import { formatDateTime } from "@/lib/formatDate";
+import HopperNoteCard, { HopperNoteTile, NOTE_BG } from "@/components/HopperNoteCard";
 
 export type HopperItem = {
   id: string;
@@ -74,9 +74,6 @@ type QueueEntry =
   | { type: "image"; id: string; createdAt: string; item: HopperItem }
   | { type: "note"; id: string; createdAt: string; note: HopperNoteItem };
 
-// The navy of a note's tile and panel — the site header's icons' colour.
-const NOTE_BG = "bg-[#2c3e6b]";
-
 // A running, session-only log of what's just been done — pure visual
 // confirmation ("did that just work"), not persisted anywhere. Cleared
 // on refresh or via the "Clear list" button.
@@ -111,6 +108,7 @@ export default function HopperView({
   artworkSettings,
   artworkIntake = false,
   returnTo,
+  openItemId,
 }: {
   siteId: string;
   // Where the Processed log's "Linked to X"/"New artwork" entries should
@@ -139,12 +137,15 @@ export default function HopperView({
   // Came from a media picker's "Upload new" (2026-10-15): after Add to
   // Media, go back there, where the new item can be picked.
   returnTo?: string;
+  // The item to open on (2026-11-13) — a Concierge picture tapped in
+  // Administration → Concierge.
+  openItemId?: string;
 }) {
   const words = useClientWords();
   const resolvedBasePath = basePath ?? `/sites/${siteId}`;
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, setSelectedId] = useState<string | null>(openItemId ?? null);
   const [addUploading, setAddUploading] = useState(false);
   const [addError, setAddError] = useState<string | null>(null);
   // { done, total } while a batch upload is in progress, null otherwise
@@ -702,16 +703,12 @@ export default function HopperView({
                   // of bulk select.
                   if (entry.type === "note") {
                     return (
-                      <button
+                      <HopperNoteTile
                         key={entry.id}
-                        type="button"
-                        onClick={() => setSelectedId(entry.id)}
+                        note={entry.note}
                         disabled={bulkSelectMode}
-                        title={entry.note.text}
-                        className={`flex aspect-square items-center justify-center rounded-md border-2 border-transparent ${NOTE_BG} px-1 text-[11px] font-semibold tracking-wide text-white hover:border-neutral-300 disabled:opacity-40`}
-                      >
-                        INSTRUCTION
-                      </button>
+                        onClick={() => setSelectedId(entry.id)}
+                      />
                     );
                   }
                   const item = entry.item;
@@ -791,7 +788,7 @@ export default function HopperView({
                   : "Drag and drop a new file in, or pick one from the list to start sorting."}
               </div>
             ) : current.type === "note" ? (
-              <NoteCard
+              <HopperNoteCard
                 key={current.id}
                 note={current.note}
                 isPending={isPending}
@@ -953,48 +950,6 @@ export default function HopperView({
           }}
         />
       )}
-    </div>
-  );
-}
-
-// A note opened for sorting (2026-10-31, Craig's mockup): when it came,
-// its text on the Hopper's navy, then Done (kept on record) or Delete.
-function NoteCard({
-  note,
-  isPending,
-  onDone,
-  onDelete,
-}: {
-  note: HopperNoteItem;
-  isPending: boolean;
-  onDone: () => void;
-  onDelete: () => void;
-}) {
-  const buttonCls =
-    "w-44 rounded-md border border-neutral-300 bg-white px-4 py-2 text-sm font-medium hover:bg-neutral-50 disabled:opacity-50";
-  return (
-    <div className="rounded-lg border border-neutral-200 bg-white p-6">
-      <p className="mb-3 text-xs text-neutral-400">Received {formatDateTime(note.createdAt)}</p>
-      <div className={`mb-8 min-h-[360px] rounded-md ${NOTE_BG} px-4 py-8 text-white`}>
-        {/* A Concierge request (2026-11-13) says so, with its kind; its
-            picture is shown here and is in the Hopper to sort too. */}
-        <p className="mb-12 text-center text-xs font-semibold tracking-wide">
-          {note.kind ? `CONCIERGE — ${note.kind.toUpperCase()}` : "INSTRUCTION"}
-        </p>
-        <p className="whitespace-pre-wrap text-lg font-semibold">{note.text}</p>
-        {note.imageUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={note.imageUrl} alt="" className="mt-6 max-h-60 rounded-md object-contain" />
-        )}
-      </div>
-      <div className="flex justify-between gap-3">
-        <button type="button" onClick={onDone} disabled={isPending} className={buttonCls}>
-          Done
-        </button>
-        <button type="button" onClick={onDelete} disabled={isPending} className={buttonCls}>
-          Delete
-        </button>
-      </div>
     </div>
   );
 }
