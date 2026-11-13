@@ -9,6 +9,7 @@ export const CONCIERGE_KINDS = [
   { key: "biography", label: "Update my Biography" },
   { key: "galleries", label: "Update my list of Galleries" },
   { key: "exhibitions", label: "Add / edit my exhibition listings" },
+  { key: "other", label: "Anything else?" },
 ] as const;
 
 export type ConciergeKind = (typeof CONCIERGE_KINDS)[number]["key"];
