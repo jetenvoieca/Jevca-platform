@@ -31,7 +31,13 @@ export default function PlanAddOnsList({
   onChange,
   disabled,
 }: {
-  plan: { currency: string; includesWeb: boolean; includesArt: boolean; addOns: PlanAddOnPrice[] };
+  plan: {
+    currency: string;
+    includesWeb: boolean;
+    includesArt: boolean;
+    includesMarketing: boolean;
+    addOns: PlanAddOnPrice[];
+  };
   planPrice: string;
   kept: SiteAddOnRow[];
   value: SiteAddOnChoice[];

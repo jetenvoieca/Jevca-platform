@@ -2,13 +2,21 @@
 // schema.prisma. No database here, so the screens can use it too; the
 // actions are in lib/actions/plans.ts.
 
-export type AddOnKey = "ART_MANAGER" | "WEB_MANAGER" | "LOCATIONS" | "ECOMMERCE" | "MAILINGS" | "EXTRA_PAGE_GROUP";
+export type AddOnKey =
+  | "ART_MANAGER"
+  | "WEB_MANAGER"
+  | "MARKETING_MANAGER"
+  | "LOCATIONS"
+  | "ECOMMERCE"
+  | "MAILINGS"
+  | "EXTRA_PAGE_GROUP";
 
 // The add-ons there are, in the order they're listed. `perItem`: charged
 // for each one the site has (a quantity), not just on or off.
 export const ADD_ONS: { key: AddOnKey; label: string; perItem: boolean }[] = [
   { key: "ART_MANAGER", label: "Art Manager", perItem: false },
   { key: "WEB_MANAGER", label: "Web Manager", perItem: false },
+  { key: "MARKETING_MANAGER", label: "Marketing Manager", perItem: false },
   { key: "LOCATIONS", label: "Locations / Consignments", perItem: false },
   { key: "ECOMMERCE", label: "Ecommerce", perItem: false },
   { key: "MAILINGS", label: "Mailings", perItem: false },
@@ -60,6 +68,7 @@ export type PlanSummary = {
   // schema.prisma.
   includesWeb: boolean;
   includesArt: boolean;
+  includesMarketing: boolean;
   groupsIncluded: number;
   pagesPerGroup: number;
   // What it includes, one item a line (shown on the Artist App's Account).
@@ -118,12 +127,17 @@ export function toPence(value: string): number | null {
 // The products (2026-11-13): an add-on for a product the plan includes
 // isn't offered; Locations / Consignments belongs to Art Manager — only
 // with it, in the plan or added.
-type PlanProducts = { includesWeb: boolean; includesArt: boolean };
+type PlanProducts = { includesWeb: boolean; includesArt: boolean; includesMarketing: boolean };
+
+// The products and the add-on that adds each (2026-11-13).
+export const PRODUCTS = [
+  { include: "includesWeb", addOn: "WEB_MANAGER", label: "Web Manager" },
+  { include: "includesArt", addOn: "ART_MANAGER", label: "Art Manager" },
+  { include: "includesMarketing", addOn: "MARKETING_MANAGER", label: "Marketing Manager" },
+] as const;
 
 export function offeredAddOns<T extends { addOn: AddOnKey }>(plan: PlanProducts, addOns: readonly T[]): T[] {
-  return addOns.filter(
-    (a) => !(a.addOn === "ART_MANAGER" && plan.includesArt) && !(a.addOn === "WEB_MANAGER" && plan.includesWeb),
-  );
+  return addOns.filter((a) => !PRODUCTS.some((p) => p.addOn === a.addOn && plan[p.include]));
 }
 
 // With the website (Web Manager): in the plan or added.
@@ -190,6 +204,7 @@ export type SiteAccountPlan = {
   currency: string;
   includesWeb: boolean;
   includesArt: boolean;
+  includesMarketing: boolean;
   groupsIncluded: number;
   pagesPerGroup: number;
   included: string[];
@@ -216,6 +231,8 @@ export type SiteAccount = {
 // pictures from the device, no filters, no limits.
 export type SiteFeatures = {
   website: boolean;
+  // Marketing Manager (2026-11-13): the Artist App's Marketing manager.
+  marketing: boolean;
   picturesFrom: "file" | "both";
   catalogue: boolean;
   pickerFilters: boolean;
@@ -231,6 +248,7 @@ export function siteFeatures(
   const art = (plan?.includesArt ?? false) || has("ART_MANAGER") > 0;
   return {
     website: !plan || plan.includesWeb || has("WEB_MANAGER") > 0,
+    marketing: (plan?.includesMarketing ?? false) || has("MARKETING_MANAGER") > 0,
     picturesFrom: art ? "both" : "file",
     catalogue: art,
     pickerFilters: art || has("LOCATIONS") > 0,

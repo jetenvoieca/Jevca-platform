@@ -27,7 +27,9 @@ import { useFrameSlots } from "@/components/artist-app/ArtistAppPanels";
 // then the screen's side contents (SidePanel) or else the site's pages,
 // each opening it on Pages — so they stay beside Account; and at the foot
 // the app's buttons: Art manager (the Artwork Catalogue, with Art Manager —
-// reading "Website" while it's open, back to Pages: 2026-11-11),
+// reading "Website" while it's open, back to Pages: 2026-11-11), Marketing
+// manager (the admin's Marketing items, with Marketing Manager, likewise —
+// 2026-11-13),
 // Concierge (a placeholder) and Account.
 // Medium screens and up the two side by side; a phone stacked.
 
@@ -58,10 +60,22 @@ export default function ArtistAppFrame({
   const chosenPage = pathname === artistAppHref(siteId, "pages") ? searchParams.get("page") : null;
   // Web Manager / Art Manager (2026-11-13): without the website, no pages,
   // preview, publish or site link, and Art manager has no Website button.
-  const { catalogue, website } = useArtistAppFeatures();
+  const { catalogue, website, marketing } = useArtistAppFeatures();
   const slots = useFrameSlots();
   const catalogueHref = artistAppHref(siteId, "artworks");
   const accountHref = artistAppHref(siteId, "account");
+  // Art manager / Marketing manager: reads "Website" while open, back to
+  // the pages — without the website, marked as open instead (2026-11-13).
+  const productButton = (href: string, label: string) => {
+    const open = pathname === href || pathname.startsWith(`${href}/`);
+    return website && open ? (
+      <AppButton href={artistAppHref(siteId, "pages")}>Website</AppButton>
+    ) : (
+      <AppButton href={href} active={open}>
+        {label}
+      </AppButton>
+    );
+  };
 
   return (
     <slots.Provider value={slots.value}>
@@ -112,14 +126,8 @@ export default function ArtistAppFrame({
             </div>
 
             <nav className="flex shrink-0 flex-col gap-2">
-              {catalogue &&
-                (website && (pathname === catalogueHref || pathname.startsWith(`${catalogueHref}/`)) ? (
-                  <AppButton href={artistAppHref(siteId, "pages")}>Website</AppButton>
-                ) : (
-                  <AppButton href={catalogueHref} active={!website && pathname.startsWith(catalogueHref)}>
-                    Art manager
-                  </AppButton>
-                ))}
+              {catalogue && productButton(catalogueHref, "Art manager")}
+              {marketing && productButton(artistAppHref(siteId, "marketing"), "Marketing manager")}
               {ARTIST_APP_SHOWS_MANAGE_WORKS && (
                 <AppButton href={artistAppHref(siteId)} active={pathname === artistAppHref(siteId)}>
                   Manage Works

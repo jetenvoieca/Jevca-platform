@@ -9,6 +9,7 @@ import {
   NO_PRICES,
   PLAN_CURRENCIES,
   PLAN_LIMITS,
+  PRODUCTS,
   offeredAddOns,
   type AddOnKey,
   type CurrencyPrices,
@@ -35,6 +36,7 @@ const draftOf = (p: PlanSummary): Draft => ({
   prices: p.prices,
   includesWeb: p.includesWeb,
   includesArt: p.includesArt,
+  includesMarketing: p.includesMarketing,
   groupsIncluded: p.groupsIncluded,
   pagesPerGroup: p.pagesPerGroup,
   included: p.included,
@@ -148,6 +150,7 @@ export default function PlansManager({
         prices: NO_PRICES,
         includesWeb: true,
         includesArt: false,
+        includesMarketing: false,
         groupsIncluded: 1,
         pagesPerGroup: 10,
         included: "",
@@ -200,35 +203,31 @@ export default function PlansManager({
                 onBlur={saveTyped}
                 className={field}
               />
-              {/* The products (2026-11-13): at least one; the other is
-                  offered as an add-on. Groups of pages and themes are
+              {/* The products (2026-11-13): at least one; those not
+                  included are offered as add-ons. Groups of pages and themes are
                   the website's — used when Web Manager is in, included
                   or added. */}
               <span className="text-sm text-neutral-700">Includes</span>
-              <div className="flex gap-5 text-sm text-neutral-800">
-                {(
-                  [
-                    ["includesWeb", "Web Manager"],
-                    ["includesArt", "Art Manager"],
-                  ] as const
-                ).map(([key, label]) => (
-                  <label key={key} className="flex items-center gap-2">
-                    <input
-                      type="checkbox"
-                      checked={draft[key]}
-                      disabled={draft[key] && !(key === "includesWeb" ? draft.includesArt : draft.includesWeb)}
-                      onChange={(e) =>
-                        change({
-                          [key]: e.target.checked,
-                          addOns: draft.addOns.filter(
-                            (a) => a.addOn !== (key === "includesWeb" ? "WEB_MANAGER" : "ART_MANAGER"),
-                          ),
-                        })
-                      }
-                    />
-                    {label}
-                  </label>
-                ))}
+              <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-neutral-800">
+                {PRODUCTS.map((p) => {
+                  const onlyOne = PRODUCTS.filter((q) => draft[q.include]).length === 1;
+                  return (
+                    <label key={p.include} className="flex items-center gap-2">
+                      <input
+                        type="checkbox"
+                        checked={draft[p.include]}
+                        disabled={draft[p.include] && onlyOne}
+                        onChange={(e) =>
+                          change({
+                            [p.include]: e.target.checked,
+                            addOns: draft.addOns.filter((a) => a.addOn !== p.addOn),
+                          })
+                        }
+                      />
+                      {p.label}
+                    </label>
+                  );
+                })}
               </div>
               <label className="text-sm text-neutral-700">Monthly price</label>
               <CurrencyPriceInputs

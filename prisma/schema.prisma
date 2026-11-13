@@ -1774,6 +1774,9 @@ model Plan {
   // underneath; these only show or hide parts of the Artist App.
   includesWeb    Boolean @default(true)
   includesArt    Boolean @default(false)
+  // Marketing Manager (2026-11-13): the admin's Marketing items in the
+  // Artist App (add-on MARKETING_MANAGER when not included).
+  includesMarketing Boolean @default(false)
 
   // Its price in each currency (2026-11-13: £, € and $ — see
   // PLAN_CURRENCIES in lib/plans.ts); its add-ons likewise (PlanAddOn).
@@ -1808,6 +1811,7 @@ model PlanTheme {
 enum AddOn {
   ART_MANAGER
   WEB_MANAGER
+  MARKETING_MANAGER
   LOCATIONS
   ECOMMERCE
   MAILINGS

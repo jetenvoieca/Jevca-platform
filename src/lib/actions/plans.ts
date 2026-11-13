@@ -83,7 +83,9 @@ export async function updatePlan(
   // A price in each currency (2026-11-13).
   const prices = pencePrices(input.prices);
   if (!prices) return { error: "The plan's price in each currency couldn't be read." };
-  if (!input.includesWeb && !input.includesArt) return { error: "A plan includes Web Manager, Art Manager or both." };
+  if (!input.includesWeb && !input.includesArt && !input.includesMarketing) {
+    return { error: "A plan includes at least one of Web Manager, Art Manager and Marketing Manager." };
+  }
   if (!inRange(input.groupsIncluded, PLAN_LIMITS.groupsIncluded)) {
     return { error: `Groups of pages included must be ${PLAN_LIMITS.groupsIncluded.min} to ${PLAN_LIMITS.groupsIncluded.max}.` };
   }
@@ -119,6 +121,7 @@ export async function updatePlan(
         name,
         includesWeb: input.includesWeb,
         includesArt: input.includesArt,
+        includesMarketing: input.includesMarketing,
         groupsIncluded: input.groupsIncluded,
         pagesPerGroup: input.pagesPerGroup,
         included,
@@ -312,6 +315,7 @@ export async function getSiteAccount(siteId: string): Promise<SiteAccount> {
       currency: plan.currency,
       includesWeb: plan.includesWeb,
       includesArt: plan.includesArt,
+      includesMarketing: plan.includesMarketing,
       groupsIncluded: plan.groupsIncluded,
       pagesPerGroup: plan.pagesPerGroup,
       included: plan.included ? plan.included.split("\n") : [],

@@ -16,6 +16,7 @@ export const PLAN_SELECT = {
   name: true,
   includesWeb: true,
   includesArt: true,
+  includesMarketing: true,
   groupsIncluded: true,
   pagesPerGroup: true,
   included: true,
@@ -32,6 +33,7 @@ type PlanRecord = {
   name: string;
   includesWeb: boolean;
   includesArt: boolean;
+  includesMarketing: boolean;
   groupsIncluded: number;
   pagesPerGroup: number;
   included: string;
@@ -56,6 +58,7 @@ export function toPlanSummary(p: PlanRecord): PlanSummary {
     prices: pricesOf(p.prices),
     includesWeb: p.includesWeb,
     includesArt: p.includesArt,
+    includesMarketing: p.includesMarketing,
     groupsIncluded: p.groupsIncluded,
     pagesPerGroup: p.pagesPerGroup,
     included: p.included,
