@@ -72,6 +72,7 @@ export default function CurationWorkPresentation({
   addPicturesFrom = "catalogue",
   mainReplaceable = false,
   basic = false,
+  owner,
 }: {
   curationId: string;
   artworkId: string;
@@ -92,7 +93,13 @@ export default function CurationWorkPresentation({
   // the Portfolio level): a larger Description, and Full price only (no
   // Purchase Options heading or instalments; online sales come later).
   basic?: boolean;
+  // Another client's work in a Curator curation (2026-11-14): its own
+  // client and their site — for the work's own details (name, medium,
+  // price) and its pictures. Default: the curation's.
+  owner?: { artistId: string; siteId: string };
 }) {
+  const workArtistId = owner?.artistId ?? artistId;
+  const workSiteId = owner?.siteId ?? siteId;
   const [data, setData] = useState<Presentation | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -139,7 +146,7 @@ export default function CurationWorkPresentation({
     }
     setError(null);
     setSaving(true);
-    const result = await updateArtworkName(artworkId, artistId, nameDraft);
+    const result = await updateArtworkName(artworkId, workArtistId, nameDraft);
     setSaving(false);
     if ("error" in result) {
       setError(result.error);
@@ -157,7 +164,7 @@ export default function CurationWorkPresentation({
     if (mediumDraft.trim() === (data.medium ?? "").trim()) return;
     setError(null);
     setSaving(true);
-    const result = await updateArtworkPresentationMedium(artworkId, artistId, mediumDraft);
+    const result = await updateArtworkPresentationMedium(artworkId, workArtistId, mediumDraft);
     setSaving(false);
     if ("error" in result) {
       setError(result.error);
@@ -195,7 +202,7 @@ export default function CurationWorkPresentation({
     if (unchanged) return;
     setError(null);
     setSaving(true);
-    const result = await updateArtworkPrice(artworkId, artistId, price, currency);
+    const result = await updateArtworkPrice(artworkId, workArtistId, price, currency);
     setSaving(false);
     if ("error" in result) {
       setError(result.error);
@@ -230,8 +237,8 @@ export default function CurationWorkPresentation({
 
       <div className="grid items-start gap-4 md:grid-cols-[4fr_5fr]">
         <ImageSetEditor
-          artistId={artistId}
-          siteId={siteId}
+          artistId={workArtistId}
+          siteId={workSiteId}
           images={data.images}
           save={(imageIds) => setCurationWorkImages(curationId, artistId, artworkId, imageIds, { mainReplaceable })}
           onSaved={(images) => {

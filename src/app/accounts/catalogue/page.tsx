@@ -1,5 +1,5 @@
 import AppShell from "@/components/AppShell";
-import CatalogueArtistPicker from "@/components/master-catalogue/CatalogueArtistPicker";
+import AdminArtistPicker from "@/components/AdminArtistPicker";
 import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
 import { getOpenAlerts } from "@/lib/alerts";
@@ -22,7 +22,7 @@ export default async function MasterCataloguePage() {
       navItems={buildTopNavItems("catalogue", openAlerts.length, recentSites)}
       content={
         <div className="px-6 py-6">
-          <CatalogueArtistPicker artists={artists} artistId={null} />
+          <AdminArtistPicker title="Catalogue" basePath="/accounts/catalogue" artists={artists} artistId={null} showCounts />
         </div>
       }
     />

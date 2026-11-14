@@ -26,6 +26,7 @@ export default function ArtworkPicker({
   opened,
   excludeIds = [],
   availableOnly = false,
+  artists,
   onSelect,
 }: {
   artistId: string;
@@ -59,6 +60,9 @@ export default function ArtworkPicker({
   excludeIds?: string[];
   // Only works still for sale (2026-10-20) — e.g. Locations' Add works.
   availableOnly?: boolean;
+  // Administration → Curator (2026-11-14): the clients whose works may be
+  // picked — a dropdown chooses whose are listed (from `artistId`'s on).
+  artists?: { id: string; name: string }[];
   onSelect: (artworks: PickedArtwork[]) => void;
 }) {
   const words = useClientWords();
@@ -97,10 +101,13 @@ export default function ArtworkPicker({
   // (or a page loading for it) can't replace the newer results.
   const requestRef = useRef(0);
   const filtersRef = useRef({ q: "", name: "", location: "", type: "" });
+  // Whose works are listed — `artistId`, or another chosen from `artists`.
+  const [sourceId, setSourceId] = useState(artistId);
+  const sourceRef = useRef(artistId);
 
   const fetchPage = (offset: number) => {
     const f = filtersRef.current;
-    return getArtworksForArtist(artistId, {
+    return getArtworksForArtist(sourceRef.current, {
       q: f.q || undefined,
       name: f.name || undefined,
       location: f.location || undefined,
@@ -157,16 +164,35 @@ export default function ArtworkPicker({
     return () => observer.disconnect();
   }, [open, hasMore, loadMore]);
 
+  // The Name, Location and Type choices for whose works are listed.
+  const loadChoices = (id: string) => {
+    listArtworkNames(id).then(setNames);
+    if (showFilters) {
+      getArtworkSettings(id).then((s) =>
+        setFilterOptions({ locations: s.locations.map((l) => l.name), types: s.artworkTypes })
+      );
+    }
+  };
+
   const handleOpen = () => {
     setOpen(true);
     setSelected([]);
     load(query);
-    if (!names) listArtworkNames(artistId).then(setNames);
-    if (showFilters && !filterOptions) {
-      getArtworkSettings(artistId).then((s) =>
-        setFilterOptions({ locations: s.locations.map((l) => l.name), types: s.artworkTypes })
-      );
-    }
+    if (!names) loadChoices(sourceRef.current);
+  };
+
+  // Another client's works (Curator): their own filters, from scratch;
+  // works already ticked stay ticked.
+  const chooseSource = (id: string) => {
+    sourceRef.current = id;
+    setSourceId(id);
+    setName("");
+    setLocation("");
+    setType("");
+    setNames(null);
+    setFilterOptions(null);
+    loadChoices(id);
+    load(query, "", "", "");
   };
   // Opened by its caller: loaded as its own button would.
   useEffect(() => {
@@ -264,6 +290,20 @@ export default function ArtworkPicker({
     >
       <div className="flex h-full max-h-[85vh] w-full max-w-6xl flex-col rounded-lg bg-white shadow-xl">
         <div className="flex items-center gap-2 border-b border-neutral-200 p-4">
+          {artists && (
+            <select
+              value={sourceId}
+              onChange={(e) => chooseSource(e.target.value)}
+              aria-label="Artist"
+              className="w-48 min-w-0 truncate rounded-md border border-neutral-300 px-2 py-2 text-sm"
+            >
+              {artists.map((a) => (
+                <option key={a.id} value={a.id}>
+                  {a.name}
+                </option>
+              ))}
+            </select>
+          )}
           <input
             type="text"
             value={query}

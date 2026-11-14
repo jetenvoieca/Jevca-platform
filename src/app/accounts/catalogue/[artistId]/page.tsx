@@ -2,7 +2,7 @@ import { notFound } from "next/navigation";
 import AppShell from "@/components/AppShell";
 import ArtworkCatalogueScreen, { type CatalogueSearchParams } from "@/components/ArtworkCatalogueScreen";
 import ClientWordsProvider from "@/components/ClientWordsProvider";
-import CatalogueArtistPicker from "@/components/master-catalogue/CatalogueArtistPicker";
+import AdminArtistPicker from "@/components/AdminArtistPicker";
 import { db } from "@/lib/db";
 import { buildTopNavItems } from "@/lib/topNav";
 import { getRecentSites } from "@/lib/recentSites";
@@ -39,7 +39,15 @@ export default async function MasterCatalogueArtistPage({
       navItems={buildTopNavItems("catalogue", openAlerts.length, recentSites)}
       content={
         <div className="px-6 py-6">
-          <CatalogueArtistPicker artists={artists} artistId={artistId} />
+          <div className="mb-6">
+            <AdminArtistPicker
+              title="Catalogue"
+              basePath="/accounts/catalogue"
+              artists={artists}
+              artistId={artistId}
+              showCounts
+            />
+          </div>
           <ClientWordsProvider kind={artist.kind}>
             <ArtworkCatalogueScreen siteId={chosen.siteId} sp={sp} />
           </ClientWordsProvider>

@@ -18,7 +18,9 @@ import {
   reorderCuration,
   type CurationDetail,
   type CurationSummary,
+  type CurationWork,
 } from "@/lib/actions/curations";
+import type { CatalogueArtist } from "@/lib/masterCatalogue";
 import { useClientWords } from "@/components/ClientWordsProvider";
 import type { ArtworkDetail, ArtworkSettings } from "@/components/ArtworkDetailPanel";
 import ArtworkCatalogueModal from "@/components/ArtworkCatalogueModal";
@@ -65,18 +67,27 @@ import DynamicPresentationEditor from "@/components/DynamicPresentationEditor";
 // space under the site header and never scrolls as a whole. The open
 // curation's title row and the list's "Curation Name" heading stay put;
 // the works and the list of curations each scroll on their own.
+//
+// Administration → Curator (2026-11-14, `crossArtist`): the curations of
+// the client whose site shows them, with works from any client (⊞ has an
+// artist dropdown). Another client's work shows whose it is; its
+// Catalogue opens in Administration → Catalogue (that client's settings),
+// its Presentation edits its own details and pictures, and it can't be
+// consigned from here (Locations are its own client's).
 export default function CurationsView({
   artistId,
   siteId,
   curations: initialCurations,
   initialSelected,
   settings,
+  crossArtist,
 }: {
   artistId: string;
   siteId: string;
   curations: CurationSummary[];
   initialSelected: CurationDetail | null;
   settings: ArtworkSettings;
+  crossArtist?: { artists: CatalogueArtist[] };
 }) {
   const words = useClientWords();
   const [curations, setCurations] = useState<CurationSummary[]>(initialCurations);
@@ -269,6 +280,12 @@ export default function CurationsView({
   // Closes by itself if the work leaves the curation, or another
   // curation is opened.
   const presentingWork = selected?.works.find((w) => w.artworkId === presentingId) ?? null;
+  // Another client's work (Curator), and that client's site.
+  const isForeign = (w: CurationWork) => !!crossArtist && !!w.artistId && w.artistId !== artistId;
+  const ownerOf = (w: CurationWork) => {
+    const owner = isForeign(w) ? crossArtist?.artists.find((a) => a.id === w.artistId) : undefined;
+    return owner ? { artistId: owner.id, siteId: owner.siteId } : undefined;
+  };
 
   // Same for About: the field being edited saves as it loses focus.
   const closeAbout = () => {
@@ -410,6 +427,7 @@ export default function CurationsView({
                   label={`Add ${words.items.toLowerCase()}`}
                   allowCreate={false}
                   excludeIds={selected.works.map((w) => w.artworkId)}
+                  artists={crossArtist?.artists}
                   onSelect={handleAddWorks}
                 />
               </div>
@@ -484,12 +502,16 @@ export default function CurationsView({
                           </button>
                           <button
                             type="button"
-                            onClick={() => openCatalogue(w.artworkId)}
+                            onClick={() =>
+                              isForeign(w)
+                                ? window.open(`/accounts/catalogue/${w.artistId}?selected=${w.artworkId}`, "_blank")
+                                : openCatalogue(w.artworkId)
+                            }
                             className="rounded-md bg-white/90 px-2 py-1 text-xs text-neutral-900 shadow hover:bg-white"
                           >
                             Catalogue
                           </button>
-                          {!isSold(w.availability) && (
+                          {!isSold(w.availability) && !isForeign(w) && (
                             <button
                               type="button"
                               onClick={() => openConsign(w.artworkId)}
@@ -514,6 +536,9 @@ export default function CurationsView({
                           <BaseStar isBase={w.isBase} />#{w.catalogueNumber}
                         </span>
                       </p>
+                      {crossArtist && w.artistName && (
+                        <p className="truncate text-sm text-neutral-600">{w.artistName}</p>
+                      )}
                       {/* Type, then edition and price where there are
                           (2026-11-11, as the artwork picker). */}
                       <p className="truncate text-sm text-neutral-400">{w.type || "—"}</p>
@@ -557,6 +582,7 @@ export default function CurationsView({
           workName={presentingWork.catalogueName}
           artistId={artistId}
           siteId={siteId}
+          owner={ownerOf(presentingWork)}
           onClose={() => setPresentingId(null)}
           onArtworkChanged={() => reload(selected.id)}
         />

@@ -20,6 +20,7 @@ export default function CurationWorkPresentationModal({
   addPicturesFrom = "catalogue",
   mainReplaceable = false,
   basic = false,
+  owner,
 }: {
   curationId: string;
   artworkId: string;
@@ -33,6 +34,7 @@ export default function CurationWorkPresentationModal({
   addPicturesFrom?: PictureSource;
   mainReplaceable?: boolean;
   basic?: boolean;
+  owner?: { artistId: string; siteId: string };
 }) {
   const close = () => {
     (document.activeElement as HTMLElement | null)?.blur();
@@ -79,6 +81,7 @@ export default function CurationWorkPresentationModal({
             addPicturesFrom={addPicturesFrom}
             mainReplaceable={mainReplaceable}
             basic={basic}
+            owner={owner}
           />
         </div>
       </div>

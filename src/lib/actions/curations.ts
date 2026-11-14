@@ -14,7 +14,10 @@ import { isSold } from "@/lib/artworkFilters";
 //
 // Every action takes the artistId and only ever touches a curation that
 // belongs to that artist, so one artist's curations can never be read
-// or changed from another artist's pages.
+// or changed from another artist's pages. A curation's works are its
+// artist's own — except that an admin may add any client's (2026-11-14,
+// Administration → Curator: e.g. a gallery client's curation of several
+// artists' works).
 //
 // No revalidatePath here, same reasoning as actions/artworks.ts: the
 // Curations page keeps its own state up to date from what these return,
@@ -58,6 +61,10 @@ export type CurationWork = {
   // such as Sliding doors.
   imageUrl: string | null;
   displayUrl: string | null;
+  // Whose work it is (2026-11-14 — a Curator curation can hold several
+  // clients' works). Absent from sites published before.
+  artistId?: string;
+  artistName?: string;
 };
 
 export type CurationDetail = {
@@ -256,6 +263,8 @@ export async function getCuration(curationId: string, artistId: string): Promise
               priceCurrency: true,
               type: true,
               edition: true,
+              artistId: true,
+              artist: { select: { name: true } },
               ...TILE_ARTWORK_IMAGES,
             },
           },
@@ -280,6 +289,8 @@ export async function getCuration(curationId: string, artistId: string): Promise
       priceCurrency: item.artwork.priceCurrency,
       type: item.artwork.type,
       edition: item.artwork.edition,
+      artistId: item.artwork.artistId,
+      artistName: item.artwork.artist.name,
       ...tileUrls(item),
     })),
   };
@@ -337,20 +348,21 @@ export async function deleteCuration(curationId: string, artistId: string): Prom
 }
 
 // Adds works to the end of the curation, in the order they were picked.
-// Works already in the curation, or not belonging to this artist, are
-// skipped. Returns the updated curation.
+// Works already in the curation, or not belonging to this artist (any
+// client's, for an admin — Curator), are skipped. Returns the updated
+// curation.
 export async function addWorksToCuration(
   curationId: string,
   artistId: string,
   artworkIds: string[],
 ): Promise<Result<CurationDetail>> {
-  await requireArtistAccess(artistId);
+  const user = await requireArtistAccess(artistId);
   if (!(await ownsCuration(curationId, artistId))) return { error: "Curation not found." };
 
   if (artworkIds.length > 0) {
     const [owned, existing, last] = await Promise.all([
       db.artwork.findMany({
-        where: { id: { in: artworkIds }, artistId },
+        where: { id: { in: artworkIds }, ...(user.role === "ADMIN" ? {} : { artistId }) },
         select: { id: true },
       }),
       db.curationItem.findMany({
@@ -506,7 +518,8 @@ export async function getCurationWorkPresentation(
 // Sets a work's whole image set within this curation — `imageIds` in
 // order, main first. The first change gives the work its own set (see
 // CurationItem.ownImages); the artwork and the Catalogue are never
-// touched. Only the artist's own images are accepted. The current main
+// touched. Only the artist's own images are accepted (or, for another
+// client's work in a Curator curation, that client's). The current main
 // image must stay in the set (2026-10-04) — it can be swapped for another
 // image, never simply removed. Returns the saved set.
 export async function setCurationWorkImages(
@@ -531,7 +544,7 @@ export async function setCurationWorkImages(
       id: true,
       ownImages: true,
       images: { orderBy: { position: "asc" }, take: 1, select: { imageId: true } },
-      artwork: { select: { mainImageId: true } },
+      artwork: { select: { mainImageId: true, artistId: true } },
     },
   });
   if (!item) return { error: "This work is no longer in the curation." };
@@ -545,7 +558,7 @@ export async function setCurationWorkImages(
   }
 
   const images = await db.image.findMany({
-    where: { id: { in: ids }, artistId },
+    where: { id: { in: ids }, artistId: { in: [artistId, item.artwork.artistId] } },
     select: ARTWORK_IMAGE_SELECT,
   });
   if (images.length !== ids.length) return { error: "One of those images couldn't be found." };
