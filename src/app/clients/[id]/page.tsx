@@ -86,6 +86,7 @@ export default async function ClientAdminPage({
         <ClientOwnerPanel
           site={data.site}
           artist={data.artist}
+          isHouse={data.isHouse}
           subscriptionPayments={data.subscriptionPayments}
           login={login}
           menuAccess={menuAccess}

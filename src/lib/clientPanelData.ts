@@ -9,6 +9,8 @@ import type { ArtistRecord, SiteRecord } from "@/lib/clientPanelTypes";
 export type ClientPanelData = {
   site: SiteRecord;
   artist: ArtistRecord;
+  // A house client — one of ours (2026-11-14; HouseClientCard).
+  isHouse: boolean;
   subscriptionPayments: {
     id: string;
     source: "STRIPE" | "MANUAL";
@@ -65,6 +67,7 @@ export async function getClientPanelData(siteId: string): Promise<ClientPanelDat
       stripeSubscriptionStatus: site.artist.stripeSubscriptionStatus,
       subscriptionCancelledAt: site.artist.subscriptionCancelledAt?.toISOString() ?? null,
     },
+    isHouse: site.artist.isHouse,
     subscriptionPayments: payments.map((p) => ({
       id: p.id,
       source: p.source as "STRIPE" | "MANUAL",

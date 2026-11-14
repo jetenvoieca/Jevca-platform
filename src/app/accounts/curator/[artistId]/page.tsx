@@ -14,11 +14,11 @@ import { getArtworkSettings } from "@/lib/actions/artworkSettings";
 
 export const dynamic = "force-dynamic";
 
-// Administration → Curator (2026-11-14, Craig): cross-artist curations. A
-// curation belongs to the client whose site shows it (Craig: "by the site
-// that shows it") — their Curations screen, with works added from any
-// client (CurationsView's `crossArtist`). Their own Curations show it too;
-// the other artists don't see it.
+// Administration → Curator (2026-11-14, Craig): curations mixing works from
+// any artist, for the sites we run. They belong to a house client (one of
+// ours, e.g. Jetenvoieca — Artist.isHouse) whose sites show them: its
+// Curations screen, with works added from any client (CurationsView's
+// `crossArtist`). Artists never see them.
 export default async function CuratorArtistPage({
   params,
   searchParams,
@@ -29,7 +29,8 @@ export default async function CuratorArtistPage({
 }) {
   await requireAdmin();
   const [{ artistId }, { selected }] = await Promise.all([params, searchParams]);
-  const [artists, artist, curations, settings, openAlerts, recentSites] = await Promise.all([
+  const [houses, artists, artist, curations, settings, openAlerts, recentSites] = await Promise.all([
+    listCatalogueArtists({ house: true }),
     listCatalogueArtists(),
     db.artist.findUnique({ where: { id: artistId }, select: { kind: true } }),
     listCurations(artistId),
@@ -37,7 +38,7 @@ export default async function CuratorArtistPage({
     getOpenAlerts(),
     getRecentSites(),
   ]);
-  const host = artists.find((a) => a.id === artistId);
+  const host = houses.find((a) => a.id === artistId);
   if (!host || !artist) notFound();
   const selectedId = selected && curations.some((c) => c.id === selected) ? selected : curations[0]?.id;
   const initialSelected = selectedId ? await getCuration(selectedId, artistId) : null;
@@ -48,7 +49,7 @@ export default async function CuratorArtistPage({
       content={
         <div className="flex h-full flex-col">
           <div className="shrink-0 px-6 pt-6">
-            <AdminArtistPicker title="Curator — for" basePath="/accounts/curator" artists={artists} artistId={artistId} />
+            <AdminArtistPicker title="Curator — for" basePath="/accounts/curator" artists={houses} artistId={artistId} />
           </div>
           <div className="min-h-0 flex-1">
             <ClientWordsProvider kind={artist.kind}>

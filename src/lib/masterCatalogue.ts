@@ -7,10 +7,11 @@ import { db } from "@/lib/db";
 
 export type CatalogueArtist = { id: string; name: string; siteId: string; works: number };
 
-// Every client with a site, by name, with their works' count.
-export async function listCatalogueArtists(): Promise<CatalogueArtist[]> {
+// Every client with a site, by name, with their works' count — or only
+// the house clients (`house`, the Curator's).
+export async function listCatalogueArtists({ house = false }: { house?: boolean } = {}): Promise<CatalogueArtist[]> {
   const artists = await db.artist.findMany({
-    where: { sites: { some: {} } },
+    where: { sites: { some: {} }, ...(house ? { isHouse: true } : {}) },
     orderBy: { name: "asc" },
     select: {
       id: true,

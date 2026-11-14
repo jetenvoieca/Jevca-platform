@@ -16,8 +16,8 @@ import { isSold } from "@/lib/artworkFilters";
 // belongs to that artist, so one artist's curations can never be read
 // or changed from another artist's pages. A curation's works are its
 // artist's own — except that an admin may add any client's (2026-11-14,
-// Administration → Curator: e.g. a gallery client's curation of several
-// artists' works).
+// Administration → Curator: a house client's — one of ours — curation of
+// several artists' works).
 //
 // No revalidatePath here, same reasoning as actions/artworks.ts: the
 // Curations page keeps its own state up to date from what these return,

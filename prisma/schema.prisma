@@ -170,6 +170,10 @@ model Artist {
   id        String       @id @default(cuid())
   // Artist or brand (2026-10-09) — see ClientKind.
   kind      ClientKind   @default(ARTIST)
+  // A house client (2026-11-14, Craig): us — the owner of the sites we run
+  // (e.g. Jetenvoieca) and of their curations, mixing works from any
+  // artist (Administration → Curator offers only house clients).
+  isHouse   Boolean      @default(false)
   name      String
   firstName String?
   email     String?

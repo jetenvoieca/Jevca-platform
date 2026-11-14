@@ -68,8 +68,8 @@ import DynamicPresentationEditor from "@/components/DynamicPresentationEditor";
 // curation's title row and the list's "Curation Name" heading stay put;
 // the works and the list of curations each scroll on their own.
 //
-// Administration → Curator (2026-11-14, `crossArtist`): the curations of
-// the client whose site shows them, with works from any client (⊞ has an
+// Administration → Curator (2026-11-14, `crossArtist`): a house client's
+// curations (the sites we run), with works from any client (⊞ has an
 // artist dropdown). Another client's work shows whose it is; its
 // Catalogue opens in Administration → Catalogue (that client's settings),
 // its Presentation edits its own details and pictures, and it can't be

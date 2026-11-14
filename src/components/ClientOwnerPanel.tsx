@@ -5,6 +5,7 @@ import HopperTokenCard from "@/components/HopperTokenCard";
 import ArtistLoginCard from "@/components/ArtistLoginCard";
 import MenuAccessCard from "@/components/MenuAccessCard";
 import PlanCard from "@/components/PlanCard";
+import HouseClientCard from "@/components/HouseClientCard";
 import type { PlanSummary, SiteSubscription } from "@/lib/plans";
 import type { ArtistLogin } from "@/lib/actions/users";
 import type { SiteNavKey } from "@/lib/siteNav";
@@ -30,6 +31,7 @@ type SubscriptionPaymentRow = {
 export default function ClientOwnerPanel({
   site,
   artist,
+  isHouse,
   subscriptionPayments,
   login,
   menuAccess,
@@ -39,6 +41,7 @@ export default function ClientOwnerPanel({
 }: {
   site: SiteRecord;
   artist: ArtistRecord;
+  isHouse: boolean;
   subscriptionPayments: SubscriptionPaymentRow[];
   // The client's own login (2026-10-26), null if none yet.
   login: ArtistLogin | null;
@@ -61,6 +64,7 @@ export default function ClientOwnerPanel({
           <HopperTokenCard artistId={artist.id} kind={artist.kind} hopperToken={artist.hopperToken} />
           <ArtistLoginCard key={artist.id} artistId={artist.id} login={login} />
           <MenuAccessCard key={`access-${artist.id}`} artistId={artist.id} initial={menuAccess} />
+          <HouseClientCard key={`house-${artist.id}`} artistId={artist.id} initial={isHouse} />
         </div>
         <div className="flex flex-col gap-4 lg:flex-1">
           <PlanCard key={`plan-${site.id}`} siteId={site.id} plans={plans} themes={themes} initial={subscription} />
